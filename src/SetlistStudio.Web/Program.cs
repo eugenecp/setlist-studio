@@ -40,18 +40,18 @@ try
     // Configure database
     builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
     {
-        if (builder.Environment.IsDevelopment())
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                              ?? "Data Source=setliststudio.db";
+        
+        // Auto-detect database provider based on connection string
+        if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
         {
-            // Use SQLite for development
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-                                  ?? "Data Source=setliststudio.db";
+            // SQLite connection string
             options.UseSqlite(connectionString);
         }
         else
         {
-            // Use SQL Server for production (can be configured via connection string)
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                                  ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            // SQL Server connection string
             options.UseSqlServer(connectionString);
         }
     });
