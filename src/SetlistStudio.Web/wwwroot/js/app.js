@@ -18,7 +18,7 @@ window.setlistStudioApp = {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                     const mainContent = document.querySelector('#main-content');
-                    if (mainContent && mainContent.contains(mutation.addedNodes[0])) {
+                    if (mainContent?.contains(mutation.addedNodes[0])) {
                         this.announcePageChange();
                     }
                 }
@@ -130,11 +130,9 @@ window.setlistStudioApp = {
                         e.preventDefault();
                         lastElement.focus();
                     }
-                } else {
-                    if (document.activeElement === lastElement) {
-                        e.preventDefault();
-                        firstElement.focus();
-                    }
+                } else if (document.activeElement === lastElement) {
+                    e.preventDefault();
+                    firstElement.focus();
                 }
             }
             
