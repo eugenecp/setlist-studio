@@ -206,7 +206,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Blazor reconnection helpers
-window.Blazor?.reconnect();
 
 // Service Worker registration for PWA support
 if ('serviceWorker' in navigator) {
