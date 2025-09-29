@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  setliststudio-web:
+    build: .
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000;https://+:5001
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/setliststudio.db
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
+      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID}
+      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET}
+      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID}
+      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET}
+    volumes:
+      - setliststudio-data:/app/data
+      - setliststudio-logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  setliststudio-data:
+  setliststudio-logs:

@@ -1,0 +1,126 @@
+/* Base styles for accessibility and Material Design */
+html, body {
+    font-family: 'Roboto', sans-serif;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Skip to content link */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.sr-only-focusable:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0.75rem 1.25rem;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+}
+
+/* Focus styles for accessibility */
+*:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Custom utilities */
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drag-drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    padding: 2rem;
+    text-align: center;
+    transition: border-color 0.3s ease;
+}
+
+.drag-drop-zone.drag-over {
+    border-color: #1976d2;
+    background-color: rgba(25, 118, 210, 0.1);
+}
+
+/* Loading states */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(25, 118, 210, 0.3);
+    border-radius: 50%;
+    border-top-color: #1976d2;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Error styles */
+.error-message {
+    color: #d32f2f;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Success styles */
+.success-message {
+    color: #2e7d32;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Blazor error UI */
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHZpZXdCb3g9IjAgMCA1NiA0OSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEzLjUgNi41QzEzLjUgMy40NjI0MyAxNS45NjI0IDEgMTkgMUgzN0M0MC4wMzc2IDEgNDIuNSAzLjQ2MjQzIDQyLjUgNi41VjQyLjVDNDIuNSA0NS41Mzc2IDQwLjAzNzYgNDggMzcgNDhIMTlDMTUuOTYyNCA0OCAxMy41IDQ1LjUzNzYgMTMuNSA0Mi41VjYuNVoiIGZpbGw9IiNGRkYiIHN0cm9rZT0iI0Q2RDNEMSIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxwYXRoIGQ9Ik0yNy44NDE5IDI1TDE5IDMwSDI5LjE1ODFMMzUgMjVIMjcuODQxOVoiIGZpbGw9IiNEQzI2MjYiLz4KPC9zdmc+);
+    background-size: 56px 49px;
+    background-repeat: no-repeat;
+    background-position: left center;
+    padding-left: 72px;
+}

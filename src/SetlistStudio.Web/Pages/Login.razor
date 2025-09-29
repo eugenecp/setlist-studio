@@ -1,0 +1,154 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authorization
+@layout EmptyLayout
+
+<PageTitle>Sign In - Setlist Studio</PageTitle>
+
+<div class="login-container">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column justify-center min-vh-100">
+        <MudPaper Elevation="8" Class="pa-8">
+            <!-- Logo and Header -->
+            <div class="text-center mb-6">
+                <MudIcon Icon="Icons.Material.Filled.LibraryMusic" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                <MudText Typo="Typo.h4" Class="mb-2">Welcome to Setlist Studio</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Sign in to organize your music and create amazing setlists
+                </MudText>
+            </div>
+            
+            <!-- Sign In Options -->
+            <div class="login-buttons">
+                <!-- Google Sign In -->
+                <MudButton 
+                    Variant="Variant.Outlined" 
+                    Color="Color.Primary"
+                    FullWidth="true" 
+                    Size="Size.Large"
+                    StartIcon="@GoogleIcon"
+                    Class="mb-3"
+                    Href="/auth/google"
+                    aria-label="Sign in with Google">
+                    Sign in with Google
+                </MudButton>
+                
+                <!-- Microsoft Sign In -->
+                <MudButton 
+                    Variant="Variant.Outlined" 
+                    Color="Color.Info"
+                    FullWidth="true" 
+                    Size="Size.Large"
+                    StartIcon="@MicrosoftIcon"
+                    Class="mb-3"
+                    Href="/auth/microsoft"
+                    aria-label="Sign in with Microsoft">
+                    Sign in with Microsoft
+                </MudButton>
+                
+                <!-- Facebook Sign In -->
+                <MudButton 
+                    Variant="Variant.Outlined" 
+                    Color="Color.Secondary"
+                    FullWidth="true" 
+                    Size="Size.Large"
+                    StartIcon="@FacebookIcon"
+                    Class="mb-3"
+                    Href="/auth/facebook"
+                    aria-label="Sign in with Facebook">
+                    Sign in with Facebook
+                </MudButton>
+            </div>
+            
+            <!-- Privacy Notice -->
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.caption" Class="text-center" Color="Color.Secondary">
+                We respect your privacy. Your data is secure and we only access basic profile information.
+            </MudText>
+            
+            <!-- Back to Home -->
+            <div class="text-center mt-4">
+                <MudButton 
+                    Variant="Variant.Text" 
+                    StartIcon="Icons.Material.Filled.ArrowBack"
+                    Href="/"
+                    aria-label="Return to home page">
+                    Back to Home
+                </MudButton>
+            </div>
+        </MudPaper>
+        
+        <!-- Features Preview -->
+        <MudGrid Class="mt-8">
+            <MudItem xs="12" sm="4">
+                <MudCard Elevation="2" Class="pa-3 text-center">
+                    <MudIcon Icon="Icons.Material.Filled.QueueMusic" Color="Color.Primary" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle2">Organize Songs</MudText>
+                    <MudText Typo="Typo.caption">Keep track of BPM, keys, and notes</MudText>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudCard Elevation="2" Class="pa-3 text-center">
+                    <MudIcon Icon="Icons.Material.Filled.PlaylistPlay" Color="Color.Secondary" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle2">Create Setlists</MudText>
+                    <MudText Typo="Typo.caption">Build and reorder performance lists</MudText>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudCard Elevation="2" Class="pa-3 text-center">
+                    <MudIcon Icon="Icons.Material.Filled.Event" Color="Color.Tertiary" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle2">Plan Shows</MudText>
+                    <MudText Typo="Typo.caption">Schedule and manage performances</MudText>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+</div>
+
+<style>
+    .login-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .login-buttons .mud-button {
+        justify-content: flex-start;
+        text-transform: none;
+        font-weight: 500;
+    }
+    
+    /* Ensure good contrast for accessibility */
+    .login-container .mud-paper {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Focus styles for accessibility */
+    .login-buttons .mud-button:focus {
+        outline: 3px solid #2196f3;
+        outline-offset: 2px;
+    }
+    
+    @@media (max-width: 600px) {
+        .login-container .mud-container {
+            padding: 1rem;
+        }
+    }
+</style>
+
+@code {
+    private const string GoogleIcon = "fab fa-google";
+    private const string MicrosoftIcon = "fab fa-microsoft";
+    private const string FacebookIcon = "fab fa-facebook-f";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user is already authenticated
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    [Inject] private AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+}
