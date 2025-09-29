@@ -259,19 +259,20 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
         await context.SaveChangesAsync();
 
         // Add songs to setlists
+        var songByTitle = sampleSongs.ToDictionary(s => s.Title);
         var weddingSongs = new List<SetlistSong>
         {
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Billie Jean").Id, Position = 1, PerformanceNotes = "High energy opener" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Uptown Funk").Id, Position = 2, PerformanceNotes = "Get everyone dancing" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Hotel California").Id, Position = 3, PerformanceNotes = "Crowd sing-along" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Sweet Child O' Mine").Id, Position = 4, PerformanceNotes = "Guitar showcase" }
+            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Billie Jean", out var billieJean) ? billieJean.Id : throw new Exception("Song 'Billie Jean' not found"), Position = 1, PerformanceNotes = "High energy opener" },
+            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Uptown Funk", out var uptownFunk) ? uptownFunk.Id : throw new Exception("Song 'Uptown Funk' not found"), Position = 2, PerformanceNotes = "Get everyone dancing" },
+            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Hotel California", out var hotelCalifornia) ? hotelCalifornia.Id : throw new Exception("Song 'Hotel California' not found"), Position = 3, PerformanceNotes = "Crowd sing-along" },
+            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Sweet Child O' Mine", out var sweetChildOMine) ? sweetChildOMine.Id : throw new Exception("Song 'Sweet Child O' Mine' not found"), Position = 4, PerformanceNotes = "Guitar showcase" }
         };
 
         var jazzSongs = new List<SetlistSong>
         {
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Summertime").Id, Position = 1, PerformanceNotes = "Gentle opener" },
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = sampleSongs.First(s => s.Title == "Take Five").Id, Position = 2, PerformanceNotes = "Feature odd time signature" },
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = sampleSongs.First(s => s.Title == "The Thrill Is Gone").Id, Position = 3, PerformanceNotes = "Blues influence" }
+            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("Summertime", out var summertime) ? summertime.Id : throw new Exception("Song 'Summertime' not found"), Position = 1, PerformanceNotes = "Gentle opener" },
+            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("Take Five", out var takeFive) ? takeFive.Id : throw new Exception("Song 'Take Five' not found"), Position = 2, PerformanceNotes = "Feature odd time signature" },
+            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("The Thrill Is Gone", out var thrillIsGone) ? thrillIsGone.Id : throw new Exception("Song 'The Thrill Is Gone' not found"), Position = 3, PerformanceNotes = "Blues influence" }
         };
 
         context.SetlistSongs.AddRange(weddingSongs);
