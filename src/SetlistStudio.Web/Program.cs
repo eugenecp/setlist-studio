@@ -19,6 +19,9 @@ try
 
     // Add Serilog
     builder.Host.UseSerilog();
+    
+    // Enable static web assets (for MudBlazor and other package assets)
+    builder.WebHost.UseStaticWebAssets();
 
     // Add services to the container
     builder.Services.AddRazorPages();
