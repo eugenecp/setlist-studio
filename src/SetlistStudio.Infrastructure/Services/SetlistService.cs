@@ -240,7 +240,8 @@ public class SetlistService : ISetlistService
             }
 
             // Determine position
-            var targetPosition = position ?? (setlist.SetlistSongs.Any() ? setlist.SetlistSongs.Max(ss => ss.Position) + 1 : 1);
+            var setlistSongsList = setlist.SetlistSongs.ToList();
+            var targetPosition = position ?? (setlistSongsList.Any() ? setlistSongsList.Max(ss => ss.Position) + 1 : 1);
 
             // Adjust positions if inserting in middle
             if (position.HasValue)
