@@ -1,0 +1,117 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider @ref="@_mudThemeProvider" @bind-IsDarkMode="@_isDarkMode" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <!-- App Bar -->
+    <MudAppBar Elevation="1">
+        <!-- Skip to content link for accessibility -->
+        <MudButton 
+            Class="sr-only sr-only-focusable skip-to-content" 
+            Href="#main-content"
+            Variant="Variant.Filled" 
+            Color="Color.Secondary">
+            Skip to content
+        </MudButton>
+        
+        <!-- Menu button for mobile -->
+        <MudIconButton 
+            Icon="Icons.Material.Filled.Menu" 
+            Color="Color.Inherit" 
+            Edge="Edge.Start" 
+            OnClick="@ToggleDrawer"
+            AriaLabel="Open navigation menu" />
+        
+        <!-- App Title -->
+        <MudText Typo="Typo.h6" Class="ml-3">Setlist Studio</MudText>
+        
+        <MudSpacer />
+        
+        <!-- Theme Toggle -->
+        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton 
+                Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                Color="Color.Inherit" 
+                OnClick="@ToggleTheme"
+                AriaLabel="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")" />
+        </MudTooltip>
+        
+        <!-- User Menu -->
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu Icon="Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AriaLabel="User menu">
+                    <MudText Typo="Typo.body2" Class="px-4 py-2">@context.User.Identity?.Name</MudText>
+                    <MudDivider />
+                    <MudMenuItem Icon="Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
+                    <MudMenuItem Icon="Icons.Material.Filled.Settings" Href="/settings">Settings</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem Icon="Icons.Material.Filled.Logout" Href="/logout">Sign Out</MudMenuItem>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton 
+                    Variant="Variant.Text" 
+                    Color="Color.Inherit" 
+                    StartIcon="Icons.Material.Filled.Login"
+                    Href="/login">
+                    Sign In
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+    
+    <!-- Navigation Drawer -->
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Navigation</MudText>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+    
+    <!-- Main Content -->
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+            <main id="main-content" tabindex="-1">
+                <ErrorBoundary>
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="exception">
+                        <MudAlert Severity="Severity.Error" Class="mb-4">
+                            <MudText Typo="Typo.h6">An error occurred</MudText>
+                            <MudText Typo="Typo.body2">@exception.Message</MudText>
+                        </MudAlert>
+                    </ErrorContent>
+                </ErrorBoundary>
+            </main>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+    private MudThemeProvider? _mudThemeProvider;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _mudThemeProvider != null)
+        {
+            // Check user's system preference for dark mode
+            _isDarkMode = await _mudThemeProvider.GetSystemPreference();
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+}

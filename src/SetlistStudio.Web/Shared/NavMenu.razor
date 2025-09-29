@@ -1,0 +1,91 @@
+<nav class="nav-menu" role="navigation" aria-label="Main navigation">
+    <MudNavMenu>
+        <!-- Home -->
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="Icons.Material.Filled.Home">
+            Home
+        </MudNavLink>
+        
+        <!-- Songs Section -->
+        <MudNavGroup Text="Songs" Icon="Icons.Material.Filled.LibraryMusic" Expanded="true">
+            <MudNavLink Href="/songs" Icon="Icons.Material.Filled.QueueMusic">
+                My Songs
+            </MudNavLink>
+            <MudNavLink Href="/songs/add" Icon="Icons.Material.Filled.Add">
+                Add Song
+            </MudNavLink>
+        </MudNavGroup>
+        
+        <!-- Setlists Section -->
+        <MudNavGroup Text="Setlists" Icon="Icons.Material.Filled.PlaylistPlay" Expanded="true">
+            <MudNavLink Href="/setlists" Icon="Icons.Material.Filled.List">
+                My Setlists
+            </MudNavLink>
+            <MudNavLink Href="/setlists/create" Icon="Icons.Material.Filled.PlaylistAdd">
+                Create Setlist
+            </MudNavLink>
+            <MudNavLink Href="/setlists/templates" Icon="Icons.Material.Filled.BookmarkBorder">
+                Templates
+            </MudNavLink>
+        </MudNavGroup>
+        
+        <!-- Divider -->
+        <MudDivider Class="my-2" />
+        
+        <!-- Profile & Settings -->
+        <AuthorizeView>
+            <Authorized>
+                <MudNavLink Href="/profile" Icon="Icons.Material.Filled.Person">
+                    Profile
+                </MudNavLink>
+                <MudNavLink Href="/settings" Icon="Icons.Material.Filled.Settings">
+                    Settings
+                </MudNavLink>
+            </Authorized>
+            <NotAuthorized>
+                <MudNavLink Href="/login" Icon="Icons.Material.Filled.Login">
+                    Sign In
+                </MudNavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+        
+        <!-- Help & About -->
+        <MudDivider Class="my-2" />
+        <MudNavLink Href="/help" Icon="Icons.Material.Filled.Help">
+            Help
+        </MudNavLink>
+        <MudNavLink Href="/about" Icon="Icons.Material.Filled.Info">
+            About
+        </MudNavLink>
+    </MudNavMenu>
+</nav>
+
+<style>
+    .nav-menu {
+        height: 100%;
+        overflow-y: auto;
+    }
+    
+    /* Ensure proper focus styles for accessibility */
+    .mud-nav-link:focus {
+        outline: 2px solid var(--mud-palette-primary);
+        outline-offset: 2px;
+    }
+    
+    /* Skip to content link styling */
+    .skip-to-content {
+        position: absolute;
+        top: -40px;
+        left: 6px;
+        background: var(--mud-palette-secondary);
+        color: var(--mud-palette-secondary-text);
+        padding: 8px;
+        border-radius: 4px;
+        text-decoration: none;
+        z-index: 1000;
+        transition: top 0.3s;
+    }
+    
+    .skip-to-content:focus {
+        top: 6px;
+    }
+</style>

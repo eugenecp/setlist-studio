@@ -1,0 +1,237 @@
+@page "/"
+@using Microsoft.AspNetCore.Authorization
+
+<PageTitle>Home - Setlist Studio</PageTitle>
+
+<!-- Hero Section -->
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-12">
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.h2" Class="mb-4" GutterBottom="true">
+                Welcome to Setlist Studio
+            </MudText>
+            <MudText Typo="Typo.h6" Class="mb-6" Color="Color.Secondary">
+                Organize your music library and create professional setlists for your performances
+            </MudText>
+            
+            <AuthorizeView>
+                <Authorized>
+                    <MudText Typo="Typo.body1" Class="mb-4">
+                        Welcome back, @context.User.Identity?.Name! Ready to rock your next performance?
+                    </MudText>
+                    <MudButtonGroup Variant="Variant.Filled" Size="Size.Large">
+                        <MudButton Color="Color.Primary" StartIcon="Icons.Material.Filled.QueueMusic" Href="/songs">
+                            My Songs
+                        </MudButton>
+                        <MudButton Color="Color.Secondary" StartIcon="Icons.Material.Filled.PlaylistPlay" Href="/setlists">
+                            My Setlists
+                        </MudButton>
+                    </MudButtonGroup>
+                </Authorized>
+                <NotAuthorized>
+                    <MudText Typo="Typo.body1" Class="mb-4">
+                        Sign in with your Google, Microsoft, or Facebook account to get started organizing your music.
+                    </MudText>
+                    <MudButton 
+                        Variant="Variant.Filled" 
+                        Color="Color.Primary" 
+                        Size="Size.Large" 
+                        StartIcon="Icons.Material.Filled.Login"
+                        Href="/login">
+                        Sign In to Get Started
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="4" Class="pa-6">
+                <MudIcon Icon="Icons.Material.Filled.LibraryMusic" Size="Size.Large" Color="Color.Primary" Class="mb-4" />
+                <MudText Typo="Typo.h5" Class="mb-2">Organize Your Music</MudText>
+                <MudText Typo="Typo.body2">
+                    Keep track of your songs with BPM, keys, genres, and performance notes. 
+                    Search and filter your library to find the perfect song for any moment.
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+<!-- Features Section -->
+<MudContainer MaxWidth="MaxWidth.Large" Class="mb-12">
+    <MudText Typo="Typo.h4" Align="Align.Center" Class="mb-8">
+        Everything You Need for Professional Performances
+    </MudText>
+    
+    <MudGrid>
+        <!-- Song Management -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-4 h-100">
+                <MudCardContent>
+                    <MudIcon Icon="Icons.Material.Filled.QueueMusic" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-2">Song Library</MudText>
+                    <MudText Typo="Typo.body2">
+                        Add songs with artist, album, BPM, key, duration, and custom tags. 
+                        Rate difficulty and add performance notes.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Setlist Creation -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-4 h-100">
+                <MudCardContent>
+                    <MudIcon Icon="Icons.Material.Filled.PlaylistPlay" Color="Color.Secondary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-2">Smart Setlists</MudText>
+                    <MudText Typo="Typo.body2">
+                        Create ordered setlists with drag-and-drop reordering, transition notes, 
+                        and performance-specific customizations.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Performance Planning -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-4 h-100">
+                <MudCardContent>
+                    <MudIcon Icon="Icons.Material.Filled.Event" Color="Color.Tertiary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-2">Performance Ready</MudText>
+                    <MudText Typo="Typo.body2">
+                        Plan performances with venue details, expected duration, 
+                        and custom notes. Mark songs as encore or optional.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+<!-- Quick Stats Section (for authenticated users) -->
+<AuthorizeView>
+    <Authorized>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mb-8">
+            <MudText Typo="Typo.h5" Class="mb-4">Your Music at a Glance</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="2" Class="pa-4 text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Primary">@TotalSongs</MudText>
+                        <MudText Typo="Typo.subtitle2">Songs in Library</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="2" Class="pa-4 text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Secondary">@TotalSetlists</MudText>
+                        <MudText Typo="Typo.subtitle2">Created Setlists</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="2" Class="pa-4 text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Tertiary">@UniqueGenres</MudText>
+                        <MudText Typo="Typo.subtitle2">Music Genres</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="2" Class="pa-4 text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Success">@UpcomingPerformances</MudText>
+                        <MudText Typo="Typo.subtitle2">Upcoming Shows</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </Authorized>
+</AuthorizeView>
+
+<!-- Call to Action -->
+<MudContainer MaxWidth="MaxWidth.Medium" Class="text-center mb-12">
+    <MudPaper Elevation="4" Class="pa-8" Style="background: linear-gradient(45deg, #1976d2, #42a5f5);">
+        <MudText Typo="Typo.h5" Class="mb-4" Style="color: white;">
+            Ready to Transform Your Music Performances?
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mb-6" Style="color: rgba(255,255,255,0.9);">
+            Join musicians worldwide who use Setlist Studio to organize their music and deliver amazing performances.
+        </MudText>
+        <AuthorizeView>
+            <Authorized>
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Surface" 
+                    Size="Size.Large"
+                    StartIcon="Icons.Material.Filled.PlaylistAdd"
+                    Href="/setlists/create">
+                    Create Your First Setlist
+                </MudButton>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Surface" 
+                    Size="Size.Large"
+                    StartIcon="Icons.Material.Filled.PersonAdd"
+                    Href="/login">
+                    Sign Up Free
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private int TotalSongs = 0;
+    private int TotalSetlists = 0;
+    private int UniqueGenres = 0;
+    private int UpcomingPerformances = 0;
+
+    [Inject] private ISongService SongService { get; set; } = default!;
+    [Inject] private ISetlistService SetlistService { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await LoadUserStatsAsync(userId);
+            }
+        }
+    }
+
+    private async Task LoadUserStatsAsync(string userId)
+    {
+        try
+        {
+            // Load songs stats
+            var (songs, songCount) = await SongService.GetSongsAsync(userId, pageSize: 1);
+            TotalSongs = songCount;
+
+            // Load setlists stats
+            var (setlists, setlistCount) = await SetlistService.GetSetlistsAsync(userId, pageSize: 1);
+            TotalSetlists = setlistCount;
+
+            // Load genres
+            var genres = await SongService.GetGenresAsync(userId);
+            UniqueGenres = genres.Count();
+
+            // Load upcoming performances
+            var (upcomingSetlists, _) = await SetlistService.GetSetlistsAsync(
+                userId, 
+                isActive: true, 
+                pageSize: 100);
+            
+            UpcomingPerformances = upcomingSetlists
+                .Count(s => s.PerformanceDate.HasValue && s.PerformanceDate > DateTime.Now);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't break the page
+            Console.WriteLine($"Error loading user stats: {ex.Message}");
+        }
+    }
+}
