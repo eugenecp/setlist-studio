@@ -31,6 +31,77 @@ Setlist Studio is built using modern .NET technologies and follows industry best
 - **GitHub Actions**: Automated CI/CD pipelines for building, testing, and deployment
 - **Version Control**: Git-based workflow with feature branches and pull request reviews
 
+## UI and Design Standards
+
+Setlist Studio includes both web and mobile applications with a clean, modern design system. When generating UI components and screens, follow these comprehensive design guidelines:
+
+### Core Design System
+- **Design Language**: Material Design 3 guidelines for spacing, typography, and color palettes
+- **Styling Framework**: Tailwind CSS for utility-based styling
+- **Component Library**: ShadCN UI components for cards, buttons, modals, and inputs
+- **Icons**: Lucide React icon library
+- **Typography**: Clean fonts (Inter or Roboto family)
+
+### Main Screen Requirements
+
+Generate clean, modern UI designs for these core screens:
+
+1. **Login/Signup**: User authentication flow with form validation
+2. **Dashboard**: Song lists with search, filtering, and organization
+3. **Song Detail View**: Display lyrics, chords, and performance notes
+4. **Create/Edit Setlist Flow**: Drag-and-drop setlist builder interface
+5. **Player Screen**: Performance view for executing setlists during shows
+
+### Design Rules and Standards
+
+**Layout and Responsiveness:**
+- Mobile-first responsive design approach
+- Seamless adaptation for tablets and desktop screens
+- Consistent spacing and grid systems across all breakpoints
+
+**Accessibility:**
+- Follow WCAG 2.1 AA accessibility standards
+- Proper color contrast ratios and focus indicators
+- Screen reader compatibility and keyboard navigation support
+
+**Visual Design:**
+- Primary action buttons must be consistent and highly visible
+- Include comprehensive dark mode support with proper color schemes
+- Design all interactive states: hover, active, focus, and error states
+
+**Code Requirements:**
+- Generate component structures using React + Tailwind CSS
+- Output complete JSX code with styled UI components
+- Include proper TypeScript interfaces and props where applicable
+- Ensure components are reusable and maintainable
+
+### UI Component Examples
+
+When creating UI components, structure them like this:
+
+```jsx
+// Example: Song Card Component
+interface SongCardProps {
+  title: string;
+  artist: string;
+  bpm?: number;
+  key?: string;
+  duration?: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
+
+const SongCard: React.FC<SongCardProps> = ({ 
+  title, artist, bpm, key, duration, onEdit, onDelete 
+}) => {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
+      {/* Component content with Tailwind classes */}
+    </div>
+  );
+};
+```
+
 ## Key Principles
 
 When working with Setlist Studio, please adhere to these core principles:
@@ -140,6 +211,23 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 "Add sample setlists for different types of performances (wedding, concert, practice session)"
 
 "Design user-friendly error messages that use musical terminology musicians will understand"
+```
+
+### UI and Design Examples
+```
+"Create a responsive song card component using ShadCN UI with Material Design 3 spacing and dark mode support"
+
+"Design a mobile-first setlist builder interface with drag-and-drop functionality using React and Tailwind CSS"
+
+"Generate a login screen with form validation, error states, and accessibility features following WCAG 2.1 AA"
+
+"Build a performance player screen with large, accessible controls for live show environments"
+
+"Create a dashboard layout with song filtering, search, and grid/list view toggles using Lucide React icons"
+
+"Design loading, error, and empty states for all main screens with consistent styling and helpful messaging"
+
+"Generate TypeScript interfaces and props for reusable UI components with proper documentation"
 ```
 
 ## Sample Data Guidelines
