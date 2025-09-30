@@ -328,14 +328,14 @@ jobs:
           fi
           
           # Test application health using dedicated health endpoint (more reliable)
-          health_response=$(curl -f -s -w "%{http_code}" -m 10 http://localhost:8080/api/status 2>/dev/null || echo "000")
+          health_response=$(curl -f -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:8080/api/status 2>/dev/null || echo "000")
           
           if [ "$health_response" = "200" ] || [[ "$health_response" =~ ^2[0-9][0-9] ]]; then
             echo "✅ Application health check passed on attempt $i (HTTP $health_response)"
             echo "✅ API health endpoint is responding correctly"
             
             # Also test the root endpoint to ensure main app is working
-            root_response=$(curl -s -w "%{http_code}" -m 5 http://localhost:8080/ 2>/dev/null || echo "000")
+            root_response=$(curl -s -o /dev/null -w "%{http_code}" -m 5 http://localhost:8080/ 2>/dev/null || echo "000")
             if [ "$root_response" = "200" ] || [[ "$root_response" =~ ^2[0-9][0-9] ]]; then
               echo "✅ Main application also responding (HTTP $root_response)"
             else
