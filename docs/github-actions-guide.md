@@ -26,6 +26,7 @@ The status badge in the README shows the current state of the main branch:
    - Builds the solution in Release mode
    - Runs all unit tests
    - Generates test reports and code coverage
+   - Creates comprehensive test summaries
 
 2. **Security Scan** 🔒
    - Scans for vulnerable NuGet packages
@@ -39,6 +40,13 @@ The status badge in the README shows the current state of the main branch:
 4. **Deploy Preview** 🚀 (PR only)
    - Creates preview environment
    - Adds deployment link to PR
+
+**Permissions & Security:**
+The workflow has been configured with minimal required permissions:
+- `contents: read` - Access repository code
+- `checks: write` - Create check runs for test results
+- `pull-requests: write` - Comment on PRs with results
+- `actions: read` - Access workflow information
 
 ### 2. Dependabot Management
 
@@ -175,13 +183,27 @@ dotnet test SetlistStudio.sln --configuration Release
 - Check container health endpoint
 - Review Docker build logs
 
+**Permission Errors:**
+If you see "Resource not accessible by integration" errors:
+- ✅ **Fixed**: Workflow now includes proper permissions
+- 📋 **Alternative**: Test results appear in workflow summary
+- 💬 **PR Comments**: Basic summaries added to pull requests
+- 🔍 **Troubleshooting**: Download artifacts for detailed analysis
+
+**Test Reporter Issues:**
+The workflow uses multiple approaches for test reporting:
+- Primary: Built-in GitHub Actions summary
+- Secondary: External test reporter (when permissions allow)
+- Fallback: Downloadable artifacts with detailed results
+
 ### Getting Help
 
 1. **Check workflow logs** first
 2. **Review error messages** in failed steps
 3. **Download artifacts** for detailed analysis
 4. **Run locally** to reproduce issues
-5. **Open an issue** if problems persist
+5. **Check permissions** if integration errors occur
+6. **Open an issue** if problems persist
 
 ## 🎯 Best Practices
 
