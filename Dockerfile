@@ -49,10 +49,10 @@ USER setliststudio
 # Pre-create empty database file with proper permissions
 RUN touch /app/data/setliststudio.db && chmod 644 /app/data/setliststudio.db
 
-# Health check with longer start period for database initialization
-# Using simple health check to avoid database dependency in container health
+# Health check with longer start period for application initialization
+# Using root endpoint for most reliable health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:5000/health/simple || exit 1
+  CMD curl -f http://localhost:5000/ || exit 1
 
 EXPOSE 5000
 

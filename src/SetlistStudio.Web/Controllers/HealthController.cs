@@ -8,9 +8,9 @@ namespace SetlistStudio.Web.Controllers;
 public class HealthController : ControllerBase
 {
     private readonly ILogger<HealthController> _logger;
-    private readonly SetlistStudioDbContext _context;
+    private readonly SetlistStudioDbContext? _context;
 
-    public HealthController(ILogger<HealthController> logger, SetlistStudioDbContext context)
+    public HealthController(ILogger<HealthController> logger, SetlistStudioDbContext? context = null)
     {
         _logger = logger;
         _context = context;
@@ -55,6 +55,11 @@ public class HealthController : ControllerBase
     {
         try
         {
+            if (_context is null)
+            {
+                return "Database context not available";
+            }
+            
             await _context.Database.CanConnectAsync();
             return "Connected";
         }
