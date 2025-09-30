@@ -45,8 +45,15 @@ try
     // Configure database
     builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
     {
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                              ?? "Data Source=setliststudio.db";
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        
+        // Use container-specific path only when running in Docker
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+                ? "Data Source=/app/data/setliststudio.db"
+                : "Data Source=setliststudio.db";
+        }
         
         // Auto-detect database provider based on connection string
         if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
