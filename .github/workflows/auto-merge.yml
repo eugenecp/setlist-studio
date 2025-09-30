@@ -23,7 +23,7 @@ jobs:
     steps:
     - name: 🔍 Check PR status
       id: check-pr
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           const { data: pr } = await github.rest.pulls.get({
@@ -69,7 +69,7 @@ jobs:
     
     - name: 🚀 Auto-merge PR
       if: fromJSON(steps.check-pr.outputs.result).canMerge
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           const result = ${{ steps.check-pr.outputs.result }};
