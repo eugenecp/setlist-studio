@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
 using Serilog;
 using SetlistStudio.Core.Entities;
@@ -164,12 +165,13 @@ try
     // Initialize database
     try
     {
-        await DatabaseInitializer.InitializeAsync(app.Services, Log.Logger);
+        using var scope = app.Services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        await DatabaseInitializer.InitializeAsync(app.Services, logger);
         
         // Seed sample data in development
         if (app.Environment.IsDevelopment())
         {
-            using var scope = app.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
             Log.Information("Seeding development data...");
             await SeedDevelopmentDataAsync(context, scope.ServiceProvider);
