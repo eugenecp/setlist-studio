@@ -327,23 +327,23 @@ jobs:
             exit 1
           fi
           
-          # Test application health using root endpoint (most reliable)
-          root_response=$(curl -f -s -w "%{http_code}" -m 10 http://localhost:8080/ 2>/dev/null || echo "000")
+          # Test application health using dedicated health endpoint (more reliable)
+          health_response=$(curl -f -s -w "%{http_code}" -m 10 http://localhost:8080/api/status 2>/dev/null || echo "000")
           
-          if [ "$root_response" = "200" ] || [[ "$root_response" =~ ^2[0-9][0-9] ]]; then
-            echo "✅ Application health check passed on attempt $i (HTTP $root_response)"
-            echo "✅ Web server is responding and serving content"
+          if [ "$health_response" = "200" ] || [[ "$health_response" =~ ^2[0-9][0-9] ]]; then
+            echo "✅ Application health check passed on attempt $i (HTTP $health_response)"
+            echo "✅ API health endpoint is responding correctly"
             
-            # Optional: Try the API health endpoints as additional validation
-            api_response=$(curl -f -s -w "%{http_code}" -m 5 http://localhost:8080/api/status 2>/dev/null || echo "000")
-            if [ "$api_response" = "200" ] || [[ "$api_response" =~ ^2[0-9][0-9] ]]; then
-              echo "✅ API endpoints also healthy (HTTP $api_response)"
+            # Also test the root endpoint to ensure main app is working
+            root_response=$(curl -s -w "%{http_code}" -m 5 http://localhost:8080/ 2>/dev/null || echo "000")
+            if [ "$root_response" = "200" ] || [[ "$root_response" =~ ^2[0-9][0-9] ]]; then
+              echo "✅ Main application also responding (HTTP $root_response)"
             else
-              echo "ℹ️ API endpoints have issues (HTTP $api_response) but main app is healthy"
+              echo "ℹ️ Main app has issues (HTTP $root_response) but health endpoint is working"
             fi
             break
           else
-            echo "❌ Health check failed on attempt $i (HTTP $root_response)"
+            echo "❌ Health check failed on attempt $i (HTTP $health_response)"
             
             # More detailed diagnostics
             echo "  📊 Container status:"
@@ -391,6 +391,9 @@ jobs:
             docker exec test-container ls -la /app/ | head -10 || echo "Cannot list app files"
             echo ""
             echo "Testing connectivity:"
+            curl -v -m 10 http://localhost:8080/api/status || echo "Cannot connect to health endpoint"
+            echo ""
+            echo "Testing main app:"
             curl -v -m 10 http://localhost:8080/ || echo "Cannot connect to base URL"
             echo ""
             docker stop test-container || true
