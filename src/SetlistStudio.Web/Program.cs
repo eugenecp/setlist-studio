@@ -28,6 +28,7 @@ try
     // Add services to the container
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
+    builder.Services.AddControllers(); // Add API controllers support
 
     // Add MudBlazor services for Material Design components
     builder.Services.AddMudServices(config =>
@@ -165,6 +166,9 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
+    // Map API controllers before fallback routing
+    app.MapControllers();
+    
     app.MapRazorPages();
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");

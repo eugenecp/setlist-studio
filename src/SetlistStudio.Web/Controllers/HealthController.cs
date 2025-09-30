@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SetlistStudio.Infrastructure.Data;
 
@@ -5,6 +6,7 @@ namespace SetlistStudio.Web.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[AllowAnonymous]
 public class HealthController : ControllerBase
 {
     private readonly ILogger<HealthController> _logger;
