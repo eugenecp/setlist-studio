@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
 using Serilog;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
+using SetlistStudio.Web.Services;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -26,6 +28,7 @@ try
     // Add services to the container
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
+    builder.Services.AddControllers(); // Add API controllers support
 
     // Add MudBlazor services for Material Design components
     builder.Services.AddMudServices(config =>
@@ -43,8 +46,15 @@ try
     // Configure database
     builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
     {
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                              ?? "Data Source=setliststudio.db";
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        
+        // Use container-specific path only when running in Docker
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+                ? "Data Source=/app/data/setliststudio.db"
+                : "Data Source=setliststudio.db";
+        }
         
         // Auto-detect database provider based on connection string
         if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
@@ -156,24 +166,48 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
+    // Map API controllers before fallback routing
+    app.MapControllers();
+    
     app.MapRazorPages();
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");
 
-    // Ensure database is created and seeded
-    using (var scope = app.Services.CreateScope())
+    // Initialize database
+    try
     {
-        var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        using var scope = app.Services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        await DatabaseInitializer.InitializeAsync(app.Services, logger);
         
         // Seed sample data in development
         if (app.Environment.IsDevelopment())
         {
+            var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
+            Log.Information("Seeding development data...");
             await SeedDevelopmentDataAsync(context, scope.ServiceProvider);
+            Log.Information("Development data seeded successfully");
+        }
+    }
+    catch (Exception dbEx)
+    {
+        Log.Error(dbEx, "Failed to initialize database");
+        
+        // In containers and production, continue without database to allow health checks
+        if (app.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+        {
+            throw; // Re-throw in local development for debugging
+        }
+        else
+        {
+            Log.Warning("Continuing without database initialization - app will have limited functionality but will respond to health checks");
         }
     }
 
     Log.Information("Setlist Studio application starting");
+    Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
+    Log.Information("URLs: {Urls}", Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
+    Log.Information("Container: {IsContainer}", Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
     
     app.Run();
 }

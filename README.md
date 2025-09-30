@@ -2,6 +2,7 @@
 
 A comprehensive music management application designed to help musicians organize songs and create professional setlists for their performances.
 
+[![CI/CD Pipeline](https://github.com/eugenecp/setlist-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/eugenecp/setlist-studio/actions/workflows/ci.yml)
 [![.NET 8](https://img.shields.io/badge/.NET-8.0-blue)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Blazor Server](https://img.shields.io/badge/Blazor-Server-purple)](https://docs.microsoft.com/en-us/aspnet/core/blazor/)
 [![Material Design](https://img.shields.io/badge/UI-Material%20Design-red)](https://material.io/)
@@ -241,7 +242,39 @@ dotnet SetlistStudio.Web.dll
 - Enable logging and monitoring
 - Configure backup strategies for user data
 
-## 🤝 Contributing
+## 🔄 CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and deployment. The pipeline automatically:
+
+- ✅ **Builds** the solution using .NET 8
+- � **Runs tests** with detailed reporting
+- 📊 **Generates code coverage** reports
+- 🔒 **Performs security scans** for vulnerabilities
+- 🐳 **Builds Docker images** for deployment
+- 🚀 **Deploys preview environments** for pull requests
+
+### Viewing Results
+
+1. **Status Badge**: The badge at the top shows current build status
+2. **Actions Tab**: Visit [Actions](https://github.com/eugenecp/setlist-studio/actions) to see all workflow runs
+3. **Pull Requests**: Each PR shows build status and includes test/coverage reports
+4. **Artifacts**: Download test results and coverage reports from completed runs
+
+### Manual Triggers
+
+You can manually trigger the CI/CD pipeline:
+1. Go to the [Actions tab](https://github.com/eugenecp/setlist-studio/actions)
+2. Select "CI/CD Pipeline" from the left sidebar
+3. Click "Run workflow" and choose your branch
+
+### Pipeline Stages
+
+- **Build & Test**: Compiles code, runs tests, generates reports
+- **Security Scan**: Checks for vulnerable packages
+- **Docker Build**: Creates containerized version
+- **Deploy Preview**: Sets up preview environment for PRs
+
+## �🤝 Contributing
 
 We welcome contributions! Here's how to get started:
 
@@ -257,6 +290,7 @@ We welcome contributions! Here's how to get started:
 - Write unit tests for new functionality
 - Ensure accessibility compliance
 - Update documentation as needed
+- All PRs are automatically tested via GitHub Actions
 - Use realistic music data in examples
 
 ## 📄 License
