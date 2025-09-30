@@ -31,19 +31,29 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* \
 # Copy published app
 COPY --from=publish /app/publish .
 
-# Create logs directory
-RUN mkdir -p /app/logs && chown -R setliststudio:setliststudio /app/logs
+# Create logs and data directories with proper permissions
+RUN mkdir -p /app/logs /app/data && \
+    chmod 755 /app/data /app/logs && \
+    chown -R setliststudio:setliststudio /app/logs /app/data
+
+# Set environment variables for ASP.NET Core
+ENV ASPNETCORE_URLS=http://0.0.0.0:5000
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_HTTP_PORTS=5000
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 # Switch to non-root user
 USER setliststudio
 
-# Set environment variables for ASP.NET Core
-ENV ASPNETCORE_URLS=http://+:5000
-ENV ASPNETCORE_ENVIRONMENT=Production
+# Pre-create empty database file with proper permissions
+RUN touch /app/data/setliststudio.db && chmod 644 /app/data/setliststudio.db
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:5000/health || exit 1
+# Health check with longer start period for database initialization
+# Using simple health check to avoid database dependency in container health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:5000/health/simple || exit 1
 
 EXPOSE 5000
+
 ENTRYPOINT ["dotnet", "SetlistStudio.Web.dll"]

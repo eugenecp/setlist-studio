@@ -238,6 +238,11 @@ jobs:
     - name: 🐳 Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
+    - name: 🔧 Install network tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y netcat-openbsd
+    
     - name: 🏗️ Build Docker image
       uses: docker/build-push-action@v5
       with:
@@ -253,8 +258,12 @@ jobs:
       run: |
         echo "Available Docker images:"
         docker images setlist-studio
+        echo ""
         echo "Image details:"
-        docker inspect setlist-studio:${{ github.sha }} --format='{{.Id}} {{.Created}} {{.Size}}'
+        docker inspect setlist-studio:${{ github.sha }} --format='{{.Id}} {{.Created}} {{.Config.Env}} {{.Config.ExposedPorts}}'
+        echo ""
+        echo "Image layers:"
+        docker history setlist-studio:${{ github.sha }} --no-trunc | head -10
     
     - name: 🧪 Test Docker image
       run: |
@@ -287,44 +296,92 @@ jobs:
         docker logs test-container
         
         echo "Testing health endpoint..."
+        # Get current container logs before testing
+        echo "Current container logs:"
+        docker logs test-container
+        
         # Try multiple times as the app might take time to start
-        for i in {1..6}; do
-          echo "Attempt $i: Testing http://localhost:8080/health"
+        for i in {1..8}; do
+          echo "Attempt $i: Testing application health"
           
-          # Test the health endpoint
-          response=$(curl -f -s -w "%{http_code}" http://localhost:8080/health 2>/dev/null || echo "000")
+          # Check if container is still running
+          if ! docker ps --filter name=test-container --filter status=running --quiet | grep -q .; then
+            echo "❌ Container is no longer running!"
+            docker ps -a --filter name=test-container
+            docker logs test-container
+            exit 1
+          fi
           
-          if [ "$response" = "200" ] || [[ "$response" =~ ^2[0-9][0-9] ]]; then
-            echo "✅ Health check passed on attempt $i (HTTP $response)"
-            echo "Response body:"
-            curl -s http://localhost:8080/health | jq . || curl -s http://localhost:8080/health
-            break
+          # First try simple health check (no database dependency)
+          simple_response=$(curl -f -s -w "%{http_code}" -m 10 http://localhost:8080/health/simple 2>/dev/null || echo "000")
+          
+          if [ "$simple_response" = "200" ] || [[ "$simple_response" =~ ^2[0-9][0-9] ]]; then
+            echo "✅ Simple health check passed (HTTP $simple_response)"
+            
+            # Now try full health check (with database)
+            full_response=$(curl -f -s -w "%{http_code}" -m 10 http://localhost:8080/health 2>/dev/null || echo "000")
+            
+            if [ "$full_response" = "200" ] || [[ "$full_response" =~ ^2[0-9][0-9] ]]; then
+              echo "✅ Full health check passed on attempt $i (HTTP $full_response)"
+              echo "Response body:"
+              curl -s http://localhost:8080/health | jq . 2>/dev/null || curl -s http://localhost:8080/health
+              break
+            else
+              echo "⚠️ Full health check failed (HTTP $full_response), but simple check passed"
+              echo "This might indicate a database issue"
+              curl -s http://localhost:8080/health || echo "No response body"
+            fi
           else
             echo "❌ Health check failed on attempt $i (HTTP $response)"
             
-            # Also try a basic connectivity test
-            if curl -f -s -m 5 http://localhost:8080/ >/dev/null 2>&1; then
-              echo "  ℹ️  Base URL is accessible, but /health returned $response"
-            else
-              echo "  ℹ️  Base URL is not accessible"
-            fi
+            # More detailed diagnostics
+            echo "  📊 Container status:"
+            docker exec test-container ps aux | head -10 || echo "    Cannot exec into container"
             
-            if [ $i -lt 6 ]; then
-              echo "Retrying in 10 seconds..."
-              sleep 10
+            echo "  🔍 Network connectivity:"
+            docker exec test-container netstat -tuln | grep :5000 || echo "    Cannot check network status"
+            
+            echo "  📋 Latest logs:"
+            docker logs --tail 20 test-container
+            
+            # Test basic connectivity
+            echo "  🌐 Testing connectivity:"
+            nc -z localhost 8080 && echo "    Port 8080 is open" || echo "    Port 8080 is closed"
+            
+            if [ $i -lt 8 ]; then
+              echo "Retrying in 15 seconds..."
+              sleep 15
             fi
           fi
           
-          if [ $i -eq 6 ]; then
+          if [ $i -eq 8 ]; then
             echo "❌ Health check failed after $i attempts"
-            echo "Final container logs:"
+            echo ""
+            echo "🔍 === FINAL DIAGNOSTICS ==="
+            echo "Container status:"
+            docker ps -a --filter name=test-container
+            echo ""
+            echo "Full container logs:"
             docker logs test-container
+            echo ""
             echo "Container processes:"
-            docker exec test-container ps aux || true
+            docker exec test-container ps aux || echo "Cannot exec into container"
+            echo ""
             echo "Network information:"
-            docker port test-container || true
-            echo "Testing base URL:"
-            curl -v http://localhost:8080/ || true
+            docker port test-container || echo "Cannot get port information"
+            echo ""
+            echo "Environment variables:"
+            docker exec test-container env | grep -E "(ASPNET|DOTNET)" || echo "Cannot get environment"
+            echo ""
+            echo "Database directory:"
+            docker exec test-container ls -la /app/data/ || echo "Cannot check database directory"
+            echo ""
+            echo "Application files:"
+            docker exec test-container ls -la /app/ | head -10 || echo "Cannot list app files"
+            echo ""
+            echo "Testing connectivity:"
+            curl -v -m 10 http://localhost:8080/ || echo "Cannot connect to base URL"
+            echo ""
             docker stop test-container || true
             exit 1
           fi

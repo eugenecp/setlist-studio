@@ -6,6 +6,7 @@ using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
+using SetlistStudio.Web.Services;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -160,16 +161,33 @@ try
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");
 
-    // Ensure database is created and seeded
-    using (var scope = app.Services.CreateScope())
+    // Initialize database
+    try
     {
-        var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        await DatabaseInitializer.InitializeAsync(app.Services, Log.Logger);
         
         // Seed sample data in development
         if (app.Environment.IsDevelopment())
         {
+            using var scope = app.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
+            Log.Information("Seeding development data...");
             await SeedDevelopmentDataAsync(context, scope.ServiceProvider);
+            Log.Information("Development data seeded successfully");
+        }
+    }
+    catch (Exception dbEx)
+    {
+        Log.Error(dbEx, "Failed to initialize database");
+        
+        // In production, we might want to continue without seeded data
+        if (app.Environment.IsDevelopment())
+        {
+            throw; // Re-throw in development for debugging
+        }
+        else
+        {
+            Log.Warning("Continuing without database initialization in production - app will have limited functionality");
         }
     }
 
