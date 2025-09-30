@@ -100,36 +100,75 @@ try
     var authBuilder = builder.Services.AddAuthentication();
 
     // Google OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Google:ClientId"]))
+    var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+    var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+    if (!string.IsNullOrWhiteSpace(googleClientId) && 
+        !string.IsNullOrWhiteSpace(googleClientSecret) &&
+        !googleClientId.StartsWith("YOUR_") &&
+        !googleClientSecret.StartsWith("YOUR_"))
     {
-        authBuilder.AddGoogle(googleOptions =>
+        try
         {
-            googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
-            googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
-            googleOptions.CallbackPath = "/signin-google";
-        });
+            authBuilder.AddGoogle(googleOptions =>
+            {
+                googleOptions.ClientId = googleClientId;
+                googleOptions.ClientSecret = googleClientSecret;
+                googleOptions.CallbackPath = "/signin-google";
+            });
+            Log.Information("Google authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Google authentication");
+        }
     }
 
     // Microsoft OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Microsoft:ClientId"]))
+    var microsoftClientId = builder.Configuration["Authentication:Microsoft:ClientId"];
+    var microsoftClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"];
+    if (!string.IsNullOrWhiteSpace(microsoftClientId) && 
+        !string.IsNullOrWhiteSpace(microsoftClientSecret) &&
+        !microsoftClientId.StartsWith("YOUR_") &&
+        !microsoftClientSecret.StartsWith("YOUR_"))
     {
-        authBuilder.AddMicrosoftAccount(microsoftOptions =>
+        try
         {
-            microsoftOptions.ClientId = builder.Configuration["Authentication:Microsoft:ClientId"]!;
-            microsoftOptions.ClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"]!;
-            microsoftOptions.CallbackPath = "/signin-microsoft";
-        });
+            authBuilder.AddMicrosoftAccount(microsoftOptions =>
+            {
+                microsoftOptions.ClientId = microsoftClientId;
+                microsoftOptions.ClientSecret = microsoftClientSecret;
+                microsoftOptions.CallbackPath = "/signin-microsoft";
+            });
+            Log.Information("Microsoft authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Microsoft authentication");
+        }
     }
 
     // Facebook OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Facebook:AppId"]))
+    var facebookAppId = builder.Configuration["Authentication:Facebook:AppId"];
+    var facebookAppSecret = builder.Configuration["Authentication:Facebook:AppSecret"];
+    if (!string.IsNullOrWhiteSpace(facebookAppId) && 
+        !string.IsNullOrWhiteSpace(facebookAppSecret) &&
+        !facebookAppId.StartsWith("YOUR_") &&
+        !facebookAppSecret.StartsWith("YOUR_"))
     {
-        authBuilder.AddFacebook(facebookOptions =>
+        try
         {
-            facebookOptions.AppId = builder.Configuration["Authentication:Facebook:AppId"]!;
-            facebookOptions.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"]!;
-            facebookOptions.CallbackPath = "/signin-facebook";
-        });
+            authBuilder.AddFacebook(facebookOptions =>
+            {
+                facebookOptions.AppId = facebookAppId;
+                facebookOptions.AppSecret = facebookAppSecret;
+                facebookOptions.CallbackPath = "/signin-facebook";
+            });
+            Log.Information("Facebook authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Facebook authentication");
+        }
     }
 
     // Register application services
@@ -323,3 +362,6 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
         Log.Error(ex, "Failed to seed development data");
     }
 }
+
+// Make Program class accessible for testing
+public partial class Program { }

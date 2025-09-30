@@ -381,6 +381,8 @@ logs/
 TestResults/
 test-results/
 coverage/
+coverage-report/
+CoverageReport/
 
 ## JetBrains Rider
 .idea/

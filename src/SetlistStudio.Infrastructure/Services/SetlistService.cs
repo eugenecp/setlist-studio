@@ -102,6 +102,9 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist> CreateSetlistAsync(Setlist setlist)
     {
+        if (setlist == null)
+            throw new ArgumentNullException(nameof(setlist));
+
         try
         {
             var validationErrors = ValidateSetlist(setlist);
@@ -111,7 +114,7 @@ public class SetlistService : ISetlistService
             }
 
             setlist.CreatedAt = DateTime.UtcNow;
-            setlist.UpdatedAt = null;
+            setlist.UpdatedAt = DateTime.UtcNow;
 
             _context.Setlists.Add(setlist);
             await _context.SaveChangesAsync();
@@ -131,6 +134,9 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist?> UpdateSetlistAsync(Setlist setlist, string userId)
     {
+        if (setlist == null)
+            throw new ArgumentNullException(nameof(setlist));
+
         try
         {
             var existingSetlist = await _context.Setlists
@@ -236,12 +242,14 @@ public class SetlistService : ISetlistService
             if (existingSetlistSong != null)
             {
                 _logger.LogWarning("Song {SongId} already exists in setlist {SetlistId}", songId, setlistId);
-                return existingSetlistSong;
+                return null;
             }
 
-            // Determine position
-            var setlistSongsList = setlist.SetlistSongs.ToList();
-            var targetPosition = position ?? (setlistSongsList.Any() ? setlistSongsList.Max(ss => ss.Position) + 1 : 1);
+            // Determine position - Always query fresh data to avoid stale collections
+            var currentSetlistSongs = await _context.SetlistSongs
+                .Where(ss => ss.SetlistId == setlistId)
+                .ToListAsync();
+            var targetPosition = position ?? (currentSetlistSongs.Any() ? currentSetlistSongs.Max(ss => ss.Position) + 1 : 1);
 
             // Adjust positions if inserting in middle
             if (position.HasValue)
@@ -253,6 +261,11 @@ public class SetlistService : ISetlistService
                 foreach (var songToShift in songsToShift)
                 {
                     songToShift.Position++;
+                }
+                
+                if (songsToShift.Any())
+                {
+                    await _context.SaveChangesAsync();
                 }
             }
 
@@ -335,11 +348,12 @@ public class SetlistService : ISetlistService
     {
         try
         {
-            var setlist = await _context.Setlists
-                .Include(sl => sl.SetlistSongs)
-                .FirstOrDefaultAsync(sl => sl.Id == setlistId && sl.UserId == userId);
+            // Always query fresh data from the database to avoid change tracking issues
+            var setlistSongs = await _context.SetlistSongs
+                .Where(ss => ss.SetlistId == setlistId && ss.Setlist.UserId == userId)
+                .ToListAsync();
 
-            if (setlist == null)
+            if (!setlistSongs.Any())
             {
                 _logger.LogWarning("Setlist {SetlistId} not found or unauthorized for user {UserId}", 
                     setlistId, userId);
@@ -347,7 +361,7 @@ public class SetlistService : ISetlistService
             }
 
             // Validate that all songs in ordering exist in setlist
-            var setlistSongIds = setlist.SetlistSongs.Select(ss => ss.SongId).ToHashSet();
+            var setlistSongIds = setlistSongs.Select(ss => ss.SongId).ToHashSet();
             if (!songOrdering.All(id => setlistSongIds.Contains(id)))
             {
                 _logger.LogWarning("Invalid song ordering for setlist {SetlistId}: some songs not in setlist", 
@@ -358,8 +372,9 @@ public class SetlistService : ISetlistService
             // Update positions
             for (int i = 0; i < songOrdering.Length; i++)
             {
-                var setlistSong = setlist.SetlistSongs.First(ss => ss.SongId == songOrdering[i]);
+                var setlistSong = setlistSongs.First(ss => ss.SongId == songOrdering[i]);
                 setlistSong.Position = i + 1;
+                _logger.LogDebug("Setting song {SongId} to position {Position}", songOrdering[i], i + 1);
             }
 
             await _context.SaveChangesAsync();
@@ -430,6 +445,11 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist?> CopySetlistAsync(int sourceSetlistId, string newName, string userId)
     {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            throw new ArgumentException("Setlist name cannot be null or empty", nameof(newName));
+        }
+
         try
         {
             var sourceSetlist = await _context.Setlists

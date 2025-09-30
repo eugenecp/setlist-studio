@@ -113,14 +113,14 @@ public class SongService : ISongService
             _context.Songs.Add(song);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
+            _logger?.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
                 song.Id, song.Title, song.Artist, song.UserId);
 
             return song;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating song '{Title}' by '{Artist}' for user {UserId}", 
+            _logger?.LogError(ex, "Error creating song '{Title}' by '{Artist}' for user {UserId}", 
                 song.Title, song.Artist, song.UserId);
             throw;
         }
@@ -249,6 +249,12 @@ public class SongService : ISongService
     public IEnumerable<string> ValidateSong(Song song)
     {
         var errors = new List<string>();
+
+        if (song == null)
+        {
+            errors.Add("Song cannot be null");
+            return errors;
+        }
 
         if (string.IsNullOrWhiteSpace(song.Title))
             errors.Add("Song title is required");
