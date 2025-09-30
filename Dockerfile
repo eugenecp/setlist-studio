@@ -56,4 +56,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 EXPOSE 5000
 
+# Add detailed logging for startup debugging
+ENV DOTNET_SYSTEM_DIAGNOSTICS_DEBUGLEVEL=Verbose
+ENV ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+
 ENTRYPOINT ["dotnet", "SetlistStudio.Web.dll"]

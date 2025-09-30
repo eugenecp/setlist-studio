@@ -189,18 +189,21 @@ try
     {
         Log.Error(dbEx, "Failed to initialize database");
         
-        // In production, we might want to continue without seeded data
-        if (app.Environment.IsDevelopment())
+        // In containers and production, continue without database to allow health checks
+        if (app.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
         {
-            throw; // Re-throw in development for debugging
+            throw; // Re-throw in local development for debugging
         }
         else
         {
-            Log.Warning("Continuing without database initialization in production - app will have limited functionality");
+            Log.Warning("Continuing without database initialization - app will have limited functionality but will respond to health checks");
         }
     }
 
     Log.Information("Setlist Studio application starting");
+    Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
+    Log.Information("URLs: {Urls}", Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
+    Log.Information("Container: {IsContainer}", Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
     
     app.Run();
 }

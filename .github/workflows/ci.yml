@@ -267,7 +267,10 @@ jobs:
     
     - name: 🧪 Test Docker image
       run: |
-        echo "Starting container..."
+        echo "Testing container in foreground first (for debugging)..."
+        timeout 10s docker run --rm --name test-debug -p 8081:5000 setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
+        
+        echo "Starting container in background..."
         docker run --rm -d --name test-container -p 8080:5000 setlist-studio:${{ github.sha }}
         
         echo "Waiting for container to start..."
@@ -300,6 +303,13 @@ jobs:
         echo "Current container logs:"
         docker logs test-container
         
+        # Wait a bit more for the application to fully start
+        echo "Giving application more time to start..."
+        sleep 10
+        
+        echo "Container logs after additional wait:"
+        docker logs test-container
+        
         # Try multiple times as the app might take time to start
         for i in {1..8}; do
           echo "Attempt $i: Testing application health"
@@ -307,8 +317,13 @@ jobs:
           # Check if container is still running
           if ! docker ps --filter name=test-container --filter status=running --quiet | grep -q .; then
             echo "❌ Container is no longer running!"
+            echo "Container status:"
             docker ps -a --filter name=test-container
+            echo "Container exit code and details:"
+            docker inspect test-container --format='{{.State.ExitCode}} {{.State.Error}}' || echo "Cannot inspect container"
+            echo "Full container logs:"
             docker logs test-container
+            echo "Container was likely terminated due to application startup failure"
             exit 1
           fi
           
