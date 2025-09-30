@@ -1,0 +1,113 @@
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize, opened, edited, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  status: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    name: Auto-merge approved PRs
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'auto-merge') ||
+      (github.event.pull_request.user.login == 'dependabot[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies'))
+    
+    steps:
+    - name: 🔍 Check PR status
+      id: check-pr
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number
+          });
+          
+          const { data: reviews } = await github.rest.pulls.listReviews({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number
+          });
+          
+          const { data: checks } = await github.rest.checks.listForRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: pr.head.sha
+          });
+          
+          const approvedReviews = reviews.filter(review => review.state === 'APPROVED');
+          const allChecksSuccess = checks.check_runs.every(check => 
+            check.status === 'completed' && check.conclusion === 'success'
+          );
+          
+          console.log(`PR #${pr.number}: ${pr.title}`);
+          console.log(`- Approved reviews: ${approvedReviews.length}`);
+          console.log(`- All checks successful: ${allChecksSuccess}`);
+          console.log(`- Draft: ${pr.draft}`);
+          console.log(`- Mergeable: ${pr.mergeable}`);
+          
+          const canMerge = approvedReviews.length > 0 && 
+                          allChecksSuccess && 
+                          !pr.draft && 
+                          pr.mergeable;
+          
+          return {
+            canMerge,
+            title: pr.title,
+            number: pr.number,
+            isDependabot: pr.user.login === 'dependabot[bot]'
+          };
+    
+    - name: 🚀 Auto-merge PR
+      if: fromJSON(steps.check-pr.outputs.result).canMerge
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const result = ${{ steps.check-pr.outputs.result }};
+          
+          try {
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: result.number,
+              commit_title: `Auto-merge: ${result.title}`,
+              merge_method: 'squash'
+            });
+            
+            console.log(`✅ Successfully merged PR #${result.number}`);
+            
+            // Add a comment about the auto-merge
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: result.number,
+              body: `🤖 **Auto-merged**\n\nThis PR was automatically merged because:\n- ✅ All checks passed\n- ✅ PR was approved\n- ✅ Contains the \`auto-merge\` label${result.isDependabot ? '\n- 🤖 Created by Dependabot' : ''}`
+            });
+            
+          } catch (error) {
+            console.error('❌ Failed to merge PR:', error.message);
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: result.number,
+              body: `⚠️ **Auto-merge failed**\n\nFailed to automatically merge this PR: ${error.message}\n\nPlease merge manually.`
+            });
+          }
+    
+    - name: 📝 Log result
+      if: always()
+      run: |
+        echo "Auto-merge workflow completed"
+        echo "PR can be merged: ${{ fromJSON(steps.check-pr.outputs.result).canMerge }}"
