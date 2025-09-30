@@ -21,7 +21,7 @@ FROM build AS publish
 RUN dotnet publish "SetlistStudio.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 # Install curl, ICU packages for globalization, and create non-root user for security
