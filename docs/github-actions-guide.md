@@ -179,9 +179,19 @@ dotnet test SetlistStudio.sln --configuration Release
 - Update vulnerable packages
 
 **Docker Issues:**
-- Verify Dockerfile builds locally
-- Check container health endpoint
-- Review Docker build logs
+```bash
+# Local Docker testing
+docker build -t setlist-studio:test .
+docker run --rm -d --name test-app -p 8080:5000 setlist-studio:test
+curl http://localhost:8080/health
+docker stop test-app
+```
+- ✅ **Fixed**: Proper port mapping (5000 → 8080)
+- ✅ **Fixed**: Curl installed in container for health checks
+- ✅ **Fixed**: Comprehensive startup verification
+- ✅ **Fixed**: Image loaded into local Docker daemon
+- 🔍 Check container logs if health checks fail
+- 📋 Verify Dockerfile builds locally before pushing
 
 **Permission Errors:**
 If you see "Resource not accessible by integration" errors:

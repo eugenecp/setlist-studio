@@ -244,16 +244,94 @@ jobs:
         context: .
         file: ./Dockerfile
         push: false
-        tags: setlist-studio:${{ github.sha }}
+        load: true  # Load image into local Docker daemon
+        tags: setlist-studio:${{ github.sha }},setlist-studio:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
+    - name: 🔍 Verify Docker image
+      run: |
+        echo "Available Docker images:"
+        docker images setlist-studio
+        echo "Image details:"
+        docker inspect setlist-studio:${{ github.sha }} --format='{{.Id}} {{.Created}} {{.Size}}'
+    
     - name: 🧪 Test Docker image
       run: |
-        docker run --rm -d --name test-container -p 8080:8080 setlist-studio:${{ github.sha }}
-        sleep 10
-        # Basic health check
-        curl -f http://localhost:8080/health || exit 1
+        echo "Starting container..."
+        docker run --rm -d --name test-container -p 8080:5000 setlist-studio:${{ github.sha }}
+        
+        echo "Waiting for container to start..."
+        # Wait and check if container is running
+        for i in {1..10}; do
+          if docker ps --filter name=test-container --filter status=running --quiet | grep -q .; then
+            echo "✅ Container is running after ${i}0 seconds"
+            break
+          else
+            echo "⏳ Container not yet running, waiting... (${i}0s)"
+            sleep 10
+          fi
+          
+          if [ $i -eq 10 ]; then
+            echo "❌ Container failed to start after 100 seconds"
+            docker ps -a --filter name=test-container
+            docker logs test-container
+            exit 1
+          fi
+        done
+        
+        echo "Container status:"
+        docker ps -a --filter name=test-container
+        
+        echo "Initial container logs:"
+        docker logs test-container
+        
+        echo "Testing health endpoint..."
+        # Try multiple times as the app might take time to start
+        for i in {1..6}; do
+          echo "Attempt $i: Testing http://localhost:8080/health"
+          
+          # Test the health endpoint
+          response=$(curl -f -s -w "%{http_code}" http://localhost:8080/health 2>/dev/null || echo "000")
+          
+          if [ "$response" = "200" ] || [[ "$response" =~ ^2[0-9][0-9] ]]; then
+            echo "✅ Health check passed on attempt $i (HTTP $response)"
+            echo "Response body:"
+            curl -s http://localhost:8080/health | jq . || curl -s http://localhost:8080/health
+            break
+          else
+            echo "❌ Health check failed on attempt $i (HTTP $response)"
+            
+            # Also try a basic connectivity test
+            if curl -f -s -m 5 http://localhost:8080/ >/dev/null 2>&1; then
+              echo "  ℹ️  Base URL is accessible, but /health returned $response"
+            else
+              echo "  ℹ️  Base URL is not accessible"
+            fi
+            
+            if [ $i -lt 6 ]; then
+              echo "Retrying in 10 seconds..."
+              sleep 10
+            fi
+          fi
+          
+          if [ $i -eq 6 ]; then
+            echo "❌ Health check failed after $i attempts"
+            echo "Final container logs:"
+            docker logs test-container
+            echo "Container processes:"
+            docker exec test-container ps aux || true
+            echo "Network information:"
+            docker port test-container || true
+            echo "Testing base URL:"
+            curl -v http://localhost:8080/ || true
+            docker stop test-container || true
+            exit 1
+          fi
+        done
+        
+        echo "✅ Container test successful!"
+        echo "Stopping container..."
         docker stop test-container
 
   deploy-preview:
