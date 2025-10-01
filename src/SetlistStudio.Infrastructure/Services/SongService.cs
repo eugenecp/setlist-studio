@@ -248,51 +248,84 @@ public class SongService : ISongService
 
     public IEnumerable<string> ValidateSong(Song song)
     {
-        var errors = new List<string>();
-
         if (song == null)
         {
-            errors.Add("Song cannot be null");
-            return errors;
+            return new[] { "Song cannot be null" };
         }
 
-        if (string.IsNullOrWhiteSpace(song.Title))
-            errors.Add("Song title is required");
-        else if (song.Title.Length > 200)
-            errors.Add("Song title cannot exceed 200 characters");
-
-        if (string.IsNullOrWhiteSpace(song.Artist))
-            errors.Add("Artist name is required");
-        else if (song.Artist.Length > 200)
-            errors.Add("Artist name cannot exceed 200 characters");
-
-        if (!string.IsNullOrEmpty(song.Album) && song.Album.Length > 200)
-            errors.Add("Album name cannot exceed 200 characters");
-
-        if (!string.IsNullOrEmpty(song.Genre) && song.Genre.Length > 50)
-            errors.Add("Genre cannot exceed 50 characters");
-
-        if (song.Bpm.HasValue && (song.Bpm < 40 || song.Bpm > 250))
-            errors.Add("BPM must be between 40 and 250");
-
-        if (!string.IsNullOrEmpty(song.MusicalKey) && song.MusicalKey.Length > 10)
-            errors.Add("Musical key cannot exceed 10 characters");
-
-        if (song.DurationSeconds.HasValue && (song.DurationSeconds < 1 || song.DurationSeconds > 3600))
-            errors.Add("Duration must be between 1 second and 1 hour");
-
-        if (!string.IsNullOrEmpty(song.Notes) && song.Notes.Length > 2000)
-            errors.Add("Notes cannot exceed 2000 characters");
-
-        if (!string.IsNullOrEmpty(song.Tags) && song.Tags.Length > 500)
-            errors.Add("Tags cannot exceed 500 characters");
-
-        if (song.DifficultyRating.HasValue && (song.DifficultyRating < 1 || song.DifficultyRating > 5))
-            errors.Add("Difficulty rating must be between 1 and 5");
-
-        if (string.IsNullOrWhiteSpace(song.UserId))
-            errors.Add("User ID is required");
+        var errors = new List<string>();
+        
+        ValidateBasicProperties(song, errors);
+        ValidateOptionalProperties(song, errors);
+        ValidateNumericProperties(song, errors);
+        ValidateUserAssociation(song, errors);
 
         return errors;
+    }
+
+    private static void ValidateBasicProperties(Song song, List<string> errors)
+    {
+        ValidateRequiredStringProperty(song.Title, "Song title", 200, errors);
+        ValidateRequiredStringProperty(song.Artist, "Artist name", 200, errors);
+    }
+
+    private static void ValidateOptionalProperties(Song song, List<string> errors)
+    {
+        ValidateOptionalStringProperty(song.Album, "Album name", 200, errors);
+        ValidateOptionalStringProperty(song.Genre, "Genre", 50, errors);
+        ValidateOptionalStringProperty(song.MusicalKey, "Musical key", 10, errors);
+        ValidateOptionalStringProperty(song.Notes, "Notes", 2000, errors);
+        ValidateOptionalStringProperty(song.Tags, "Tags", 500, errors);
+    }
+
+    private static void ValidateNumericProperties(Song song, List<string> errors)
+    {
+        ValidateOptionalNumericRange(song.Bpm, "BPM", 40, 250, errors);
+        ValidateOptionalNumericRange(song.DurationSeconds, "Duration", 1, 3600, "Duration must be between 1 second and 1 hour", errors);
+        ValidateOptionalNumericRange(song.DifficultyRating, "Difficulty rating", 1, 5, errors);
+    }
+
+    private static void ValidateUserAssociation(Song song, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(song.UserId))
+        {
+            errors.Add("User ID is required");
+        }
+    }
+
+    private static void ValidateRequiredStringProperty(string? value, string propertyName, int maxLength, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            errors.Add($"{propertyName} is required");
+        }
+        else if (value.Length > maxLength)
+        {
+            errors.Add($"{propertyName} cannot exceed {maxLength} characters");
+        }
+    }
+
+    private static void ValidateOptionalStringProperty(string? value, string propertyName, int maxLength, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(value) && value.Length > maxLength)
+        {
+            errors.Add($"{propertyName} cannot exceed {maxLength} characters");
+        }
+    }
+
+    private static void ValidateOptionalNumericRange(int? value, string propertyName, int min, int max, List<string> errors)
+    {
+        if (value.HasValue && (value < min || value > max))
+        {
+            errors.Add($"{propertyName} must be between {min} and {max}");
+        }
+    }
+
+    private static void ValidateOptionalNumericRange(int? value, string propertyName, int min, int max, string customMessage, List<string> errors)
+    {
+        if (value.HasValue && (value < min || value > max))
+        {
+            errors.Add(customMessage);
+        }
     }
 }
