@@ -393,11 +393,37 @@ public class ProgramAuthenticationBranchTests : IDisposable
                     Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
                 }
                 
+                // Clear any existing authentication environment variables that might interfere with tests
+                // Only clear them if they're not explicitly set in the test configuration
+                if (!configuration.ContainsKey("Authentication:Google:ClientId"))
+                {
+                    Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
+                    Environment.SetEnvironmentVariable("Authentication__Google__ClientSecret", null);
+                }
+                if (!configuration.ContainsKey("Authentication:Microsoft:ClientId"))
+                {
+                    Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientId", null);
+                    Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
+                }
+                if (!configuration.ContainsKey("Authentication:Facebook:AppId"))
+                {
+                    Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
+                    Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
+                }
+                
+                // Use UseSetting for each configuration key - this has the highest priority
+                foreach (var kvp in configuration)
+                {
+                    if (kvp.Value != null)
+                    {
+                        builder.UseSetting(kvp.Key, kvp.Value);
+                    }
+                }
+                
                 builder.ConfigureAppConfiguration((context, config) =>
                 {
-                    config.Sources.Clear();
+                    // Also add in-memory collection as fallback
                     config.AddInMemoryCollection(configuration);
-                    config.AddEnvironmentVariables();
                 });
 
                 // Configure logging to suppress output during tests
@@ -418,6 +444,14 @@ public class ProgramAuthenticationBranchTests : IDisposable
         {
             Environment.SetEnvironmentVariable(key, null);
         }
+        
+        // Clean up authentication environment variables
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
     }
 
     #endregion
