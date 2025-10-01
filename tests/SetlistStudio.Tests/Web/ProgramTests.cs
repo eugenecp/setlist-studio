@@ -209,12 +209,11 @@ public class ProgramTests : IDisposable
         // Act
         using var factory = CreateWebApplicationFactory(config);
         
-        // Assert - Debug configuration values
+        // Assert - Verify configuration was applied correctly
         var configuration = factory.Services.GetRequiredService<IConfiguration>();
         var googleClientId = configuration["Authentication:Google:ClientId"];
         var googleClientSecret = configuration["Authentication:Google:ClientSecret"];
         
-        // These should help us debug
         googleClientId.Should().Be("real-google-client-id");
         googleClientSecret.Should().Be("real-google-secret");
         
@@ -418,11 +417,18 @@ public class ProgramTests : IDisposable
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment(environment);
+                // Set environment variables for authentication configuration
+                foreach (var kvp in config)
+                {
+                    Environment.SetEnvironmentVariable(kvp.Key.Replace(":", "__"), kvp.Value);
+                }
+                
                 builder.ConfigureAppConfiguration((context, configBuilder) =>
                 {
-                    // Clear all existing configuration sources to ensure our test config takes precedence
+                    // Clear existing configuration and add only our test config
                     configBuilder.Sources.Clear();
                     configBuilder.AddInMemoryCollection(config!);
+                    configBuilder.AddEnvironmentVariables();
                 });
                 
                 // Override database with in-memory for testing
@@ -454,11 +460,18 @@ public class ProgramTests : IDisposable
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment(environment);
+                // Set environment variables for authentication configuration
+                foreach (var kvp in config)
+                {
+                    Environment.SetEnvironmentVariable(kvp.Key.Replace(":", "__"), kvp.Value);
+                }
+                
                 builder.ConfigureAppConfiguration((context, configBuilder) =>
                 {
-                    // Clear all existing configuration sources to ensure our test config takes precedence
+                    // Clear existing configuration and add only our test config
                     configBuilder.Sources.Clear();
                     configBuilder.AddInMemoryCollection(config!);
+                    configBuilder.AddEnvironmentVariables();
                 });
                 // Don't override database configuration - let Program.cs handle it
             });
@@ -470,6 +483,23 @@ public class ProgramTests : IDisposable
 
     public void Dispose()
     {
+        // Clean up environment variables to avoid interference between tests
+        var configKeys = new[]
+        {
+            "ConnectionStrings__DefaultConnection",
+            "Authentication__Google__ClientId",
+            "Authentication__Google__ClientSecret",
+            "Authentication__Microsoft__ClientId",
+            "Authentication__Microsoft__ClientSecret",
+            "Authentication__Facebook__AppId",
+            "Authentication__Facebook__AppSecret"
+        };
+        
+        foreach (var key in configKeys)
+        {
+            Environment.SetEnvironmentVariable(key, null);
+        }
+        
         _factory?.Dispose();
     }
 }

@@ -84,18 +84,19 @@ public class SetlistServiceSongManagementTests : IDisposable
         result.Should().NotBeNull();
         result!.Position.Should().Be(2);
 
-        // Verify reordering occurred
-        var updatedSetlist = await _context.Setlists
-            .Include(s => s.SetlistSongs.OrderBy(ss => ss.Position))
-            .FirstAsync(s => s.Id == setlist.Id);
+        // Verify reordering occurred - Query results separately and order them
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
 
-        updatedSetlist.SetlistSongs.Should().HaveCount(3);
-        updatedSetlist.SetlistSongs.ElementAt(0).SongId.Should().Be(songs[0].Id);
-        updatedSetlist.SetlistSongs.ElementAt(0).Position.Should().Be(1);
-        updatedSetlist.SetlistSongs.ElementAt(1).SongId.Should().Be(songs[2].Id);
-        updatedSetlist.SetlistSongs.ElementAt(1).Position.Should().Be(2);
-        updatedSetlist.SetlistSongs.ElementAt(2).SongId.Should().Be(songs[1].Id);
-        updatedSetlist.SetlistSongs.ElementAt(2).Position.Should().Be(3);
+        setlistSongs.Should().HaveCount(3);
+        setlistSongs[0].SongId.Should().Be(songs[0].Id);
+        setlistSongs[0].Position.Should().Be(1);
+        setlistSongs[1].SongId.Should().Be(songs[2].Id);
+        setlistSongs[1].Position.Should().Be(2);
+        setlistSongs[2].SongId.Should().Be(songs[1].Id);
+        setlistSongs[2].Position.Should().Be(3);
     }
 
     [Fact]
@@ -337,16 +338,17 @@ public class SetlistServiceSongManagementTests : IDisposable
         // Assert
         result.Should().BeTrue();
 
-        var updatedSetlist = await _context.Setlists
-            .Include(s => s.SetlistSongs.OrderBy(ss => ss.Position))
-            .FirstAsync(s => s.Id == setlist.Id);
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
 
-        updatedSetlist.SetlistSongs.ElementAt(0).SongId.Should().Be(songs[2].Id);
-        updatedSetlist.SetlistSongs.ElementAt(0).Position.Should().Be(1);
-        updatedSetlist.SetlistSongs.ElementAt(1).SongId.Should().Be(songs[0].Id);
-        updatedSetlist.SetlistSongs.ElementAt(1).Position.Should().Be(2);
-        updatedSetlist.SetlistSongs.ElementAt(2).SongId.Should().Be(songs[1].Id);
-        updatedSetlist.SetlistSongs.ElementAt(2).Position.Should().Be(3);
+        setlistSongs[0].SongId.Should().Be(songs[2].Id);
+        setlistSongs[0].Position.Should().Be(1);
+        setlistSongs[1].SongId.Should().Be(songs[0].Id);
+        setlistSongs[1].Position.Should().Be(2);
+        setlistSongs[2].SongId.Should().Be(songs[1].Id);
+        setlistSongs[2].Position.Should().Be(3);
     }
 
     [Fact]

@@ -45,9 +45,19 @@ Every feature must work consistently and predictably. All functionality should b
 - Test boundary conditions (empty setlists, maximum song limits, etc.)
 
 #### Code Coverage Standards
-Setlist Studio maintains a **minimum 90% code coverage** requirement to ensure reliability and confidence in our codebase.
+Setlist Studio maintains a **minimum 90% code coverage requirement for each individual file** to ensure reliability and confidence in our codebase.
 
-**Current Coverage Status**: 🎯 **87.8% overall coverage achieved** (977/1112 lines covered) with comprehensive test suites covering all core business logic, entities, services, and application startup configuration. Major components at 100% coverage include all Core entities, SongService, SetlistStudioDbContext, and Web controllers.
+**Quality Metrics Requirements:**
+- ✅ **Code Coverage**: Each individual file must achieve at least 90% line coverage
+- ✅ **CRAP Score**: All methods must maintain acceptable complexity-to-coverage ratios
+- ✅ **Cyclomatic Complexity**: All methods must stay within acceptable complexity thresholds
+
+**Individual File Coverage Requirements:**
+- **Each file must achieve at least 90% line coverage**
+- New code must include tests that achieve 90%+ coverage for the modified files
+- Pull requests should not reduce coverage below 90% for any existing file
+- **All new files must achieve 90% coverage before merge**
+- Focus on achieving high individual file coverage, not just overall project coverage
 
 **Testing Framework Requirements:**
 - **xUnit**: Primary testing framework for all unit and integration tests
@@ -56,11 +66,13 @@ Setlist Studio maintains a **minimum 90% code coverage** requirement to ensure r
 
 **Coverage Guidelines:**
 - All new code must include comprehensive tests covering normal cases, error scenarios, and edge cases
+- **Each individual file must maintain at least 90% line coverage**
 - Tests must cover all conditional branches (if/else statements, try/catch blocks, switch cases)
 - Each test should be small, focused, and clearly named describing what it tests
 - Test names should follow the pattern: `MethodName_Scenario_ExpectedResult`
 - Mock external dependencies to ensure tests are isolated and fast
 - Use realistic musical data in test examples (songs, artists, BPMs, keys)
+- **Focus on achieving high individual file coverage, not just overall project coverage**
 
 **Test Organization:**
 - Group related tests in nested classes or separate test files
@@ -93,10 +105,11 @@ reportgenerator -reports:"./TestResults/[TestRun]/*/coverage.cobertura.xml" -tar
 **Coverage Analysis Guidelines:**
 - Generate coverage reports for all major code changes and pull requests
 - Review line-by-line coverage for newly added classes and methods
-- Identify and address any critical paths with less than 90% coverage
+- **Identify and address any files with less than 90% individual coverage**
 - Use coverage reports to find untested edge cases and error handling paths
-- Focus on achieving high branch coverage, not just line coverage
+- **Focus on achieving high individual file coverage, not just overall project coverage**
 - Document any intentionally excluded code with appropriate justification
+- **Prioritize files below 90% coverage for immediate testing improvements**
 
 **Coverage Report Interpretation:**
 - **Green bars**: Well-covered code (>90% coverage)
@@ -104,6 +117,14 @@ reportgenerator -reports:"./TestResults/[TestRun]/*/coverage.cobertura.xml" -tar
 - **Red bars**: Poorly covered code (<70% coverage) - requires immediate improvement
 - **Risk Hotspots**: High complexity code with low coverage - prioritize for testing
 - **Branch Coverage**: Measures all conditional paths (if/else, switch, try/catch)
+
+**Quality Metrics Analysis:**
+- **CRAP Score**: Change Risk Anti-Patterns score combining complexity and coverage
+  - Target: Keep CRAP score low by maintaining high test coverage on complex methods
+  - Action: Break down methods with high CRAP scores or add comprehensive tests
+- **Cyclomatic Complexity**: Measures code complexity through decision points
+  - Target: Break down methods with high complexity or ensure comprehensive testing
+  - Action: Refactor complex methods into smaller, more testable units
 
 **Example Coverage Analysis Commands:**
 ```bash

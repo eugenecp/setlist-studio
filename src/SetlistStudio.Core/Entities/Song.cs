@@ -105,14 +105,14 @@ public class Song
     /// Helper property to get formatted duration (MM:SS)
     /// </summary>
     public string FormattedDuration => DurationSeconds.HasValue 
-        ? TimeSpan.FromSeconds(DurationSeconds.Value).ToString(@"mm\:ss")
+        ? $"{(int)TimeSpan.FromSeconds(DurationSeconds.Value).TotalMinutes:00}:{TimeSpan.FromSeconds(DurationSeconds.Value).Seconds:00}"
         : "";
 
     /// <summary>
     /// Helper property to check if song has complete metadata
     /// </summary>
-    public bool IsComplete => !string.IsNullOrEmpty(Title) && 
-                             !string.IsNullOrEmpty(Artist) && 
+    public bool IsComplete => !string.IsNullOrWhiteSpace(Title) && 
+                             !string.IsNullOrWhiteSpace(Artist) && 
                              Bpm.HasValue && 
-                             !string.IsNullOrEmpty(MusicalKey);
+                             !string.IsNullOrWhiteSpace(MusicalKey);
 }
