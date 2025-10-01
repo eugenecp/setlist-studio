@@ -255,6 +255,8 @@ static void ConfigureGoogleAuthentication(AuthenticationBuilder authBuilder, ICo
     var clientId = configuration["Authentication:Google:ClientId"];
     var clientSecret = configuration["Authentication:Google:ClientSecret"];
     
+
+    
     if (IsValidAuthenticationCredentials(clientId, clientSecret))
     {
         try
@@ -272,6 +274,10 @@ static void ConfigureGoogleAuthentication(AuthenticationBuilder authBuilder, ICo
             Log.Warning(ex, "Failed to configure Google authentication");
         }
     }
+    else
+    {
+
+    }
 }
 
 /// <summary>
@@ -281,6 +287,8 @@ static void ConfigureMicrosoftAuthentication(AuthenticationBuilder authBuilder, 
 {
     var clientId = configuration["Authentication:Microsoft:ClientId"];
     var clientSecret = configuration["Authentication:Microsoft:ClientSecret"];
+    
+
     
     if (IsValidAuthenticationCredentials(clientId, clientSecret))
     {
@@ -299,6 +307,10 @@ static void ConfigureMicrosoftAuthentication(AuthenticationBuilder authBuilder, 
             Log.Warning(ex, "Failed to configure Microsoft authentication");
         }
     }
+    else
+    {
+
+    }
 }
 
 /// <summary>
@@ -308,6 +320,8 @@ static void ConfigureFacebookAuthentication(AuthenticationBuilder authBuilder, I
 {
     var appId = configuration["Authentication:Facebook:AppId"];
     var appSecret = configuration["Authentication:Facebook:AppSecret"];
+    
+
     
     if (IsValidAuthenticationCredentials(appId, appSecret))
     {
@@ -325,6 +339,10 @@ static void ConfigureFacebookAuthentication(AuthenticationBuilder authBuilder, I
         {
             Log.Warning(ex, "Failed to configure Facebook authentication");
         }
+    }
+    else
+    {
+
     }
 }
 

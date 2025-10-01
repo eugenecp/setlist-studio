@@ -66,10 +66,22 @@ public class ProgramAuthenticationTests : IDisposable
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                builder.UseEnvironment("Test");
+                
+                // Set environment variables for authentication configuration
+                foreach (var kvp in configuration)
+                {
+                    if (kvp.Value != null)
+                    {
+                        Environment.SetEnvironmentVariable(kvp.Key.Replace(":", "__"), kvp.Value);
+                    }
+                }
+                
                 builder.ConfigureAppConfiguration((context, config) =>
                 {
                     config.Sources.Clear(); // Clear all existing configuration sources
                     config.AddInMemoryCollection(configuration);
+                    config.AddEnvironmentVariables();
                 });
             });
 
@@ -100,10 +112,22 @@ public class ProgramAuthenticationTests : IDisposable
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                builder.UseEnvironment("Test");
+                
+                // Set environment variables for authentication configuration
+                foreach (var kvp in configuration)
+                {
+                    if (kvp.Value != null)
+                    {
+                        Environment.SetEnvironmentVariable(kvp.Key.Replace(":", "__"), kvp.Value);
+                    }
+                }
+                
                 builder.ConfigureAppConfiguration((context, config) =>
                 {
                     config.Sources.Clear(); // Clear all existing configuration sources
                     config.AddInMemoryCollection(configuration);
+                    config.AddEnvironmentVariables();
                 });
             });
 
