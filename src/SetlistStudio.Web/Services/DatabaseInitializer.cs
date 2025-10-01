@@ -17,9 +17,24 @@ public static class DatabaseInitializer
             logger.LogInformation("Starting database initialization...");
             
             // Skip database initialization for test environments using in-memory databases
-            // Check if using in-memory database provider
+            // Check if using in-memory database provider or SQLite in-memory connection
             var providerName = context.Database.ProviderName;
-            if (providerName?.Contains("InMemory") == true)
+            
+            // Try to get connection string, but handle cases where it might throw for non-relational providers
+            string? connectionString = null;
+            try
+            {
+                connectionString = context.Database.GetConnectionString();
+            }
+            catch (InvalidOperationException)
+            {
+                // GetConnectionString() throws for non-relational providers like InMemory
+                // This is expected and we can continue with providerName check
+            }
+            
+            // Check if using EF InMemory provider or SQLite in-memory database
+            if (providerName?.Contains("InMemory") == true || 
+                connectionString?.Contains(":memory:") == true)
             {
                 logger.LogInformation("In-memory database detected - skipping initialization for test environment");
                 logger.LogInformation("Database initialization completed (skipped for tests)");
