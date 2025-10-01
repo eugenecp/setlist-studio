@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -46,27 +47,8 @@ try
     // Configure database
     builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
     {
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-        
-        // Use container-specific path only when running in Docker
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
-                ? "Data Source=/app/data/setliststudio.db"
-                : "Data Source=setliststudio.db";
-        }
-        
-        // Auto-detect database provider based on connection string
-        if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
-        {
-            // SQLite connection string
-            options.UseSqlite(connectionString);
-        }
-        else
-        {
-            // SQL Server connection string
-            options.UseSqlServer(connectionString);
-        }
+        var connectionString = GetDatabaseConnectionString(builder.Configuration);
+        ConfigureDatabaseProvider(options, connectionString);
     });
 
     // Configure Identity
@@ -98,39 +80,7 @@ try
 
     // Configure external authentication
     var authBuilder = builder.Services.AddAuthentication();
-
-    // Google OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Google:ClientId"]))
-    {
-        authBuilder.AddGoogle(googleOptions =>
-        {
-            googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
-            googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
-            googleOptions.CallbackPath = "/signin-google";
-        });
-    }
-
-    // Microsoft OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Microsoft:ClientId"]))
-    {
-        authBuilder.AddMicrosoftAccount(microsoftOptions =>
-        {
-            microsoftOptions.ClientId = builder.Configuration["Authentication:Microsoft:ClientId"]!;
-            microsoftOptions.ClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"]!;
-            microsoftOptions.CallbackPath = "/signin-microsoft";
-        });
-    }
-
-    // Facebook OAuth
-    if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Facebook:AppId"]))
-    {
-        authBuilder.AddFacebook(facebookOptions =>
-        {
-            facebookOptions.AppId = builder.Configuration["Authentication:Facebook:AppId"]!;
-            facebookOptions.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"]!;
-            facebookOptions.CallbackPath = "/signin-facebook";
-        });
-    }
+    ConfigureExternalAuthentication(authBuilder, builder.Configuration);
 
     // Register application services
     builder.Services.AddScoped<ISongService, SongService>();
@@ -174,35 +124,7 @@ try
     app.MapFallbackToPage("/_Host");
 
     // Initialize database
-    try
-    {
-        using var scope = app.Services.CreateScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        await DatabaseInitializer.InitializeAsync(app.Services, logger);
-        
-        // Seed sample data in development
-        if (app.Environment.IsDevelopment())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
-            Log.Information("Seeding development data...");
-            await SeedDevelopmentDataAsync(context, scope.ServiceProvider);
-            Log.Information("Development data seeded successfully");
-        }
-    }
-    catch (Exception dbEx)
-    {
-        Log.Error(dbEx, "Failed to initialize database");
-        
-        // In containers and production, continue without database to allow health checks
-        if (app.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
-        {
-            throw; // Re-throw in local development for debugging
-        }
-        else
-        {
-            Log.Warning("Continuing without database initialization - app will have limited functionality but will respond to health checks");
-        }
-    }
+    await InitializeDatabaseAsync(app);
 
     Log.Information("Setlist Studio application starting");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
@@ -221,6 +143,221 @@ finally
 }
 
 /// <summary>
+/// Initializes the database and seeds development data if appropriate
+/// </summary>
+static async Task InitializeDatabaseAsync(WebApplication app)
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        await DatabaseInitializer.InitializeAsync(app.Services, logger);
+        
+        await SeedDevelopmentDataIfNeededAsync(app, scope.ServiceProvider);
+    }
+    catch (Exception dbEx)
+    {
+        HandleDatabaseInitializationError(app.Environment, dbEx);
+    }
+}
+
+/// <summary>
+/// Seeds development data if running in development environment
+/// </summary>
+static async Task SeedDevelopmentDataIfNeededAsync(WebApplication app, IServiceProvider serviceProvider)
+{
+    if (app.Environment.IsDevelopment())
+    {
+        var context = serviceProvider.GetRequiredService<SetlistStudioDbContext>();
+        Log.Information("Seeding development data...");
+        await SeedDevelopmentDataAsync(context, serviceProvider);
+        Log.Information("Development data seeded successfully");
+    }
+}
+
+/// <summary>
+/// Handles database initialization errors based on environment
+/// </summary>
+static void HandleDatabaseInitializationError(IWebHostEnvironment environment, Exception dbEx)
+{
+    Log.Error(dbEx, "Failed to initialize database");
+    
+    // In containers and production, continue without database to allow health checks
+    if (environment.IsDevelopment() && Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+    {
+        throw new InvalidOperationException("Database initialization failed in development environment", dbEx);
+    }
+    else
+    {
+        Log.Warning("Continuing without database initialization - app will have limited functionality but will respond to health checks");
+    }
+}
+
+/// <summary>
+/// Gets the database connection string, using environment-specific defaults if none configured
+/// </summary>
+static string GetDatabaseConnectionString(IConfiguration configuration)
+{
+    var connectionString = configuration.GetConnectionString("DefaultConnection");
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        
+        // Use in-memory database for test environments to avoid file locking
+        if (string.Equals(environment, "Test", StringComparison.OrdinalIgnoreCase))
+        {
+            connectionString = "Data Source=:memory:";
+        }
+        else
+        {
+            connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+                ? "Data Source=/app/data/setliststudio.db"
+                : "Data Source=setliststudio.db";
+        }
+    }
+    
+    return connectionString;
+}
+
+/// <summary>
+/// Configures the database provider based on the connection string format
+/// </summary>
+static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
+{
+    if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+    {
+        // SQLite connection string
+        options.UseSqlite(connectionString);
+    }
+    else
+    {
+        // SQL Server connection string
+        options.UseSqlServer(connectionString);
+    }
+}
+
+/// <summary>
+/// Configures external authentication providers (Google, Microsoft, Facebook)
+/// </summary>
+static void ConfigureExternalAuthentication(AuthenticationBuilder authBuilder, IConfiguration configuration)
+{
+    ConfigureGoogleAuthentication(authBuilder, configuration);
+    ConfigureMicrosoftAuthentication(authBuilder, configuration);
+    ConfigureFacebookAuthentication(authBuilder, configuration);
+}
+
+/// <summary>
+/// Configures Google OAuth authentication if credentials are available
+/// </summary>
+static void ConfigureGoogleAuthentication(AuthenticationBuilder authBuilder, IConfiguration configuration)
+{
+    var clientId = configuration["Authentication:Google:ClientId"];
+    var clientSecret = configuration["Authentication:Google:ClientSecret"];
+    
+
+    
+    if (IsValidAuthenticationCredentials(clientId, clientSecret))
+    {
+        try
+        {
+            authBuilder.AddGoogle(options =>
+            {
+                options.ClientId = clientId!;
+                options.ClientSecret = clientSecret!;
+                options.CallbackPath = "/signin-google";
+            });
+            Log.Information("Google authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Google authentication");
+        }
+    }
+    else
+    {
+
+    }
+}
+
+/// <summary>
+/// Configures Microsoft OAuth authentication if credentials are available
+/// </summary>
+static void ConfigureMicrosoftAuthentication(AuthenticationBuilder authBuilder, IConfiguration configuration)
+{
+    var clientId = configuration["Authentication:Microsoft:ClientId"];
+    var clientSecret = configuration["Authentication:Microsoft:ClientSecret"];
+    
+
+    
+    if (IsValidAuthenticationCredentials(clientId, clientSecret))
+    {
+        try
+        {
+            authBuilder.AddMicrosoftAccount(options =>
+            {
+                options.ClientId = clientId!;
+                options.ClientSecret = clientSecret!;
+                options.CallbackPath = "/signin-microsoft";
+            });
+            Log.Information("Microsoft authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Microsoft authentication");
+        }
+    }
+    else
+    {
+
+    }
+}
+
+/// <summary>
+/// Configures Facebook OAuth authentication if credentials are available
+/// </summary>
+static void ConfigureFacebookAuthentication(AuthenticationBuilder authBuilder, IConfiguration configuration)
+{
+    var appId = configuration["Authentication:Facebook:AppId"];
+    var appSecret = configuration["Authentication:Facebook:AppSecret"];
+    
+
+    
+    if (IsValidAuthenticationCredentials(appId, appSecret))
+    {
+        try
+        {
+            authBuilder.AddFacebook(options =>
+            {
+                options.AppId = appId!;
+                options.AppSecret = appSecret!;
+                options.CallbackPath = "/signin-facebook";
+            });
+            Log.Information("Facebook authentication configured successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Facebook authentication");
+        }
+    }
+    else
+    {
+
+    }
+}
+
+/// <summary>
+/// Validates that authentication credentials are present and not placeholder values
+/// </summary>
+static bool IsValidAuthenticationCredentials(string? id, string? secret)
+{
+    return !string.IsNullOrWhiteSpace(id) && 
+           !string.IsNullOrWhiteSpace(secret) &&
+           !id.StartsWith("YOUR_") &&
+           !secret.StartsWith("YOUR_");
+}
+
+/// <summary>
 /// Seeds the database with sample data for development and testing
 /// </summary>
 static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServiceProvider services)
@@ -232,89 +369,12 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
             return;
 
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        
-        // Create a demo user
-        var demoUser = new ApplicationUser
-        {
-            UserName = "demo@setliststudio.com",
-            Email = "demo@setliststudio.com",
-            DisplayName = "Demo User",
-            EmailConfirmed = true,
-            Provider = "Demo",
-            CreatedAt = DateTime.UtcNow
-        };
+        var demoUser = await CreateDemoUserAsync(userManager);
+        if (demoUser == null) return;
 
-        var result = await userManager.CreateAsync(demoUser, "Demo123!");
-        if (!result.Succeeded)
-        {
-            Log.Warning("Failed to create demo user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
-            return;
-        }
-
-        // Add sample songs with realistic music data
-        var sampleSongs = new List<Song>
-        {
-            new Song { Title = "Bohemian Rhapsody", Artist = "Queen", Album = "A Night at the Opera", Genre = "Rock", Bpm = 72, MusicalKey = "Bb", DurationSeconds = 355, Tags = "epic, opera, classic rock", DifficultyRating = 5, UserId = demoUser.Id },
-            new Song { Title = "Billie Jean", Artist = "Michael Jackson", Album = "Thriller", Genre = "Pop", Bpm = 117, MusicalKey = "F#m", DurationSeconds = 294, Tags = "dance, pop, 80s", DifficultyRating = 3, UserId = demoUser.Id },
-            new Song { Title = "Sweet Child O' Mine", Artist = "Guns N' Roses", Album = "Appetite for Destruction", Genre = "Rock", Bpm = 125, MusicalKey = "D", DurationSeconds = 356, Tags = "guitar solo, rock, 80s", DifficultyRating = 4, UserId = demoUser.Id },
-            new Song { Title = "Take Five", Artist = "Dave Brubeck", Album = "Time Out", Genre = "Jazz", Bpm = 176, MusicalKey = "Bb", DurationSeconds = 324, Tags = "instrumental, jazz, 5/4 time", DifficultyRating = 4, UserId = demoUser.Id },
-            new Song { Title = "The Thrill Is Gone", Artist = "B.B. King", Genre = "Blues", Bpm = 98, MusicalKey = "Bm", DurationSeconds = 311, Tags = "blues, guitar, emotional", DifficultyRating = 3, UserId = demoUser.Id },
-            new Song { Title = "Hotel California", Artist = "Eagles", Album = "Hotel California", Genre = "Rock", Bpm = 75, MusicalKey = "Bm", DurationSeconds = 391, Tags = "classic rock, guitar", DifficultyRating = 4, UserId = demoUser.Id },
-            new Song { Title = "Summertime", Artist = "George Gershwin", Genre = "Jazz", Bpm = 85, MusicalKey = "Am", DurationSeconds = 195, Tags = "jazz standard, ballad", DifficultyRating = 2, UserId = demoUser.Id },
-            new Song { Title = "Uptown Funk", Artist = "Mark Ronson ft. Bruno Mars", Genre = "Funk", Bpm = 115, MusicalKey = "Dm", DurationSeconds = 269, Tags = "funk, dance, modern", DifficultyRating = 3, UserId = demoUser.Id }
-        };
-
-        context.Songs.AddRange(sampleSongs);
-        await context.SaveChangesAsync();
-
-        // Create sample setlists
-        var weddingSetlist = new Setlist
-        {
-            Name = "Wedding Reception Set",
-            Description = "Perfect mix for wedding celebration",
-            Venue = "Grand Ballroom",
-            PerformanceDate = DateTime.Now.AddDays(30),
-            ExpectedDurationMinutes = 120,
-            IsTemplate = false,
-            IsActive = true,
-            PerformanceNotes = "Keep energy up, take requests for slow dances",
-            UserId = demoUser.Id
-        };
-
-        var jazzSetlist = new Setlist
-        {
-            Name = "Jazz Evening Template",
-            Description = "Sophisticated jazz standards for intimate venues",
-            IsTemplate = true,
-            IsActive = false,
-            ExpectedDurationMinutes = 90,
-            PerformanceNotes = "Encourage improvisation, adjust tempo based on audience",
-            UserId = demoUser.Id
-        };
-
-        context.Setlists.AddRange(weddingSetlist, jazzSetlist);
-        await context.SaveChangesAsync();
-
-        // Add songs to setlists
-        var songByTitle = sampleSongs.ToDictionary(s => s.Title);
-        var weddingSongs = new List<SetlistSong>
-        {
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Billie Jean", out var billieJean) ? billieJean.Id : throw new Exception("Song 'Billie Jean' not found"), Position = 1, PerformanceNotes = "High energy opener" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Uptown Funk", out var uptownFunk) ? uptownFunk.Id : throw new Exception("Song 'Uptown Funk' not found"), Position = 2, PerformanceNotes = "Get everyone dancing" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Hotel California", out var hotelCalifornia) ? hotelCalifornia.Id : throw new Exception("Song 'Hotel California' not found"), Position = 3, PerformanceNotes = "Crowd sing-along" },
-            new SetlistSong { SetlistId = weddingSetlist.Id, SongId = songByTitle.TryGetValue("Sweet Child O' Mine", out var sweetChildOMine) ? sweetChildOMine.Id : throw new Exception("Song 'Sweet Child O' Mine' not found"), Position = 4, PerformanceNotes = "Guitar showcase" }
-        };
-
-        var jazzSongs = new List<SetlistSong>
-        {
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("Summertime", out var summertime) ? summertime.Id : throw new Exception("Song 'Summertime' not found"), Position = 1, PerformanceNotes = "Gentle opener" },
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("Take Five", out var takeFive) ? takeFive.Id : throw new Exception("Song 'Take Five' not found"), Position = 2, PerformanceNotes = "Feature odd time signature" },
-            new SetlistSong { SetlistId = jazzSetlist.Id, SongId = songByTitle.TryGetValue("The Thrill Is Gone", out var thrillIsGone) ? thrillIsGone.Id : throw new Exception("Song 'The Thrill Is Gone' not found"), Position = 3, PerformanceNotes = "Blues influence" }
-        };
-
-        context.SetlistSongs.AddRange(weddingSongs);
-        context.SetlistSongs.AddRange(jazzSongs);
-        await context.SaveChangesAsync();
+        var sampleSongs = await CreateSampleSongsAsync(context, demoUser.Id);
+        var setlists = await CreateSampleSetlistsAsync(context, demoUser.Id);
+        await CreateSetlistSongsAsync(context, setlists, sampleSongs);
 
         Log.Information("Sample data seeded successfully");
     }
@@ -323,3 +383,141 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
         Log.Error(ex, "Failed to seed development data");
     }
 }
+
+/// <summary>
+/// Creates a demo user for development and testing
+/// </summary>
+static async Task<ApplicationUser?> CreateDemoUserAsync(UserManager<ApplicationUser> userManager)
+{
+    var demoUser = new ApplicationUser
+    {
+        UserName = "demo@setliststudio.com",
+        Email = "demo@setliststudio.com",
+        DisplayName = "Demo User",
+        EmailConfirmed = true,
+        Provider = "Demo",
+        CreatedAt = DateTime.UtcNow
+    };
+
+    var result = await userManager.CreateAsync(demoUser, "Demo123!");
+    if (!result.Succeeded)
+    {
+        Log.Warning("Failed to create demo user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+        return null;
+    }
+
+    return demoUser;
+}
+
+/// <summary>
+/// Creates sample songs with realistic music data
+/// </summary>
+static async Task<List<Song>> CreateSampleSongsAsync(SetlistStudioDbContext context, string userId)
+{
+    var sampleSongs = new List<Song>
+    {
+        new Song { Title = "Bohemian Rhapsody", Artist = "Queen", Album = "A Night at the Opera", Genre = "Rock", Bpm = 72, MusicalKey = "Bb", DurationSeconds = 355, Tags = "epic, opera, classic rock", DifficultyRating = 5, UserId = userId },
+        new Song { Title = "Billie Jean", Artist = "Michael Jackson", Album = "Thriller", Genre = "Pop", Bpm = 117, MusicalKey = "F#m", DurationSeconds = 294, Tags = "dance, pop, 80s", DifficultyRating = 3, UserId = userId },
+        new Song { Title = "Sweet Child O' Mine", Artist = "Guns N' Roses", Album = "Appetite for Destruction", Genre = "Rock", Bpm = 125, MusicalKey = "D", DurationSeconds = 356, Tags = "guitar solo, rock, 80s", DifficultyRating = 4, UserId = userId },
+        new Song { Title = "Take Five", Artist = "Dave Brubeck", Album = "Time Out", Genre = "Jazz", Bpm = 176, MusicalKey = "Bb", DurationSeconds = 324, Tags = "instrumental, jazz, 5/4 time", DifficultyRating = 4, UserId = userId },
+        new Song { Title = "The Thrill Is Gone", Artist = "B.B. King", Genre = "Blues", Bpm = 98, MusicalKey = "Bm", DurationSeconds = 311, Tags = "blues, guitar, emotional", DifficultyRating = 3, UserId = userId },
+        new Song { Title = "Hotel California", Artist = "Eagles", Album = "Hotel California", Genre = "Rock", Bpm = 75, MusicalKey = "Bm", DurationSeconds = 391, Tags = "classic rock, guitar", DifficultyRating = 4, UserId = userId },
+        new Song { Title = "Summertime", Artist = "George Gershwin", Genre = "Jazz", Bpm = 85, MusicalKey = "Am", DurationSeconds = 195, Tags = "jazz standard, ballad", DifficultyRating = 2, UserId = userId },
+        new Song { Title = "Uptown Funk", Artist = "Mark Ronson ft. Bruno Mars", Genre = "Funk", Bpm = 115, MusicalKey = "Dm", DurationSeconds = 269, Tags = "funk, dance, modern", DifficultyRating = 3, UserId = userId }
+    };
+
+    context.Songs.AddRange(sampleSongs);
+    await context.SaveChangesAsync();
+
+    return sampleSongs;
+}
+
+/// <summary>
+/// Creates sample setlists for development and testing
+/// </summary>
+static async Task<(Setlist WeddingSetlist, Setlist JazzSetlist)> CreateSampleSetlistsAsync(SetlistStudioDbContext context, string userId)
+{
+    var weddingSetlist = new Setlist
+    {
+        Name = "Wedding Reception Set",
+        Description = "Perfect mix for wedding celebration",
+        Venue = "Grand Ballroom",
+        PerformanceDate = DateTime.Now.AddDays(30),
+        ExpectedDurationMinutes = 120,
+        IsTemplate = false,
+        IsActive = true,
+        PerformanceNotes = "Keep energy up, take requests for slow dances",
+        UserId = userId
+    };
+
+    var jazzSetlist = new Setlist
+    {
+        Name = "Jazz Evening Template",
+        Description = "Sophisticated jazz standards for intimate venues",
+        IsTemplate = true,
+        IsActive = false,
+        ExpectedDurationMinutes = 90,
+        PerformanceNotes = "Encourage improvisation, adjust tempo based on audience",
+        UserId = userId
+    };
+
+    context.Setlists.AddRange(weddingSetlist, jazzSetlist);
+    await context.SaveChangesAsync();
+
+    return (weddingSetlist, jazzSetlist);
+}
+
+/// <summary>
+/// Creates setlist songs by linking songs to setlists
+/// </summary>
+static async Task CreateSetlistSongsAsync(SetlistStudioDbContext context, (Setlist WeddingSetlist, Setlist JazzSetlist) setlists, List<Song> sampleSongs)
+{
+    var songByTitle = sampleSongs.ToDictionary(s => s.Title);
+    
+    var weddingSongs = CreateWeddingSetlistSongs(setlists.WeddingSetlist.Id, songByTitle);
+    var jazzSongs = CreateJazzSetlistSongs(setlists.JazzSetlist.Id, songByTitle);
+
+    context.SetlistSongs.AddRange(weddingSongs);
+    context.SetlistSongs.AddRange(jazzSongs);
+    await context.SaveChangesAsync();
+}
+
+/// <summary>
+/// Creates wedding setlist songs with performance notes
+/// </summary>
+static List<SetlistSong> CreateWeddingSetlistSongs(int setlistId, Dictionary<string, Song> songByTitle)
+{
+    return new List<SetlistSong>
+    {
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Billie Jean"), Position = 1, PerformanceNotes = "High energy opener" },
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Uptown Funk"), Position = 2, PerformanceNotes = "Get everyone dancing" },
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Hotel California"), Position = 3, PerformanceNotes = "Crowd sing-along" },
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Sweet Child O' Mine"), Position = 4, PerformanceNotes = "Guitar showcase" }
+    };
+}
+
+/// <summary>
+/// Creates jazz setlist songs with performance notes
+/// </summary>
+static List<SetlistSong> CreateJazzSetlistSongs(int setlistId, Dictionary<string, Song> songByTitle)
+{
+    return new List<SetlistSong>
+    {
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Summertime"), Position = 1, PerformanceNotes = "Gentle opener" },
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Take Five"), Position = 2, PerformanceNotes = "Feature odd time signature" },
+        new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "The Thrill Is Gone"), Position = 3, PerformanceNotes = "Blues influence" }
+    };
+}
+
+/// <summary>
+/// Gets a song ID by title, throwing an exception if not found
+/// </summary>
+static int GetSongId(Dictionary<string, Song> songByTitle, string title)
+{
+    return songByTitle.TryGetValue(title, out var song) 
+        ? song.Id 
+        : throw new InvalidOperationException($"Song '{title}' not found in sample data");
+}
+
+// Make Program class accessible for testing
+public partial class Program { }

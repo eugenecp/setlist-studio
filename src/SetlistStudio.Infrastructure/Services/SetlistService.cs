@@ -102,6 +102,9 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist> CreateSetlistAsync(Setlist setlist)
     {
+        if (setlist == null)
+            throw new ArgumentNullException(nameof(setlist));
+
         try
         {
             var validationErrors = ValidateSetlist(setlist);
@@ -111,7 +114,7 @@ public class SetlistService : ISetlistService
             }
 
             setlist.CreatedAt = DateTime.UtcNow;
-            setlist.UpdatedAt = null;
+            setlist.UpdatedAt = DateTime.UtcNow;
 
             _context.Setlists.Add(setlist);
             await _context.SaveChangesAsync();
@@ -131,6 +134,9 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist?> UpdateSetlistAsync(Setlist setlist, string userId)
     {
+        if (setlist == null)
+            throw new ArgumentNullException(nameof(setlist));
+
         try
         {
             var existingSetlist = await _context.Setlists
@@ -206,72 +212,17 @@ public class SetlistService : ISetlistService
     {
         try
         {
-            // Verify setlist belongs to user
-            var setlist = await _context.Setlists
-                .Include(sl => sl.SetlistSongs)
-                .FirstOrDefaultAsync(sl => sl.Id == setlistId && sl.UserId == userId);
-
-            if (setlist == null)
+            var validationResult = await ValidateAddSongRequestAsync(setlistId, songId, userId);
+            if (!validationResult.IsValid)
             {
-                _logger.LogWarning("Setlist {SetlistId} not found or unauthorized for user {UserId}", 
-                    setlistId, userId);
                 return null;
             }
 
-            // Verify song belongs to user
-            var song = await _context.Songs
-                .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+            var targetPosition = await DetermineTargetPositionAsync(setlistId, position);
+            await AdjustPositionsForInsertionAsync(setlistId, position);
 
-            if (song == null)
-            {
-                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", 
-                    songId, userId);
-                return null;
-            }
-
-            // Check if song is already in setlist
-            var existingSetlistSong = await _context.SetlistSongs
-                .FirstOrDefaultAsync(ss => ss.SetlistId == setlistId && ss.SongId == songId);
-
-            if (existingSetlistSong != null)
-            {
-                _logger.LogWarning("Song {SongId} already exists in setlist {SetlistId}", songId, setlistId);
-                return existingSetlistSong;
-            }
-
-            // Determine position
-            var setlistSongsList = setlist.SetlistSongs.ToList();
-            var targetPosition = position ?? (setlistSongsList.Any() ? setlistSongsList.Max(ss => ss.Position) + 1 : 1);
-
-            // Adjust positions if inserting in middle
-            if (position.HasValue)
-            {
-                var songsToShift = await _context.SetlistSongs
-                    .Where(ss => ss.SetlistId == setlistId && ss.Position >= position.Value)
-                    .ToListAsync();
-
-                foreach (var songToShift in songsToShift)
-                {
-                    songToShift.Position++;
-                }
-            }
-
-            var setlistSong = new SetlistSong
-            {
-                SetlistId = setlistId,
-                SongId = songId,
-                Position = targetPosition,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.SetlistSongs.Add(setlistSong);
-            await _context.SaveChangesAsync();
-
-            // Load the complete entity with navigation properties
-            var result = await _context.SetlistSongs
-                .Include(ss => ss.Song)
-                .Include(ss => ss.Setlist)
-                .FirstAsync(ss => ss.Id == setlistSong.Id);
+            var setlistSong = await CreateAndSaveSetlistSongAsync(setlistId, songId, targetPosition);
+            var result = await LoadSetlistSongWithNavigationPropertiesAsync(setlistSong.Id);
 
             _logger.LogInformation("Added song {SongId} to setlist {SetlistId} at position {Position} for user {UserId}", 
                 songId, setlistId, targetPosition, userId);
@@ -284,6 +235,100 @@ public class SetlistService : ISetlistService
                 songId, setlistId, userId);
             throw;
         }
+    }
+
+    private async Task<(bool IsValid, Setlist? Setlist, Song? Song)> ValidateAddSongRequestAsync(int setlistId, int songId, string userId)
+    {
+        // Verify setlist belongs to user
+        var setlist = await _context.Setlists
+            .Include(sl => sl.SetlistSongs)
+            .FirstOrDefaultAsync(sl => sl.Id == setlistId && sl.UserId == userId);
+
+        if (setlist == null)
+        {
+            _logger.LogWarning("Setlist {SetlistId} not found or unauthorized for user {UserId}", 
+                setlistId, userId);
+            return (false, null, null);
+        }
+
+        // Verify song belongs to user
+        var song = await _context.Songs
+            .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+
+        if (song == null)
+        {
+            _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", 
+                songId, userId);
+            return (false, setlist, null);
+        }
+
+        // Check if song is already in setlist
+        var existingSetlistSong = await _context.SetlistSongs
+            .FirstOrDefaultAsync(ss => ss.SetlistId == setlistId && ss.SongId == songId);
+
+        if (existingSetlistSong != null)
+        {
+            _logger.LogWarning("Song {SongId} already exists in setlist {SetlistId}", songId, setlistId);
+            return (false, setlist, song);
+        }
+
+        return (true, setlist, song);
+    }
+
+    private async Task<int> DetermineTargetPositionAsync(int setlistId, int? position)
+    {
+        if (!position.HasValue)
+        {
+            var currentSetlistSongs = await _context.SetlistSongs
+                .Where(ss => ss.SetlistId == setlistId)
+                .ToListAsync();
+            return currentSetlistSongs.Any() ? currentSetlistSongs.Max(ss => ss.Position) + 1 : 1;
+        }
+
+        return position.Value;
+    }
+
+    private async Task AdjustPositionsForInsertionAsync(int setlistId, int? position)
+    {
+        if (!position.HasValue) return;
+
+        var songsToShift = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlistId && ss.Position >= position.Value)
+            .ToListAsync();
+
+        foreach (var songToShift in songsToShift)
+        {
+            songToShift.Position++;
+        }
+        
+        if (songsToShift.Any())
+        {
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    private async Task<SetlistSong> CreateAndSaveSetlistSongAsync(int setlistId, int songId, int targetPosition)
+    {
+        var setlistSong = new SetlistSong
+        {
+            SetlistId = setlistId,
+            SongId = songId,
+            Position = targetPosition,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        return setlistSong;
+    }
+
+    private async Task<SetlistSong> LoadSetlistSongWithNavigationPropertiesAsync(int setlistSongId)
+    {
+        return await _context.SetlistSongs
+            .Include(ss => ss.Song)
+            .Include(ss => ss.Setlist)
+            .FirstAsync(ss => ss.Id == setlistSongId);
     }
 
     public async Task<bool> RemoveSongFromSetlistAsync(int setlistId, int songId, string userId)
@@ -335,11 +380,12 @@ public class SetlistService : ISetlistService
     {
         try
         {
-            var setlist = await _context.Setlists
-                .Include(sl => sl.SetlistSongs)
-                .FirstOrDefaultAsync(sl => sl.Id == setlistId && sl.UserId == userId);
+            // Always query fresh data from the database to avoid change tracking issues
+            var setlistSongs = await _context.SetlistSongs
+                .Where(ss => ss.SetlistId == setlistId && ss.Setlist.UserId == userId)
+                .ToListAsync();
 
-            if (setlist == null)
+            if (!setlistSongs.Any())
             {
                 _logger.LogWarning("Setlist {SetlistId} not found or unauthorized for user {UserId}", 
                     setlistId, userId);
@@ -347,7 +393,7 @@ public class SetlistService : ISetlistService
             }
 
             // Validate that all songs in ordering exist in setlist
-            var setlistSongIds = setlist.SetlistSongs.Select(ss => ss.SongId).ToHashSet();
+            var setlistSongIds = setlistSongs.Select(ss => ss.SongId).ToHashSet();
             if (!songOrdering.All(id => setlistSongIds.Contains(id)))
             {
                 _logger.LogWarning("Invalid song ordering for setlist {SetlistId}: some songs not in setlist", 
@@ -358,8 +404,9 @@ public class SetlistService : ISetlistService
             // Update positions
             for (int i = 0; i < songOrdering.Length; i++)
             {
-                var setlistSong = setlist.SetlistSongs.First(ss => ss.SongId == songOrdering[i]);
+                var setlistSong = setlistSongs.First(ss => ss.SongId == songOrdering[i]);
                 setlistSong.Position = i + 1;
+                _logger.LogDebug("Setting song {SongId} to position {Position}", songOrdering[i], i + 1);
             }
 
             await _context.SaveChangesAsync();
@@ -430,58 +477,18 @@ public class SetlistService : ISetlistService
 
     public async Task<Setlist?> CopySetlistAsync(int sourceSetlistId, string newName, string userId)
     {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            throw new ArgumentException("Setlist name cannot be null or empty", nameof(newName));
+        }
+
         try
         {
-            var sourceSetlist = await _context.Setlists
-                .Include(sl => sl.SetlistSongs)
-                .ThenInclude(ss => ss.Song)
-                .FirstOrDefaultAsync(sl => sl.Id == sourceSetlistId && sl.UserId == userId);
+            var sourceSetlist = await GetSourceSetlistForCopyingAsync(sourceSetlistId, userId);
+            if (sourceSetlist == null) return null;
 
-            if (sourceSetlist == null)
-            {
-                _logger.LogWarning("Source setlist {SetlistId} not found or unauthorized for user {UserId}", 
-                    sourceSetlistId, userId);
-                return null;
-            }
-
-            var newSetlist = new Setlist
-            {
-                Name = newName,
-                Description = sourceSetlist.Description,
-                Venue = null, // Don't copy venue as it's performance-specific
-                PerformanceDate = null, // Don't copy performance date
-                ExpectedDurationMinutes = sourceSetlist.ExpectedDurationMinutes,
-                IsTemplate = false, // New copies are not templates by default
-                IsActive = false, // New copies are not active by default
-                PerformanceNotes = sourceSetlist.PerformanceNotes,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Setlists.Add(newSetlist);
-            await _context.SaveChangesAsync();
-
-            // Copy songs
-            foreach (var sourceSong in sourceSetlist.SetlistSongs.OrderBy(ss => ss.Position))
-            {
-                var newSetlistSong = new SetlistSong
-                {
-                    SetlistId = newSetlist.Id,
-                    SongId = sourceSong.SongId,
-                    Position = sourceSong.Position,
-                    TransitionNotes = sourceSong.TransitionNotes,
-                    PerformanceNotes = sourceSong.PerformanceNotes,
-                    IsEncore = sourceSong.IsEncore,
-                    IsOptional = sourceSong.IsOptional,
-                    CustomBpm = sourceSong.CustomBpm,
-                    CustomKey = sourceSong.CustomKey,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.SetlistSongs.Add(newSetlistSong);
-            }
-
-            await _context.SaveChangesAsync();
+            var newSetlist = await CreateCopiedSetlistAsync(sourceSetlist, newName, userId);
+            await CopySetlistSongsAsync(sourceSetlist, newSetlist);
 
             _logger.LogInformation("Copied setlist {SourceId} to new setlist {NewId} '{NewName}' for user {UserId}", 
                 sourceSetlistId, newSetlist.Id, newName, userId);
@@ -496,30 +503,129 @@ public class SetlistService : ISetlistService
         }
     }
 
+    private async Task<Setlist?> GetSourceSetlistForCopyingAsync(int sourceSetlistId, string userId)
+    {
+        var sourceSetlist = await _context.Setlists
+            .Include(sl => sl.SetlistSongs)
+            .ThenInclude(ss => ss.Song)
+            .FirstOrDefaultAsync(sl => sl.Id == sourceSetlistId && sl.UserId == userId);
+
+        if (sourceSetlist == null)
+        {
+            _logger.LogWarning("Source setlist {SetlistId} not found or unauthorized for user {UserId}", 
+                sourceSetlistId, userId);
+        }
+
+        return sourceSetlist;
+    }
+
+    private async Task<Setlist> CreateCopiedSetlistAsync(Setlist sourceSetlist, string newName, string userId)
+    {
+        var newSetlist = new Setlist
+        {
+            Name = newName,
+            Description = sourceSetlist.Description,
+            Venue = null, // Don't copy venue as it's performance-specific
+            PerformanceDate = null, // Don't copy performance date
+            ExpectedDurationMinutes = sourceSetlist.ExpectedDurationMinutes,
+            IsTemplate = false, // New copies are not templates by default
+            IsActive = false, // New copies are not active by default
+            PerformanceNotes = sourceSetlist.PerformanceNotes,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(newSetlist);
+        await _context.SaveChangesAsync();
+
+        return newSetlist;
+    }
+
+    private async Task CopySetlistSongsAsync(Setlist sourceSetlist, Setlist newSetlist)
+    {
+        var newSetlistSongs = sourceSetlist.SetlistSongs
+            .OrderBy(ss => ss.Position)
+            .Select(sourceSong => new SetlistSong
+            {
+                SetlistId = newSetlist.Id,
+                SongId = sourceSong.SongId,
+                Position = sourceSong.Position,
+                TransitionNotes = sourceSong.TransitionNotes,
+                PerformanceNotes = sourceSong.PerformanceNotes,
+                IsEncore = sourceSong.IsEncore,
+                IsOptional = sourceSong.IsOptional,
+                CustomBpm = sourceSong.CustomBpm,
+                CustomKey = sourceSong.CustomKey,
+                CreatedAt = DateTime.UtcNow
+            });
+
+        _context.SetlistSongs.AddRange(newSetlistSongs);
+        await _context.SaveChangesAsync();
+    }
+
     public IEnumerable<string> ValidateSetlist(Setlist setlist)
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(setlist.Name))
-            errors.Add("Setlist name is required");
-        else if (setlist.Name.Length > 200)
-            errors.Add("Setlist name cannot exceed 200 characters");
-
-        if (!string.IsNullOrEmpty(setlist.Description) && setlist.Description.Length > 1000)
-            errors.Add("Description cannot exceed 1000 characters");
-
-        if (!string.IsNullOrEmpty(setlist.Venue) && setlist.Venue.Length > 200)
-            errors.Add("Venue cannot exceed 200 characters");
-
-        if (setlist.ExpectedDurationMinutes.HasValue && setlist.ExpectedDurationMinutes < 1)
-            errors.Add("Expected duration must be at least 1 minute");
-
-        if (!string.IsNullOrEmpty(setlist.PerformanceNotes) && setlist.PerformanceNotes.Length > 2000)
-            errors.Add("Performance notes cannot exceed 2000 characters");
-
-        if (string.IsNullOrWhiteSpace(setlist.UserId))
-            errors.Add("User ID is required");
+        ValidateSetlistName(setlist.Name, errors);
+        ValidateSetlistDescription(setlist.Description, errors);
+        ValidateSetlistVenue(setlist.Venue, errors);
+        ValidateSetlistDuration(setlist.ExpectedDurationMinutes, errors);
+        ValidateSetlistPerformanceNotes(setlist.PerformanceNotes, errors);
+        ValidateSetlistUserId(setlist.UserId, errors);
 
         return errors;
+    }
+
+    private static void ValidateSetlistName(string name, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            errors.Add("Setlist name is required");
+        }
+        else if (name.Length > 200)
+        {
+            errors.Add("Setlist name cannot exceed 200 characters");
+        }
+    }
+
+    private static void ValidateSetlistDescription(string? description, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(description) && description.Length > 1000)
+        {
+            errors.Add("Description cannot exceed 1000 characters");
+        }
+    }
+
+    private static void ValidateSetlistVenue(string? venue, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(venue) && venue.Length > 200)
+        {
+            errors.Add("Venue cannot exceed 200 characters");
+        }
+    }
+
+    private static void ValidateSetlistDuration(int? durationMinutes, List<string> errors)
+    {
+        if (durationMinutes.HasValue && durationMinutes < 1)
+        {
+            errors.Add("Expected duration must be at least 1 minute");
+        }
+    }
+
+    private static void ValidateSetlistPerformanceNotes(string? performanceNotes, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(performanceNotes) && performanceNotes.Length > 2000)
+        {
+            errors.Add("Performance notes cannot exceed 2000 characters");
+        }
+    }
+
+    private static void ValidateSetlistUserId(string userId, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            errors.Add("User ID is required");
+        }
     }
 }

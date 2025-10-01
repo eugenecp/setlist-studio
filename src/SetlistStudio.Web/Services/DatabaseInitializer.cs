@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.InMemory;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Infrastructure.Data;
 
@@ -15,6 +16,31 @@ public static class DatabaseInitializer
         {
             logger.LogInformation("Starting database initialization...");
             
+            // Skip database initialization for test environments using in-memory databases
+            // Check if using in-memory database provider or SQLite in-memory connection
+            var providerName = context.Database.ProviderName;
+            
+            // Try to get connection string, but handle cases where it might throw for non-relational providers
+            string? connectionString = null;
+            try
+            {
+                connectionString = context.Database.GetConnectionString();
+            }
+            catch (InvalidOperationException)
+            {
+                // GetConnectionString() throws for non-relational providers like InMemory
+                // This is expected and we can continue with providerName check
+            }
+            
+            // Check if using EF InMemory provider or SQLite in-memory database
+            if (providerName?.Contains("InMemory") == true || 
+                connectionString?.Contains(":memory:") == true)
+            {
+                logger.LogInformation("In-memory database detected - skipping initialization for test environment");
+                logger.LogInformation("Database initialization completed (skipped for tests)");
+                return;
+            }
+            
             // Check if database can be accessed
             var canConnect = await context.Database.CanConnectAsync();
             logger.LogInformation("Database connection test: {CanConnect}", canConnect);
@@ -28,9 +54,34 @@ public static class DatabaseInitializer
             var created = await context.Database.EnsureCreatedAsync();
             logger.LogInformation("Database creation result: {Created} (true = created, false = already existed)", created);
             
-            // Test basic database operations
-            var songCount = await context.Songs.CountAsync();
-            logger.LogInformation("Current song count in database: {SongCount}", songCount);
+            // If database was just created, wait a moment for all connections to sync
+            if (created)
+            {
+                await Task.Delay(100); // Brief delay to ensure schema is fully available
+                logger.LogInformation("Database was created, allowing schema to settle");
+            }
+            
+            // Test basic database operations with retry logic (only for persistent databases)
+            var songCount = 0;
+            var retryCount = 0;
+            const int maxRetries = 3;
+            
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    songCount = await context.Songs.CountAsync();
+                    logger.LogInformation("Current song count in database: {SongCount}", songCount);
+                    break; // Success, exit retry loop
+                }
+                catch (Exception countEx) when (retryCount < maxRetries - 1)
+                {
+                    retryCount++;
+                    logger.LogWarning("Failed to query Songs table on attempt {Attempt}: {Error}. Retrying...", 
+                        retryCount, countEx.Message);
+                    await Task.Delay(200 * retryCount); // Exponential backoff
+                }
+            }
             
             logger.LogInformation("Database initialization completed successfully");
         }

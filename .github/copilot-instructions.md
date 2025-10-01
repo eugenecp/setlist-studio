@@ -44,6 +44,101 @@ Every feature must work consistently and predictably. All functionality should b
 - Ensure database transactions are atomic and consistent
 - Test boundary conditions (empty setlists, maximum song limits, etc.)
 
+#### Code Coverage Standards
+Setlist Studio maintains a **minimum 90% code coverage requirement for each individual file** to ensure reliability and confidence in our codebase.
+
+**Quality Metrics Requirements:**
+- ✅ **Code Coverage**: Each individual file must achieve at least 90% line coverage
+- ✅ **CRAP Score**: All methods must maintain acceptable complexity-to-coverage ratios
+- ✅ **Cyclomatic Complexity**: All methods must stay within acceptable complexity thresholds
+
+**Individual File Coverage Requirements:**
+- **Each file must achieve at least 90% line coverage**
+- New code must include tests that achieve 90%+ coverage for the modified files
+- Pull requests should not reduce coverage below 90% for any existing file
+- **All new files must achieve 90% coverage before merge**
+- Focus on achieving high individual file coverage, not just overall project coverage
+
+**Testing Framework Requirements:**
+- **xUnit**: Primary testing framework for all unit and integration tests
+- **Moq**: For creating mocks and stubs of dependencies
+- **FluentAssertions**: For readable, expressive test assertions
+
+**Coverage Guidelines:**
+- All new code must include comprehensive tests covering normal cases, error scenarios, and edge cases
+- **Each individual file must maintain at least 90% line coverage**
+- Tests must cover all conditional branches (if/else statements, try/catch blocks, switch cases)
+- Each test should be small, focused, and clearly named describing what it tests
+- Test names should follow the pattern: `MethodName_Scenario_ExpectedResult`
+- Mock external dependencies to ensure tests are isolated and fast
+- Use realistic musical data in test examples (songs, artists, BPMs, keys)
+- **Focus on achieving high individual file coverage, not just overall project coverage**
+
+**Test Organization:**
+- Group related tests in nested classes or separate test files
+- Use descriptive test method names that explain the scenario being tested
+- Include comments for complex test setups or assertions
+- Ensure tests are deterministic and can run in any order
+
+**Coverage Reporting and Analysis:**
+Setlist Studio uses comprehensive coverage reporting to track and maintain code quality. All coverage reports are generated in the `CoverageReport` directory for easy analysis and review.
+
+**Running Coverage Analysis:**
+```bash
+# Run tests with coverage collection
+dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults/[TestRun]
+
+# Generate HTML coverage report
+reportgenerator -reports:"./TestResults/[TestRun]/*/coverage.cobertura.xml" -targetdir:"./CoverageReport/[TestRun]" -reporttypes:Html
+
+# Open coverage report in browser
+# Navigate to ./CoverageReport/[TestRun]/index.html
+```
+
+**Coverage Report Structure:**
+- **CoverageReport/**: Root directory for all coverage analysis reports
+  - **[TestRun]/**: Timestamped or named subdirectories for different test runs
+    - **index.html**: Main coverage report with summary and detailed breakdowns
+    - **[Assembly]_[Class].html**: Detailed line-by-line coverage for specific classes
+    - **report.css**: Styling for coverage reports
+
+**Coverage Analysis Guidelines:**
+- Generate coverage reports for all major code changes and pull requests
+- Review line-by-line coverage for newly added classes and methods
+- **Identify and address any files with less than 90% individual coverage**
+- Use coverage reports to find untested edge cases and error handling paths
+- **Focus on achieving high individual file coverage, not just overall project coverage**
+- Document any intentionally excluded code with appropriate justification
+- **Prioritize files below 90% coverage for immediate testing improvements**
+
+**Coverage Report Interpretation:**
+- **Green bars**: Well-covered code (>90% coverage)
+- **Yellow bars**: Moderately covered code (70-90% coverage) - needs attention
+- **Red bars**: Poorly covered code (<70% coverage) - requires immediate improvement
+- **Risk Hotspots**: High complexity code with low coverage - prioritize for testing
+- **Branch Coverage**: Measures all conditional paths (if/else, switch, try/catch)
+
+**Quality Metrics Analysis:**
+- **CRAP Score**: Change Risk Anti-Patterns score combining complexity and coverage
+  - Target: Keep CRAP score low by maintaining high test coverage on complex methods
+  - Action: Break down methods with high CRAP scores or add comprehensive tests
+- **Cyclomatic Complexity**: Measures code complexity through decision points
+  - Target: Break down methods with high complexity or ensure comprehensive testing
+  - Action: Refactor complex methods into smaller, more testable units
+
+**Example Coverage Analysis Commands:**
+```bash
+# Quick coverage check for current changes
+dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults/QuickCheck
+
+# Full coverage analysis with detailed reporting
+dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults/FullAnalysis
+reportgenerator -reports:"./TestResults/FullAnalysis/*/coverage.cobertura.xml" -targetdir:"./CoverageReport/FullAnalysis" -reporttypes:Html
+
+# Coverage comparison between branches
+reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./CoverageReport/Comparison" -reporttypes:Html -historydirectory:"./CoverageReport/History"
+```
+
 ### 2. Scalability 📈
 The application must handle growth in songs, setlists, users, and performance data as the user base expands.
 
@@ -96,6 +191,22 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 "Add error handling for database connection failures in the performance scheduling service"
 
 "Write tests that verify setlist ordering is maintained correctly when songs are added or removed"
+
+"Analyze current code coverage and identify classes/methods missing tests to reach 90% coverage"
+
+"Write xUnit tests using Moq and FluentAssertions for the SongService covering normal cases, null inputs, and exception scenarios"
+
+"Create test cases for all branches in the SetlistService AddSong method including duplicate song handling"
+
+"Generate unit tests for entity validation covering valid data, invalid BPM ranges, and missing required fields"
+
+"Write tests for all conditional logic in the authentication service including successful login, failed login, and account lockout scenarios"
+
+"Generate a coverage report in CoverageReport/NewFeature and analyze which classes need additional testing"
+
+"Run coverage analysis and create tests for all uncovered branches in the Program.cs startup configuration"
+
+"Review the coverage report in CoverageReport/Latest and identify critical paths with less than 90% coverage"
 ```
 
 ### Scalability Examples

@@ -64,7 +64,7 @@ public class SetlistSong
     /// <summary>
     /// Foreign key to the setlist
     /// </summary>
-    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "SetlistId must be a positive integer")]
     public int SetlistId { get; set; }
 
     /// <summary>
@@ -75,7 +75,7 @@ public class SetlistSong
     /// <summary>
     /// Foreign key to the song
     /// </summary>
-    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "SongId must be a positive integer")]
     public int SongId { get; set; }
 
     /// <summary>
@@ -91,7 +91,7 @@ public class SetlistSong
     /// <summary>
     /// Helper property to get effective key (custom or song default)
     /// </summary>
-    public string? EffectiveKey => CustomKey ?? Song?.MusicalKey;
+    public string? EffectiveKey => string.IsNullOrEmpty(CustomKey) ? Song?.MusicalKey : CustomKey;
 
     /// <summary>
     /// Helper property to check if this song has custom performance settings
