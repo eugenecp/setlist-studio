@@ -40,8 +40,8 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
             options.UseSqlite("Data Source=/invalid/path/cannot/access/database.db"));
         var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
 
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<Exception>(async () => 
+        // Act & Assert - Expect SqliteException specifically, not generic Exception
+        var exception = await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () => 
             await DatabaseInitializer.InitializeAsync(_serviceProvider, logger));
 
         exception.Should().NotBeNull();
@@ -73,20 +73,22 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
     {
         // Arrange - Use a database that exists but will have query issues
         var tempDbPath = Path.GetTempFileName();
-        File.WriteAllText(tempDbPath, "invalid database content"); // Corrupt file
         
-        var services = new ServiceCollection();
-        services.AddDbContext<SetlistStudioDbContext>(options =>
-            options.UseSqlite($"Data Source={tempDbPath}"));
-        services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
-
-        _serviceProvider = services.BuildServiceProvider();
-        var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
-
         try
         {
+            File.WriteAllText(tempDbPath, "invalid database content"); // Corrupt file
+            
+            var services = new ServiceCollection();
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+                options.UseSqlite($"Data Source={tempDbPath}"));
+            services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
+
+            _serviceProvider?.Dispose(); // Dispose previous service provider
+            _serviceProvider = services.BuildServiceProvider();
+            var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
+
             // Act & Assert
-            await Assert.ThrowsAsync<Exception>(async () =>
+            await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () =>
                 await DatabaseInitializer.InitializeAsync(_serviceProvider, logger));
 
             // Should show retry attempts in logs
@@ -94,8 +96,20 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
         }
         finally
         {
-            if (File.Exists(tempDbPath))
-                File.Delete(tempDbPath);
+            _serviceProvider?.Dispose();
+            _serviceProvider = null;
+            
+            // Wait a moment and then try to delete the file
+            await Task.Delay(100);
+            try
+            {
+                if (File.Exists(tempDbPath))
+                    File.Delete(tempDbPath);
+            }
+            catch (IOException)
+            {
+                // File may still be locked, ignore cleanup failure
+            }
         }
     }
 
@@ -108,18 +122,20 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
     {
         // Arrange
         var tempDbPath = Path.GetTempFileName();
-        File.Delete(tempDbPath); // File doesn't exist initially
         
-        var services = new ServiceCollection();
-        services.AddDbContext<SetlistStudioDbContext>(options =>
-            options.UseSqlite($"Data Source={tempDbPath}"));
-        services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
-
-        _serviceProvider = services.BuildServiceProvider();
-        var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
-
         try
         {
+            File.Delete(tempDbPath); // File doesn't exist initially
+            
+            var services = new ServiceCollection();
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+                options.UseSqlite($"Data Source={tempDbPath}"));
+            services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
+
+            _serviceProvider?.Dispose(); // Dispose previous service provider
+            _serviceProvider = services.BuildServiceProvider();
+            var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
+
             // Act
             await DatabaseInitializer.InitializeAsync(_serviceProvider, logger);
 
@@ -129,8 +145,20 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
         }
         finally
         {
-            if (File.Exists(tempDbPath))
-                File.Delete(tempDbPath);
+            _serviceProvider?.Dispose();
+            _serviceProvider = null;
+            
+            // Wait a moment and then try to delete the file
+            await Task.Delay(100);
+            try
+            {
+                if (File.Exists(tempDbPath))
+                    File.Delete(tempDbPath);
+            }
+            catch (IOException)
+            {
+                // File may still be locked, ignore cleanup failure
+            }
         }
     }
 
@@ -216,20 +244,22 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
     {
         // Arrange - Create a scenario that will fail multiple times
         var tempDbPath = Path.GetTempFileName();
-        File.WriteAllBytes(tempDbPath, new byte[] { 0x00, 0x01, 0x02 }); // Invalid SQLite file
         
-        var services = new ServiceCollection();
-        services.AddDbContext<SetlistStudioDbContext>(options =>
-            options.UseSqlite($"Data Source={tempDbPath}"));
-        services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
-
-        _serviceProvider = services.BuildServiceProvider();
-        var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
-
         try
         {
+            File.WriteAllBytes(tempDbPath, new byte[] { 0x00, 0x01, 0x02 }); // Invalid SQLite file
+            
+            var services = new ServiceCollection();
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+                options.UseSqlite($"Data Source={tempDbPath}"));
+            services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
+
+            _serviceProvider?.Dispose(); // Dispose previous service provider
+            _serviceProvider = services.BuildServiceProvider();
+            var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
+
             // Act & Assert
-            await Assert.ThrowsAsync<Exception>(async () =>
+            await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () =>
                 await DatabaseInitializer.InitializeAsync(_serviceProvider, logger));
 
             // Should show multiple retry attempts with different delays
@@ -238,8 +268,20 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
         }
         finally
         {
-            if (File.Exists(tempDbPath))
-                File.Delete(tempDbPath);
+            _serviceProvider?.Dispose();
+            _serviceProvider = null;
+            
+            // Wait a moment and then try to delete the file
+            await Task.Delay(100);
+            try
+            {
+                if (File.Exists(tempDbPath))
+                    File.Delete(tempDbPath);
+            }
+            catch (IOException)
+            {
+                // File may still be locked, ignore cleanup failure
+            }
         }
     }
 
@@ -249,16 +291,17 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
         // Arrange - Test the database file logging branch
         var readOnlyPath = Path.Combine(Path.GetTempPath(), "readonly_test.db");
         
-        var services = new ServiceCollection();
-        services.AddDbContext<SetlistStudioDbContext>(options =>
-            options.UseSqlite($"Data Source={readOnlyPath}"));
-        services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
-
-        _serviceProvider = services.BuildServiceProvider();
-        var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
-
         try
         {
+            var services = new ServiceCollection();
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+                options.UseSqlite($"Data Source={readOnlyPath}"));
+            services.AddLogging(builder => builder.AddProvider(new TestLoggerProvider(_logMessages)));
+
+            _serviceProvider?.Dispose(); // Dispose previous service provider
+            _serviceProvider = services.BuildServiceProvider();
+            var logger = _serviceProvider.GetRequiredService<ILogger<DatabaseInitializerBranchCoverageTests>>();
+
             // Act & Assert
             try
             {
@@ -273,8 +316,20 @@ public class DatabaseInitializerBranchCoverageTests : IDisposable
         }
         finally
         {
-            if (File.Exists(readOnlyPath))
-                File.Delete(readOnlyPath);
+            _serviceProvider?.Dispose();
+            _serviceProvider = null;
+            
+            // Wait a moment and then try to delete the file
+            await Task.Delay(100);
+            try
+            {
+                if (File.Exists(readOnlyPath))
+                    File.Delete(readOnlyPath);
+            }
+            catch (IOException)
+            {
+                // File may still be locked, ignore cleanup failure
+            }
         }
     }
 

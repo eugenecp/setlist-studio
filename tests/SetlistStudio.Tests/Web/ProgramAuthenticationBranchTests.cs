@@ -27,8 +27,13 @@ public class ProgramAuthenticationBranchTests : IDisposable
         // Arrange
         var configuration = new Dictionary<string, string?>
         {
-            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
-            // No Google credentials provided
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -71,8 +76,12 @@ public class ProgramAuthenticationBranchTests : IDisposable
         var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
-            {"Authentication:Google:ClientSecret", "valid-client-secret"}
-            // Missing ClientId
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", "valid-client-secret"},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -94,7 +103,11 @@ public class ProgramAuthenticationBranchTests : IDisposable
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
             {"Authentication:Google:ClientId", "   "},
-            {"Authentication:Google:ClientSecret", "\t\n   "}
+            {"Authentication:Google:ClientSecret", "\t\n   "},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -116,7 +129,11 @@ public class ProgramAuthenticationBranchTests : IDisposable
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
             {"Authentication:Google:ClientId", "YOUR_CLIENT_ID"},
-            {"Authentication:Google:ClientSecret", "YOUR_CLIENT_SECRET"}
+            {"Authentication:Google:ClientSecret", "YOUR_CLIENT_SECRET"},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -140,8 +157,13 @@ public class ProgramAuthenticationBranchTests : IDisposable
         // Arrange
         var configuration = new Dictionary<string, string?>
         {
-            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
-            // No Microsoft credentials provided
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -162,8 +184,12 @@ public class ProgramAuthenticationBranchTests : IDisposable
         var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
             {"Authentication:Microsoft:ClientId", "YOUR_MICROSOFT_CLIENT_ID"},
-            {"Authentication:Microsoft:ClientSecret", "YOUR_MICROSOFT_CLIENT_SECRET"}
+            {"Authentication:Microsoft:ClientSecret", "YOUR_MICROSOFT_CLIENT_SECRET"},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -184,8 +210,12 @@ public class ProgramAuthenticationBranchTests : IDisposable
         var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
             {"Authentication:Microsoft:ClientId", "valid-microsoft-client-id"},
-            {"Authentication:Microsoft:ClientSecret", "valid-microsoft-client-secret"}
+            {"Authentication:Microsoft:ClientSecret", "valid-microsoft-client-secret"},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -209,8 +239,13 @@ public class ProgramAuthenticationBranchTests : IDisposable
         // Arrange
         var configuration = new Dictionary<string, string?>
         {
-            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
-            // No Facebook credentials provided
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
+            {"Authentication:Facebook:AppId", null},
+            {"Authentication:Facebook:AppSecret", null}
         };
 
         // Act
@@ -253,6 +288,10 @@ public class ProgramAuthenticationBranchTests : IDisposable
         var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
+            {"Authentication:Google:ClientId", null},
+            {"Authentication:Google:ClientSecret", null},
+            {"Authentication:Microsoft:ClientId", null},
+            {"Authentication:Microsoft:ClientSecret", null},
             {"Authentication:Facebook:AppId", "valid-facebook-app-id"},
             {"Authentication:Facebook:AppSecret", "valid-facebook-app-secret"}
         };
