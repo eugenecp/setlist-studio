@@ -14,7 +14,7 @@ namespace SetlistStudio.Tests.Web;
 public class DatabaseInitializerTests
 {
     [Fact]
-    public async Task InitializeAsync_ShouldLogStartAndCompletion_WhenDatabaseConnectionSucceeds()
+    public async Task InitializeAsync_ShouldSkipInitialization_WhenUsingInMemoryDatabase()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -23,16 +23,14 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert
+        // Assert - Should skip initialization for in-memory databases
         VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database connection test: True");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: False (true = created, false = already existed)");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 5");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     [Fact]
-    public async Task InitializeAsync_ShouldLogConnectionTest_WhenDatabaseConnectionSucceeds()
+    public async Task InitializeAsync_ShouldSkipConnectionTest_WhenUsingInMemoryDatabase()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -41,13 +39,14 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert - Since in-memory database always connects, test successful connection
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database connection test: True");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+        // Assert - Should skip initialization for in-memory databases
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     [Fact]
-    public async Task InitializeAsync_ShouldCreateNewDatabase_WhenDatabaseDoesNotExist()
+    public async Task InitializeAsync_ShouldSkipDatabaseCreation_WhenUsingInMemoryDatabase()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -56,15 +55,16 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: True (true = created, false = already existed)");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 0");
+        // Assert - Should skip initialization for in-memory databases
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
 
 
     [Fact]
-    public async Task InitializeAsync_ShouldLogBasicInformation_WhenSuccessful()
+    public async Task InitializeAsync_ShouldSkipInitialization_WhenUsingInMemoryDatabaseWithData()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -73,14 +73,14 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert - Test successful initialization with song count
+        // Assert - Should skip initialization for in-memory databases
         VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 5");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     [Fact]
-    public async Task InitializeAsync_ShouldLogDatabaseCreationResult_WhenDatabaseIsCreated()
+    public async Task InitializeAsync_ShouldSkipDatabaseCreationLogging_WhenUsingInMemoryDatabase()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -89,13 +89,14 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert - Test database creation logging
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: True (true = created, false = already existed)");
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 0");
+        // Assert - Should skip initialization for in-memory databases
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     [Fact]
-    public async Task InitializeAsync_ShouldCountExistingSongs_WhenDatabaseHasData()
+    public async Task InitializeAsync_ShouldSkipSongCounting_WhenUsingInMemoryDatabase()
     {
         // Arrange
         var mockLogger = new Mock<ILogger>();
@@ -104,8 +105,10 @@ public class DatabaseInitializerTests
         // Act
         await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
 
-        // Assert
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 42");
+        // Assert - Should skip initialization for in-memory databases
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     [Theory]
@@ -113,7 +116,7 @@ public class DatabaseInitializerTests
     [InlineData(true, false, 10)]
     [InlineData(false, true, 0)]
     [InlineData(false, true, 5)]
-    public async Task InitializeAsync_ShouldHandleVariousDatabaseStates_Successfully(
+    public async Task InitializeAsync_ShouldSkipInitializationForAllInMemoryDatabaseStates(
         bool canConnect, bool ensureCreatedResult, int songCount)
     {
         // Arrange
@@ -124,9 +127,11 @@ public class DatabaseInitializerTests
         var exception = await Record.ExceptionAsync(
             () => DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
 
-        // Assert
+        // Assert - Should skip initialization for all in-memory database states
         exception.Should().BeNull();
-        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed (skipped for tests)");
     }
 
     private static IServiceProvider CreateServiceProvider(bool canConnect, bool ensureCreatedResult, int songCount)

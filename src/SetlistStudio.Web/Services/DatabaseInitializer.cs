@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.InMemory;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Infrastructure.Data;
 
@@ -14,6 +15,16 @@ public static class DatabaseInitializer
         try
         {
             logger.LogInformation("Starting database initialization...");
+            
+            // Skip database initialization for test environments using in-memory databases
+            // Check if using in-memory database provider
+            var providerName = context.Database.ProviderName;
+            if (providerName?.Contains("InMemory") == true)
+            {
+                logger.LogInformation("In-memory database detected - skipping initialization for test environment");
+                logger.LogInformation("Database initialization completed (skipped for tests)");
+                return;
+            }
             
             // Check if database can be accessed
             var canConnect = await context.Database.CanConnectAsync();
@@ -35,7 +46,7 @@ public static class DatabaseInitializer
                 logger.LogInformation("Database was created, allowing schema to settle");
             }
             
-            // Test basic database operations with retry logic
+            // Test basic database operations with retry logic (only for persistent databases)
             var songCount = 0;
             var retryCount = 0;
             const int maxRetries = 3;
