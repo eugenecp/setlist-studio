@@ -45,18 +45,20 @@ Every feature must work consistently and predictably. All functionality should b
 - Test boundary conditions (empty setlists, maximum song limits, etc.)
 
 #### Code Coverage Standards
-Setlist Studio maintains a **minimum 90% code coverage requirement for each individual file** to ensure reliability and confidence in our codebase.
+Setlist Studio maintains **minimum 90% code coverage requirements for both line and branch coverage at the file and project levels** to ensure reliability and confidence in our codebase.
 
 **Quality Metrics Requirements:**
-- ✅ **Code Coverage**: Each individual file must achieve at least 90% line coverage
-- ✅ **CRAP Score**: All methods must maintain acceptable complexity-to-coverage ratios
-- ✅ **Cyclomatic Complexity**: All methods must stay within acceptable complexity thresholds
+- ✅ **Line Coverage**: Each individual file must achieve at least 90% line coverage
+- ✅ **Branch Coverage**: Each individual file must achieve at least 90% branch coverage
+- ✅ **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
+- ✅ **CRAP Score**: All methods must maintain passing CRAP scores (low complexity-to-coverage ratios)
+- ✅ **Cyclomatic Complexity**: All methods must maintain passing cyclomatic complexity metrics
 
 **Individual File Coverage Requirements:**
-- **Each file must achieve at least 90% line coverage**
-- New code must include tests that achieve 90%+ coverage for the modified files
-- Pull requests should not reduce coverage below 90% for any existing file
-- **All new files must achieve 90% coverage before merge**
+- **Each file must achieve at least 90% line coverage AND 90% branch coverage**
+- New code must include tests that achieve 90%+ line and branch coverage for the modified files
+- Pull requests should not reduce coverage below 90% for any existing file (line or branch)
+- **All new files must achieve 90% line and branch coverage before merge**
 - Focus on achieving high individual file coverage, not just overall project coverage
 
 **Testing Framework Requirements:**
@@ -66,13 +68,14 @@ Setlist Studio maintains a **minimum 90% code coverage requirement for each indi
 
 **Coverage Guidelines:**
 - All new code must include comprehensive tests covering normal cases, error scenarios, and edge cases
-- **Each individual file must maintain at least 90% line coverage**
+- **Each individual file must maintain at least 90% line coverage AND 90% branch coverage**
+- **Project overall must maintain at least 90% line coverage AND 90% branch coverage**
 - Tests must cover all conditional branches (if/else statements, try/catch blocks, switch cases)
 - Each test should be small, focused, and clearly named describing what it tests
 - Test names should follow the pattern: `MethodName_Scenario_ExpectedResult`
 - Mock external dependencies to ensure tests are isolated and fast
 - Use realistic musical data in test examples (songs, artists, BPMs, keys)
-- **Focus on achieving high individual file coverage, not just overall project coverage**
+- **Focus on achieving high individual file coverage (line and branch), not just overall project coverage**
 
 **Test Organization:**
 - Group related tests in nested classes or separate test files
@@ -105,24 +108,26 @@ reportgenerator -reports:"./TestResults/[TestRun]/*/coverage.cobertura.xml" -tar
 **Coverage Analysis Guidelines:**
 - Generate coverage reports for all major code changes and pull requests
 - Review line-by-line coverage for newly added classes and methods
-- **Identify and address any files with less than 90% individual coverage**
+- **Identify and address any files with less than 90% individual line or branch coverage**
 - Use coverage reports to find untested edge cases and error handling paths
-- **Focus on achieving high individual file coverage, not just overall project coverage**
+- **Focus on achieving high individual file coverage (line and branch), not just overall project coverage**
 - Document any intentionally excluded code with appropriate justification
-- **Prioritize files below 90% coverage for immediate testing improvements**
+- **Prioritize files below 90% line or branch coverage for immediate testing improvements**
 
 **Coverage Report Interpretation:**
-- **Green bars**: Well-covered code (>90% coverage)
+- **Green bars**: Well-covered code (>90% line and branch coverage)
 - **Yellow bars**: Moderately covered code (70-90% coverage) - needs attention
 - **Red bars**: Poorly covered code (<70% coverage) - requires immediate improvement
 - **Risk Hotspots**: High complexity code with low coverage - prioritize for testing
-- **Branch Coverage**: Measures all conditional paths (if/else, switch, try/catch)
+- **Branch Coverage**: Measures all conditional paths (if/else, switch, try/catch) - must achieve 90%
 
 **Quality Metrics Analysis:**
 - **CRAP Score**: Change Risk Anti-Patterns score combining complexity and coverage
+  - **Requirement**: All methods must maintain passing CRAP scores
   - Target: Keep CRAP score low by maintaining high test coverage on complex methods
   - Action: Break down methods with high CRAP scores or add comprehensive tests
 - **Cyclomatic Complexity**: Measures code complexity through decision points
+  - **Requirement**: All methods must maintain passing cyclomatic complexity metrics
   - Target: Break down methods with high complexity or ensure comprehensive testing
   - Action: Refactor complex methods into smaller, more testable units
 
@@ -192,7 +197,7 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 
 "Write tests that verify setlist ordering is maintained correctly when songs are added or removed"
 
-"Analyze current code coverage and identify classes/methods missing tests to reach 90% coverage"
+"Analyze current code coverage and identify classes/methods missing tests to reach 90% line and branch coverage"
 
 "Write xUnit tests using Moq and FluentAssertions for the SongService covering normal cases, null inputs, and exception scenarios"
 
@@ -206,7 +211,13 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 
 "Run coverage analysis and create tests for all uncovered branches in the Program.cs startup configuration"
 
-"Review the coverage report in CoverageReport/Latest and identify critical paths with less than 90% coverage"
+"Review the coverage report in CoverageReport/Latest and identify critical paths with less than 90% line or branch coverage"
+
+"Create tests for all conditional branches to achieve 90% branch coverage on the UserService class"
+
+"Analyze CRAP scores and cyclomatic complexity metrics to identify methods needing refactoring or additional tests"
+
+"Write comprehensive tests to ensure all files maintain 90% line and branch coverage with passing CRAP scores"
 ```
 
 ### Scalability Examples

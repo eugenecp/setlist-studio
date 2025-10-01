@@ -10,6 +10,7 @@ using SetlistStudio.Web.Shared;
 using Xunit;
 using MudBlazor;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 
 namespace SetlistStudio.Tests.Web.Shared
 {
@@ -23,6 +24,29 @@ namespace SetlistStudio.Tests.Web.Shared
             // Add a test authorization service
             Services.AddSingleton<AuthenticationStateProvider, TestAuthStateProvider>();
             Services.AddAuthorizationCore();
+
+            // Setup JSInterop for MudBlazor components
+            var mudElementRef = new
+            {
+                x = 0,
+                y = 0,
+                width = 100,
+                height = 50,
+                top = 0,
+                left = 0,
+                bottom = 50,
+                right = 100
+            };
+
+            JSInterop.Setup<object>("mudElementRef.getBoundingClientRect", _ => true)
+                .SetResult(mudElementRef);
+            
+            JSInterop.SetupVoid("mudKeyInterceptor.connect", _ => true);
+            JSInterop.SetupVoid("mudKeyInterceptor.updatekey", _ => true);
+            JSInterop.SetupVoid("mudKeyInterceptor.disconnect", _ => true);
+            JSInterop.SetupVoid("mudScrollManager.lockScroll", _ => true);
+            JSInterop.SetupVoid("mudScrollManager.unlockScroll", _ => true);
+            JSInterop.Setup<bool>("mudWindow.matchMedia", _ => true).SetResult(false);
         }
 
         [Fact]
