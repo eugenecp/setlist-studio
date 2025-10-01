@@ -52,11 +52,22 @@ jobs:
     - name: 🏗️ Build solution
       run: dotnet build SetlistStudio.sln --configuration Release --no-restore --verbosity normal
     
-    - name: 🧪 Run tests
+    - name: 🧪 Run tests with clean environment
       run: |
+        # Kill any potential background dotnet processes to avoid file locking
+        pkill -f "dotnet.*SetlistStudio" || true
+        sleep 2
+        
+        # Clean any previous builds to ensure fresh start
+        dotnet clean SetlistStudio.sln --configuration Release
+        
+        # Set test environment to avoid database conflicts
+        export ASPNETCORE_ENVIRONMENT=Test
+        export DOTNET_ENVIRONMENT=Test
+        
+        # Run tests with build to avoid file locking issues
         dotnet test SetlistStudio.sln \
           --configuration Release \
-          --no-build \
           --verbosity normal \
           --logger trx \
           --logger "console;verbosity=detailed" \
@@ -267,6 +278,10 @@ jobs:
     
     - name: 🧪 Test Docker image
       run: |
+        # Clean up any existing containers to avoid conflicts
+        docker stop test-container test-debug 2>/dev/null || true
+        docker rm test-container test-debug 2>/dev/null || true
+        
         echo "Testing container in foreground first (for debugging)..."
         timeout 10s docker run --rm --name test-debug -p 8081:5000 setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
         

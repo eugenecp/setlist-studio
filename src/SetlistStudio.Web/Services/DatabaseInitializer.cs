@@ -28,9 +28,34 @@ public static class DatabaseInitializer
             var created = await context.Database.EnsureCreatedAsync();
             logger.LogInformation("Database creation result: {Created} (true = created, false = already existed)", created);
             
-            // Test basic database operations
-            var songCount = await context.Songs.CountAsync();
-            logger.LogInformation("Current song count in database: {SongCount}", songCount);
+            // If database was just created, wait a moment for all connections to sync
+            if (created)
+            {
+                await Task.Delay(100); // Brief delay to ensure schema is fully available
+                logger.LogInformation("Database was created, allowing schema to settle");
+            }
+            
+            // Test basic database operations with retry logic
+            var songCount = 0;
+            var retryCount = 0;
+            const int maxRetries = 3;
+            
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    songCount = await context.Songs.CountAsync();
+                    logger.LogInformation("Current song count in database: {SongCount}", songCount);
+                    break; // Success, exit retry loop
+                }
+                catch (Exception countEx) when (retryCount < maxRetries - 1)
+                {
+                    retryCount++;
+                    logger.LogWarning("Failed to query Songs table on attempt {Attempt}: {Error}. Retrying...", 
+                        retryCount, countEx.Message);
+                    await Task.Delay(200 * retryCount); // Exponential backoff
+                }
+            }
             
             logger.LogInformation("Database initialization completed successfully");
         }
