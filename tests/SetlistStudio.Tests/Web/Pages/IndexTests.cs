@@ -31,8 +31,20 @@ public class IndexTests : TestContext
         // Register MudBlazor services
         Services.AddMudServices();
         
-        // Register authorization services
+        // Register authorization services 
         Services.AddAuthorizationCore();
+        
+        // Add a mock authorization service to handle AuthorizeView components
+        var mockAuthService = new Mock<IAuthorizationService>();
+        mockAuthService.Setup(x => x.AuthorizeAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<object>(), It.IsAny<IEnumerable<IAuthorizationRequirement>>()))
+                      .ReturnsAsync((ClaimsPrincipal user, object resource, IEnumerable<IAuthorizationRequirement> requirements) =>
+                      {
+                          // Return success if user is authenticated, failure if not
+                          return user.Identity?.IsAuthenticated == true 
+                              ? AuthorizationResult.Success() 
+                              : AuthorizationResult.Failed();
+                      });
+        Services.AddScoped<IAuthorizationService>(_ => mockAuthService.Object);
         
         // Register mocked services
         Services.AddScoped<AuthenticationStateProvider>(_ => _mockAuthStateProvider.Object);
@@ -66,7 +78,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
 
         // Assert
         component.Markup.Should().Contain("Everything You Need for Professional Performances");
@@ -85,7 +98,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
 
         // Assert
         var signInButton = component.Find("a[href='/login']");
@@ -126,7 +140,8 @@ public class IndexTests : TestContext
             .ReturnsAsync((upcomingSetlists, 2));
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
@@ -172,7 +187,8 @@ public class IndexTests : TestContext
             .ReturnsAsync((upcomingSetlists, 3));
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations to complete
         await Task.Delay(200);
@@ -201,7 +217,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
@@ -228,7 +245,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
@@ -259,7 +277,8 @@ public class IndexTests : TestContext
             .ThrowsAsync(new Exception("Database connection failed"));
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
@@ -278,16 +297,17 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
 
         // Assert
         component.Markup.Should().Contain("Ready to Transform Your Music Performances?");
         component.Markup.Should().Contain("Join musicians worldwide");
         
-        // Should show sign up button for unauthenticated users
-        var signUpButton = component.Find("a[href='/login']");
-        signUpButton.Should().NotBeNull();
-        signUpButton.TextContent.Should().Contain("Sign Up Free");
+    // Should show sign in button for unauthenticated users
+    var signInButton = component.Find("a[href='/login']");
+    signInButton.Should().NotBeNull();
+    signInButton.TextContent.Should().Contain("Sign In to Get Started");
     }
 
     [Fact]
@@ -317,7 +337,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(new string[0]);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
@@ -356,7 +377,8 @@ public class IndexTests : TestContext
             .ReturnsAsync(new string[0]);
 
         // Act
-        var component = RenderComponent<IndexPage>();
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
         await Task.Delay(100);
