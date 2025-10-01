@@ -36,7 +36,7 @@ public class ProgramIntegrationTests : IClassFixture<WebApplicationFactory<Progr
     #region Application Startup Tests
 
     [Fact]
-    public async Task Application_ShouldStart_Successfully()
+    public void Application_ShouldStart_Successfully()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -64,7 +64,7 @@ public class ProgramIntegrationTests : IClassFixture<WebApplicationFactory<Progr
     #region HTTP Pipeline Tests
 
     [Fact]
-    public async Task HttpPipeline_ShouldRedirectToSSL_InProduction()
+    public void HttpPipeline_ShouldRedirectToSSL_InProduction()
     {
         // This test would need to be configured for production environment
         // For now, we verify the middleware is configured
@@ -225,7 +225,7 @@ public class ProgramIntegrationTests : IClassFixture<WebApplicationFactory<Progr
     #region Error Handling Tests
 
     [Fact]
-    public async Task ErrorHandling_ShouldProvideCustomErrorPages_InProduction()
+    public void ErrorHandling_ShouldProvideCustomErrorPages_InProduction()
     {
         // This would need production environment configuration
         // For now we verify error handling middleware is present

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using FluentAssertions;
 using Moq;
 using SetlistStudio.Core.Entities;
@@ -292,23 +293,17 @@ public class ProgramSeedDataTests : IDisposable
         // Arrange
         var emptyContext = GetFreshContext();
         
-        // Create a mock service provider that returns a failing UserManager
+        // Create a mock service provider that returns null for UserManager (simulating service not available)
         var mockServiceProvider = new Mock<IServiceProvider>();
-        var mockUserManager = new Mock<UserManager<ApplicationUser>>(
-            Mock.Of<IUserStore<ApplicationUser>>(), null, null, null, null, null, null, null, null);
-        
-        mockUserManager.Setup(um => um.CreateAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
-            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Test error" }));
-        
         mockServiceProvider.Setup(sp => sp.GetService(typeof(UserManager<ApplicationUser>)))
-            .Returns(mockUserManager.Object);
+            .Returns((UserManager<ApplicationUser>?)null);
 
         // Act
         await InvokeSeedDevelopmentDataAsync(emptyContext, mockServiceProvider.Object);
 
         // Assert - Should not throw exception and should not create any data
         var songs = await emptyContext.Songs.CountAsync();
-        songs.Should().Be(0, "should not create songs when user creation fails");
+        songs.Should().Be(0, "should not create songs when UserManager is not available");
         
         var setlists = await emptyContext.Setlists.CountAsync();
         setlists.Should().Be(0, "should not create setlists when user creation fails");

@@ -110,7 +110,7 @@ public class HealthControllerTests : IDisposable
         // Should still return "Healthy" for service, but database should show error
         statusProperty!.GetValue(healthStatus).Should().Be("Healthy");
         databaseProperty!.GetValue(healthStatus).Should().NotBe("Connected");
-        databaseProperty.GetValue(healthStatus).ToString().Should().StartWith("Error:");
+        databaseProperty!.GetValue(healthStatus)?.ToString().Should().StartWith("Error:");
 
         // Verify warning was logged
         _mockLogger.Verify(

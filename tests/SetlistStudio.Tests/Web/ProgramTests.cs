@@ -196,7 +196,7 @@ public class ProgramTests : IDisposable
     #region Authentication Configuration Tests
 
     [Fact]
-    public void Program_ShouldConfigureGoogleAuthentication_WhenClientIdProvided()
+    public async Task Program_ShouldConfigureGoogleAuthentication_WhenClientIdProvided()
     {
         // Arrange
         var config = new Dictionary<string, string>
@@ -221,12 +221,12 @@ public class ProgramTests : IDisposable
         authenticationService.Should().NotBeNull();
         
         var schemeProvider = factory.Services.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = schemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await schemeProvider.GetAllSchemesAsync();
         schemes.Should().Contain(s => s.Name == "Google");
     }
 
     [Fact]
-    public void Program_ShouldConfigureMicrosoftAuthentication_WhenClientIdProvided()
+    public async Task Program_ShouldConfigureMicrosoftAuthentication_WhenClientIdProvided()
     {
         // Arrange
         var config = new Dictionary<string, string>
@@ -241,12 +241,12 @@ public class ProgramTests : IDisposable
         
         // Assert
         var schemeProvider = factory.Services.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = schemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await schemeProvider.GetAllSchemesAsync();
         schemes.Should().Contain(s => s.Name == "Microsoft");
     }
 
     [Fact]
-    public void Program_ShouldConfigureFacebookAuthentication_WhenAppIdProvided()
+    public async Task Program_ShouldConfigureFacebookAuthentication_WhenAppIdProvided()
     {
         // Arrange
         var config = new Dictionary<string, string>
@@ -261,12 +261,12 @@ public class ProgramTests : IDisposable
         
         // Assert
         var schemeProvider = factory.Services.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = schemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await schemeProvider.GetAllSchemesAsync();
         schemes.Should().Contain(s => s.Name == "Facebook");
     }
 
     [Fact]
-    public void Program_ShouldNotConfigureExternalAuth_WhenNoCredentialsProvided()
+    public async Task Program_ShouldNotConfigureExternalAuth_WhenNoCredentialsProvided()
     {
         // Arrange - explicitly provide config with empty auth credentials
         var config = new Dictionary<string, string>
@@ -280,7 +280,7 @@ public class ProgramTests : IDisposable
         
         // Assert
         var schemeProvider = factory.Services.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = schemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await schemeProvider.GetAllSchemesAsync();
         
         // Should only have default Identity schemes, not external providers
         schemes.Should().NotContain(s => s.Name == "Google");

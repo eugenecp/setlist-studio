@@ -243,7 +243,7 @@ public class StatusControllerTests
     }
 
     [Fact]
-    public void Get_And_Ping_ShouldBothReturnOkResult_WhenCalledConcurrently()
+    public async Task Get_And_Ping_ShouldBothReturnOkResult_WhenCalledConcurrently()
     {
         // Arrange
         var controller = new StatusController();
@@ -256,12 +256,12 @@ public class StatusControllerTests
             tasks.Add(Task.Run(() => controller.Ping()));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        var results = await Task.WhenAll(tasks);
 
         // Assert
-        foreach (var task in tasks)
+        foreach (var result in results)
         {
-            task.Result.Should().BeOfType<OkObjectResult>();
+            result.Should().BeOfType<OkObjectResult>();
         }
     }
 }

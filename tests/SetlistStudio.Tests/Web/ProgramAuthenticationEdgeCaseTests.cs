@@ -17,10 +17,10 @@ public class ProgramAuthenticationTests : IDisposable
     private WebApplicationFactory<Program>? _factory;
 
     [Fact]
-    public void Program_ShouldConfigureIdentityAuthentication()
+    public async Task Program_ShouldConfigureIdentityAuthentication()
     {
         // Arrange
-        var configuration = new Dictionary<string, string>
+        var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
         };
@@ -40,7 +40,7 @@ public class ProgramAuthenticationTests : IDisposable
 
         // Assert
         var authSchemeProvider = serviceProvider.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = authSchemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await authSchemeProvider.GetAllSchemesAsync();
         
         // Identity authentication schemes should always be configured
         schemes.Should().Contain(s => s.Name == "Identity.Application");
@@ -48,10 +48,10 @@ public class ProgramAuthenticationTests : IDisposable
     }
 
     [Fact]
-    public void Program_ShouldConfigureExternalAuth_WhenValidCredentialsProvided()
+    public async Task Program_ShouldConfigureExternalAuth_WhenValidCredentialsProvided()
     {
         // Arrange
-        var configuration = new Dictionary<string, string>
+        var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
             {"Authentication:Google:ClientId", "valid-google-client-id"},
@@ -77,7 +77,7 @@ public class ProgramAuthenticationTests : IDisposable
 
         // Assert
         var authSchemeProvider = serviceProvider.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = authSchemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await authSchemeProvider.GetAllSchemesAsync();
         
         // External authentication providers should be configured when valid credentials are provided
         schemes.Should().Contain(s => s.Name == "Google");
@@ -86,10 +86,10 @@ public class ProgramAuthenticationTests : IDisposable
     }
 
     [Fact]
-    public void Program_ShouldNotConfigureExternalAuth_WhenPlaceholderCredentialsProvided()
+    public async Task Program_ShouldNotConfigureExternalAuth_WhenPlaceholderCredentialsProvided()
     {
         // Arrange
-        var configuration = new Dictionary<string, string>
+        var configuration = new Dictionary<string, string?>
         {
             {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"},
             {"Authentication:Google:ClientId", "YOUR_GOOGLE_CLIENT_ID"},
@@ -111,7 +111,7 @@ public class ProgramAuthenticationTests : IDisposable
 
         // Assert
         var authSchemeProvider = serviceProvider.GetRequiredService<IAuthenticationSchemeProvider>();
-        var schemes = authSchemeProvider.GetAllSchemesAsync().Result;
+        var schemes = await authSchemeProvider.GetAllSchemesAsync();
         
         // Google should not be configured with placeholder credentials
         schemes.Should().NotContain(s => s.Name == "Google");

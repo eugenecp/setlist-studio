@@ -477,7 +477,7 @@ public class SetlistStudioDbContextTests : IDisposable
     #region Constraint Tests
 
     [Fact]
-    public async Task SetlistSongs_ShouldHaveUniqueIndex_WhenDuplicateSongInSameSetlist()
+    public void SetlistSongs_ShouldHaveUniqueIndex_WhenDuplicateSongInSameSetlist()
     {
         // Arrange & Act
         var setlistSongEntity = _context.Model.FindEntityType(typeof(SetlistSong));
