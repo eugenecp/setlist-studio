@@ -97,6 +97,8 @@ Test files must follow strict naming conventions that directly correspond to the
 
 **Test File Structure Requirements:**
 - **One test file per source file**: Each source code file must have exactly one corresponding test file
+- **ALL tests must match a source file**: No orphaned test files are allowed - every test file must correspond to an actual source code file
+- **No generic or utility test files**: Avoid creating generic test files like `UtilityTests.cs` or `HelpersTests.cs` - instead, create specific test files for specific source classes
 - **Mirror directory structure**: Test files must be organized in directories that mirror the source code structure
 - **Consistent namespace mapping**: 
   - Source: `SetlistStudio.Core.Entities` → Test: `SetlistStudio.Tests.Entities`
@@ -111,6 +113,29 @@ src/SetlistStudio.Infrastructure/Services/SongService.cs → tests/SetlistStudio
 src/SetlistStudio.Web/Controllers/HealthController.cs → tests/SetlistStudio.Tests/Controllers/HealthControllerTests.cs
 src/SetlistStudio.Web/Program.cs → tests/SetlistStudio.Tests/Web/ProgramTests.cs
 ```
+
+**Test-to-Source File Validation:**
+To maintain test quality and ensure comprehensive coverage, all test files must have clear traceability to source code files.
+
+**Validation Requirements:**
+- **Every test file must correspond to exactly one source code file**
+- **Every source code file should have exactly one corresponding test file** (except for auto-generated files)
+- **Test file names must exactly match the source file naming pattern**: `{SourceClass}Tests.cs`
+- **Test files without corresponding source files are prohibited** - they indicate either:
+  - Missing source code that should be implemented
+  - Incorrectly named test files that should be renamed
+  - Test files that should be deleted or refactored
+
+**Verification Process:**
+- Before creating new test files, verify the corresponding source file exists
+- When refactoring or renaming source files, update corresponding test file names
+- During code reviews, validate that all new test files follow the 1:1 mapping requirement
+- Use tools or scripts to validate test-to-source file mapping consistency
+
+**Acceptable Exceptions:**
+- Auto-generated files (e.g., migrations, scaffolded code) may not require test files
+- Static program entry points may have specialized test approaches
+- Configuration files and data files typically don't require dedicated test files
 
 **Coverage Reporting and Analysis:**
 Setlist Studio uses comprehensive coverage reporting to track and maintain code quality. All coverage reports are generated in the `CoverageReport` directory for easy analysis and review.
@@ -240,6 +265,16 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 
 "Generate test files following the naming pattern {ClassName}Tests.cs for all classes in the SetlistStudio.Core.Entities namespace"
 
+"Verify that all test files correspond to existing source files and follow the 1:1 mapping requirement"
+
+"Create test files for all source code files that are missing corresponding test files"
+
+"Validate that each test file matches exactly one source code file using the {SourceClass}Tests.cs naming pattern"
+
+"Review existing test files and ensure none are orphaned - all must correspond to actual source code files"
+
+"Generate individual test files for each source class rather than creating combined or utility test files"
+
 "Create test cases for all branches in the SetlistService AddSong method including duplicate song handling"
 
 "Generate unit tests for entity validation covering valid data, invalid BPM ranges, and missing required fields"
@@ -332,8 +367,9 @@ When contributing to Setlist Studio:
 
 1. **Read the codebase**: Familiarize yourself with existing patterns and conventions
 2. **Follow the principles**: Keep reliability, scalability, security, maintainability, and delight in mind
-3. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-4. **Test thoroughly**: Ensure your code works correctly and handles edge cases
-5. **Document your work**: Add clear comments and update documentation as needed
+3. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
+4. **Use realistic examples**: When creating tests or documentation, use authentic musical data
+5. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
+6. **Document your work**: Add clear comments and update documentation as needed
 
 Remember: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world.
