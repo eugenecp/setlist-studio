@@ -35,7 +35,10 @@ public class ProgramUtilityTests
     public void GetDatabaseConnectionString_WithTestEnvironment_ReturnsMemoryConnection()
     {
         // Arrange
-        var config = new ConfigurationBuilder().Build();
+        // Explicitly create a configuration with no DefaultConnection to ensure null is returned
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
         var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
         
         try
