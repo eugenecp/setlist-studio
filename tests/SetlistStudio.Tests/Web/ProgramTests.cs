@@ -413,6 +413,14 @@ public class ProgramTests : IDisposable
     {
         var config = configuration ?? _testConfiguration;
         
+        // Clean up any existing environment variables first
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
+        
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {

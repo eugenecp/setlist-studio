@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using FluentAssertions;
 using Xunit;
+using System.Linq;
 
 namespace SetlistStudio.Tests.Web;
 
@@ -63,6 +64,14 @@ public class ProgramAuthenticationTests : IDisposable
         };
 
         // Act
+        // First clean up any existing environment variables
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
+        
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -92,9 +101,13 @@ public class ProgramAuthenticationTests : IDisposable
         var schemes = await authSchemeProvider.GetAllSchemesAsync();
         
         // External authentication providers should be configured when valid credentials are provided
-        schemes.Should().Contain(s => s.Name == "Google");
-        schemes.Should().Contain(s => s.Name == "Microsoft");
-        schemes.Should().Contain(s => s.Name == "Facebook");
+        // For debugging: let's see what schemes are actually available
+        var schemeNames = schemes.Select(s => s.Name).ToList();
+        
+        // All three external providers should be configured when valid credentials are provided
+        schemes.Should().Contain(s => s.Name == "Google", "Google should be configured with valid credentials");
+        schemes.Should().Contain(s => s.Name == "Microsoft", "Microsoft should be configured with valid credentials");
+        schemes.Should().Contain(s => s.Name == "Facebook", "Facebook should be configured with valid credentials");
     }
 
     [Fact]
