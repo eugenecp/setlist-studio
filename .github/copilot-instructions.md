@@ -88,17 +88,22 @@ Test files must follow strict naming conventions that directly correspond to the
 
 **Required Naming Pattern:**
 - **Source File**: `{ClassName}.cs` → **Test File**: `{ClassName}Tests.cs`
+- **Razor Component**: `{ComponentName}.razor` → **Test File**: `{ComponentName}Tests.cs`
+- **Razor View**: `{ViewName}.cshtml` → **Test File**: `{ViewName}Tests.cs`
 - **Examples**:
   - `Song.cs` → `SongTests.cs`
   - `SetlistService.cs` → `SetlistServiceTests.cs`
   - `HealthController.cs` → `HealthControllerTests.cs`
   - `Program.cs` → `ProgramTests.cs`
   - `SetlistStudioDbContext.cs` → `SetlistStudioDbContextTests.cs`
+  - `Index.razor` → `IndexTests.cs`
+  - `Login.razor` → `LoginTests.cs`
+  - `_LoginPartial.cshtml` → `LoginPartialTests.cs`
 
 **Test File Structure Requirements:**
-- **One test file per source file**: Each source code file must have exactly one corresponding test file
-- **ALL tests must match a source file**: No orphaned test files are allowed - every test file must correspond to an actual source code file
-- **No generic or utility test files**: Avoid creating generic test files like `UtilityTests.cs` or `HelpersTests.cs` - instead, create specific test files for specific source classes
+- **One test file per source file**: Each source code file (.cs), Razor component (.razor), or Razor view (.cshtml) must have exactly one corresponding test file
+- **ALL tests must match a source file**: No orphaned test files are allowed - every test file must correspond to an actual source code file (.cs), Razor component (.razor), or Razor view (.cshtml)
+- **No generic or utility test files**: Avoid creating generic test files like `UtilityTests.cs` or `HelpersTests.cs` - instead, create specific test files for specific source classes, components, or views
 - **Mirror directory structure**: Test files must be organized in directories that mirror the source code structure
 - **Consistent namespace mapping**: 
   - Source: `SetlistStudio.Core.Entities` → Test: `SetlistStudio.Tests.Entities`
@@ -112,6 +117,9 @@ src/SetlistStudio.Core/Entities/Song.cs → tests/SetlistStudio.Tests/Entities/S
 src/SetlistStudio.Infrastructure/Services/SongService.cs → tests/SetlistStudio.Tests/Services/SongServiceTests.cs
 src/SetlistStudio.Web/Controllers/HealthController.cs → tests/SetlistStudio.Tests/Controllers/HealthControllerTests.cs
 src/SetlistStudio.Web/Program.cs → tests/SetlistStudio.Tests/Web/ProgramTests.cs
+src/SetlistStudio.Web/Pages/Index.razor → tests/SetlistStudio.Tests/Pages/IndexTests.cs
+src/SetlistStudio.Web/Pages/Login.razor → tests/SetlistStudio.Tests/Pages/LoginTests.cs
+src/SetlistStudio.Web/Pages/Shared/_LoginPartial.cshtml → tests/SetlistStudio.Tests/Pages/Shared/LoginPartialTests.cs
 ```
 
 **Test-to-Source File Validation:**
@@ -134,6 +142,13 @@ To maintain test quality and ensure comprehensive coverage, all test files must 
 
 **Acceptable Exceptions:**
 - Auto-generated files (e.g., migrations, scaffolded code) may not require test files
+- Static program entry points may have specialized test approaches
+- Configuration files and data files typically don't require dedicated test files
+
+**Source File Types Requiring Tests:**
+- **C# Classes**: All `.cs` files containing classes, interfaces, services, controllers, etc.
+- **Razor Components**: All `.razor` files containing Blazor components
+- **Razor Views**: All `.cshtml` files containing MVC views, partial views, and layouts
 - Static program entry points may have specialized test approaches
 - Configuration files and data files typically don't require dedicated test files
 
