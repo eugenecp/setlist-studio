@@ -14,7 +14,7 @@ using MudBlazor;
 using MudBlazor.Services;
 using IndexPage = SetlistStudio.Web.Pages.Index;
 
-namespace SetlistStudio.Tests.Web.Pages;
+namespace SetlistStudio.Tests.Pages;
 
 public class IndexTests : TestContext
 {

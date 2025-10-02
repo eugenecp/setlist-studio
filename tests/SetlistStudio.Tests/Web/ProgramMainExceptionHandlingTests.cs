@@ -69,10 +69,7 @@ public class ProgramMainExceptionHandlingTests : IDisposable
     [Fact]
     public void Program_ShouldHandleInvalidEnvironmentConfiguration()
     {
-        // Arrange - Set up environment that might cause issues
-        _environmentVariables.Add("ASPNETCORE_ENVIRONMENT", "InvalidEnvironment");
-        _environmentVariables.Add("ASPNETCORE_URLS", "invalid-url-format");
-        
+        // Arrange - Set up configuration that might cause issues
         try
         {
             // Act
@@ -81,12 +78,16 @@ public class ProgramMainExceptionHandlingTests : IDisposable
                 {
                     builder.UseEnvironment("Test"); // Override to Test for safety
                     
-                    foreach (var kvp in _environmentVariables)
+                    // Use configuration instead of environment variables to avoid affecting other tests
+                    builder.ConfigureAppConfiguration((context, config) =>
                     {
-                        Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
-                    }
-                    
-                    builder.UseSetting("ConnectionStrings:DefaultConnection", "Data Source=:memory:");
+                        config.AddInMemoryCollection(new Dictionary<string, string?>
+                        {
+                            {"ASPNETCORE_ENVIRONMENT", "InvalidEnvironment"},
+                            // Note: Don't set invalid URLs as it can break the whole test host
+                            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+                        });
+                    });
                     
                     builder.ConfigureLogging(logging =>
                     {
@@ -261,7 +262,7 @@ public class ProgramMainExceptionHandlingTests : IDisposable
 
     public void Dispose()
     {
-        // Clean up environment variables
+        // Clean up environment variables that might have been set in other tests
         foreach (var key in _environmentVariables.Keys)
         {
             Environment.SetEnvironmentVariable(key, null);
@@ -274,6 +275,9 @@ public class ProgramMainExceptionHandlingTests : IDisposable
         Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
         Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
         Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
+        
+        // Clean up any URLs environment variable that might interfere with other tests
+        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", null);
     }
 
     #endregion

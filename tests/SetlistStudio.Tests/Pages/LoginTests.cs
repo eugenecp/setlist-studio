@@ -9,7 +9,7 @@ using FluentAssertions;
 using MudBlazor;
 using MudBlazor.Services;
 
-namespace SetlistStudio.Tests.Web.Pages;
+namespace SetlistStudio.Tests.Pages;
 
 public class LoginTests : TestContext
 {

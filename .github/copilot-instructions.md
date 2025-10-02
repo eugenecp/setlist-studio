@@ -83,6 +83,35 @@ Setlist Studio maintains **minimum 90% code coverage requirements for both line 
 - Include comments for complex test setups or assertions
 - Ensure tests are deterministic and can run in any order
 
+**Test File Naming Conventions:**
+Test files must follow strict naming conventions that directly correspond to the source code files they are testing to ensure clarity and maintainability.
+
+**Required Naming Pattern:**
+- **Source File**: `{ClassName}.cs` → **Test File**: `{ClassName}Tests.cs`
+- **Examples**:
+  - `Song.cs` → `SongTests.cs`
+  - `SetlistService.cs` → `SetlistServiceTests.cs`
+  - `HealthController.cs` → `HealthControllerTests.cs`
+  - `Program.cs` → `ProgramTests.cs`
+  - `SetlistStudioDbContext.cs` → `SetlistStudioDbContextTests.cs`
+
+**Test File Structure Requirements:**
+- **One test file per source file**: Each source code file must have exactly one corresponding test file
+- **Mirror directory structure**: Test files must be organized in directories that mirror the source code structure
+- **Consistent namespace mapping**: 
+  - Source: `SetlistStudio.Core.Entities` → Test: `SetlistStudio.Tests.Entities`
+  - Source: `SetlistStudio.Infrastructure.Services` → Test: `SetlistStudio.Tests.Services`
+  - Source: `SetlistStudio.Web.Controllers` → Test: `SetlistStudio.Tests.Controllers`
+- **Test class naming**: Test class names must match the pattern `{SourceClassName}Tests`
+
+**Project Structure Mapping:**
+```
+src/SetlistStudio.Core/Entities/Song.cs → tests/SetlistStudio.Tests/Entities/SongTests.cs
+src/SetlistStudio.Infrastructure/Services/SongService.cs → tests/SetlistStudio.Tests/Services/SongServiceTests.cs
+src/SetlistStudio.Web/Controllers/HealthController.cs → tests/SetlistStudio.Tests/Controllers/HealthControllerTests.cs
+src/SetlistStudio.Web/Program.cs → tests/SetlistStudio.Tests/Web/ProgramTests.cs
+```
+
 **Coverage Reporting and Analysis:**
 Setlist Studio uses comprehensive coverage reporting to track and maintain code quality. All coverage reports are generated in the `CoverageReport` directory for easy analysis and review.
 
@@ -200,6 +229,16 @@ Use these example prompts to get the most out of GitHub Copilot while maintainin
 "Analyze current code coverage and identify classes/methods missing tests to reach 90% line and branch coverage"
 
 "Write xUnit tests using Moq and FluentAssertions for the SongService covering normal cases, null inputs, and exception scenarios"
+
+"Create SongServiceTests.cs file with comprehensive tests for the SongService.cs class following the required naming convention"
+
+"Generate SetlistStudioDbContextTests.cs file to test all methods in SetlistStudioDbContext.cs with 90% line and branch coverage"
+
+"Write HealthControllerTests.cs file that matches the HealthController.cs structure and tests all endpoints"
+
+"Create ProgramTests.cs file in tests/SetlistStudio.Tests/Web/ directory to test the Program.cs startup configuration"
+
+"Generate test files following the naming pattern {ClassName}Tests.cs for all classes in the SetlistStudio.Core.Entities namespace"
 
 "Create test cases for all branches in the SetlistService AddSong method including duplicate song handling"
 

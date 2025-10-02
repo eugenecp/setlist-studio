@@ -143,6 +143,14 @@ public class ProgramAuthenticationTests : IDisposable
 
     public void Dispose()
     {
+        // Clean up environment variables that may have been set during tests
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientId", null);
+        Environment.SetEnvironmentVariable("Authentication__Microsoft__ClientSecret", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppId", null);
+        Environment.SetEnvironmentVariable("Authentication__Facebook__AppSecret", null);
+        
         _factory?.Dispose();
     }
 }
