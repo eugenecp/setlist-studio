@@ -312,7 +312,7 @@ public class ProgramAuthenticationBranchTests : IDisposable
     #region Environment Branch Tests
 
     [Fact]
-    public async Task Program_ShouldUseContainerDatabasePath_WhenRunningInContainer()
+    public void Program_ShouldUseContainerDatabasePath_WhenRunningInContainer()
     {
         // Arrange
         _environmentVariables.Add("DOTNET_RUNNING_IN_CONTAINER", "true");
@@ -329,7 +329,7 @@ public class ProgramAuthenticationBranchTests : IDisposable
     }
 
     [Fact]
-    public async Task Program_ShouldUseTestDatabasePath_WhenTestEnvironment()
+    public void Program_ShouldUseTestDatabasePath_WhenTestEnvironment()
     {
         // Arrange
         _environmentVariables.Add("ASPNETCORE_ENVIRONMENT", "Test");
@@ -349,7 +349,7 @@ public class ProgramAuthenticationBranchTests : IDisposable
     #region Database Provider Branch Tests
 
     [Fact]
-    public async Task Program_ShouldUseSqlServer_WhenConnectionStringContainsServer()
+    public void Program_ShouldUseSqlServer_WhenConnectionStringContainsServer()
     {
         // Arrange
         var configuration = new Dictionary<string, string?>
@@ -363,7 +363,7 @@ public class ProgramAuthenticationBranchTests : IDisposable
     }
 
     [Fact]
-    public async Task Program_ShouldUseSqlite_WhenConnectionStringContainsDataSource()
+    public void Program_ShouldUseSqlite_WhenConnectionStringContainsDataSource()
     {
         // Arrange
         var configuration = new Dictionary<string, string?>
