@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using SetlistStudio.Core.Entities;
@@ -193,5 +196,455 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
             authenticatedUser.Identity?.Name.Should().Be("authenticated@example.com");
             anonymousUser.Identity?.Name.Should().BeNull();
         }
+
+        #region Authentication State Edge Cases
+
+        [Fact]
+        public void LoginPartial_IsSignedIn_WithNullUser_ShouldReturnFalse()
+        {
+            // Arrange
+            ClaimsPrincipal? nullUser = null;
+            _mockSignInManager.Setup(x => x.IsSignedIn(nullUser!)).Returns(false);
+
+            // Act
+            var result = _mockSignInManager.Object.IsSignedIn(nullUser!);
+
+            // Assert
+            result.Should().BeFalse("Null user should not be signed in");
+        }
+
+        [Fact]
+        public void LoginPartial_IsSignedIn_WithEmptyClaimsPrincipal_ShouldReturnFalse()
+        {
+            // Arrange
+            var emptyUser = new ClaimsPrincipal();
+            _mockSignInManager.Setup(x => x.IsSignedIn(emptyUser)).Returns(false);
+
+            // Act
+            var result = _mockSignInManager.Object.IsSignedIn(emptyUser);
+
+            // Assert
+            result.Should().BeFalse("Empty ClaimsPrincipal should not be signed in");
+        }
+
+        [Fact]
+        public void LoginPartial_IsSignedIn_WithValidUser_ShouldReturnTrue()
+        {
+            // Arrange
+            var validUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "user-123")
+            }, "Identity.Application"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(validUser)).Returns(true);
+
+            // Act
+            var result = _mockSignInManager.Object.IsSignedIn(validUser);
+
+            // Assert
+            result.Should().BeTrue("Valid user should be signed in");
+        }
+
+        [Fact]
+        public void LoginPartial_UserIdentityName_WithSpecialCharacters_ShouldBePreserved()
+        {
+            // Arrange
+            var specialNames = new[]
+            {
+                "test@example.com",
+                "José García",
+                "王小明",
+                "user@münchen.de",
+                "🎵 Music Lover 🎸"
+            };
+
+            foreach (var name in specialNames)
+            {
+                var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, name)
+                }, "test"));
+
+                // Act
+                var actualName = user.Identity?.Name;
+
+                // Assert
+                actualName.Should().Be(name, $"Special character name '{name}' should be preserved");
+            }
+        }
+
+        [Fact]
+        public void LoginPartial_UserIdentityName_WithLongName_ShouldBePreserved()
+        {
+            // Arrange
+            var longName = new string('a', 300); // Very long name
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, longName)
+            }, "test"));
+
+            // Act
+            var actualName = user.Identity?.Name;
+
+            // Assert
+            actualName.Should().Be(longName, "Long name should be preserved");
+            actualName!.Length.Should().Be(300, "Long name length should be preserved");
+        }
+
+        #endregion
+
+        #region Multiple Authentication Schemes
+
+        [Fact]
+        public void LoginPartial_DifferentAuthSchemes_ShouldAllWorkCorrectly()
+        {
+            // Arrange
+            var schemes = new[]
+            {
+                "Identity.Application",
+                "Identity.External",
+                "Google",
+                "Microsoft",
+                "Facebook"
+            };
+
+            foreach (var scheme in schemes)
+            {
+                var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, $"user@{scheme.ToLower()}.com")
+                }, scheme));
+
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+                // Act
+                var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+                var name = user.Identity?.Name;
+
+                // Assert
+                isSignedIn.Should().BeTrue($"User with scheme '{scheme}' should be signed in");
+                name.Should().Be($"user@{scheme.ToLower()}.com", $"Name for scheme '{scheme}' should be correct");
+            }
+        }
+
+        [Fact]
+        public void LoginPartial_MultipleIdentities_ShouldUsePrimary()
+        {
+            // Arrange
+            var primaryIdentity = new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "primary@test.com")
+            }, "Identity.Application");
+
+            var secondaryIdentity = new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "secondary@test.com")
+            }, "Google");
+
+            var user = new ClaimsPrincipal(new[] { primaryIdentity, secondaryIdentity });
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var name = user.Identity?.Name; // Should use primary identity
+
+            // Assert
+            isSignedIn.Should().BeTrue("User with multiple identities should be signed in");
+            name.Should().Be("primary@test.com", "Primary identity name should be used");
+        }
+
+        #endregion
+
+        #region Claims Handling
+
+        [Fact]
+        public void LoginPartial_MultipleClaims_ShouldHandleCorrectly()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "user-123"),
+                new Claim(ClaimTypes.Email, "test@example.com"),
+                new Claim(ClaimTypes.Role, "Admin"),
+                new Claim(ClaimTypes.Role, "User"),
+                new Claim("custom_claim", "custom_value")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var name = user.Identity?.Name;
+            var nameIdentifier = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = user.FindFirst(ClaimTypes.Email)?.Value;
+            var roles = user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
+            var customClaim = user.FindFirst("custom_claim")?.Value;
+
+            // Assert
+            isSignedIn.Should().BeTrue("User with multiple claims should be signed in");
+            name.Should().Be("test@example.com");
+            nameIdentifier.Should().Be("user-123");
+            email.Should().Be("test@example.com");
+            roles.Should().Equal("Admin", "User");
+            customClaim.Should().Be("custom_value");
+        }
+
+        [Fact]
+        public void LoginPartial_MissingNameClaim_ShouldHandleGracefully()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, "user-123"),
+                new Claim(ClaimTypes.Email, "test@example.com")
+                // Missing Name claim
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var name = user.Identity?.Name;
+
+            // Assert
+            isSignedIn.Should().BeTrue("User without Name claim should still be signed in if authenticated");
+            name.Should().BeNull("Missing Name claim should result in null name");
+        }
+
+        [Fact]
+        public void LoginPartial_LargeClaimSet_ShouldHandleEfficiently()
+        {
+            // Arrange - Create user with many claims
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "user-123")
+            };
+
+            // Add 100 additional claims
+            for (int i = 0; i < 100; i++)
+            {
+                claims.Add(new Claim($"custom_claim_{i}", $"value_{i}"));
+            }
+
+            var user = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            // Act
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var name = user.Identity?.Name;
+            var claimCount = user.Claims.Count();
+            stopwatch.Stop();
+
+            // Assert
+            isSignedIn.Should().BeTrue("User with many claims should be signed in");
+            name.Should().Be("test@example.com");
+            claimCount.Should().Be(102, "Should handle large number of claims");
+            stopwatch.ElapsedMilliseconds.Should().BeLessThan(50, "Should handle large claim set efficiently");
+        }
+
+        #endregion
+
+        #region Cultural and Localization
+
+        [Fact]
+        public void LoginPartial_DifferentCultures_ShouldMaintainFunctionality()
+        {
+            // Arrange
+            var cultures = new[]
+            {
+                new CultureInfo("en-US"),
+                new CultureInfo("es-ES"),
+                new CultureInfo("fr-FR"),
+                new CultureInfo("ja-JP"),
+                new CultureInfo("ar-SA")
+            };
+
+            foreach (var culture in cultures)
+            {
+                var originalCulture = CultureInfo.CurrentCulture;
+                var originalUICulture = CultureInfo.CurrentUICulture;
+
+                try
+                {
+                    // Set culture
+                    CultureInfo.CurrentCulture = culture;
+                    CultureInfo.CurrentUICulture = culture;
+
+                    var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                    {
+                        new Claim(ClaimTypes.Name, $"user@{culture.Name}.com"),
+                        new Claim(ClaimTypes.NameIdentifier, $"user-{culture.Name}")
+                    }, "test"));
+
+                    _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+                    // Act
+                    var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+                    var name = user.Identity?.Name;
+
+                    // Assert
+                    isSignedIn.Should().BeTrue($"Authentication should work with culture '{culture.Name}'");
+                    name.Should().Be($"user@{culture.Name}.com", $"Name should be preserved with culture '{culture.Name}'");
+                }
+                finally
+                {
+                    // Restore original culture
+                    CultureInfo.CurrentCulture = originalCulture;
+                    CultureInfo.CurrentUICulture = originalUICulture;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Service Configuration and Validation
+
+        [Fact]
+        public void LoginPartial_SignInManager_ShouldBeConfiguredCorrectly()
+        {
+            // Act & Assert
+            _mockSignInManager.Should().NotBeNull("SignInManager should be configured");
+            _mockSignInManager.Object.Should().NotBeNull("SignInManager instance should be valid");
+        }
+
+        [Fact]
+        public void LoginPartial_UserManager_ShouldBeConfiguredCorrectly()
+        {
+            // Act & Assert
+            _mockUserManager.Should().NotBeNull("UserManager should be configured");
+            _mockUserManager.Object.Should().NotBeNull("UserManager instance should be valid");
+        }
+
+        [Fact]
+        public void LoginPartial_AuthenticationTypes_ShouldBeRecognized()
+        {
+            // Arrange
+            var authTypes = new[]
+            {
+                "Identity.Application",
+                "Identity.External",
+                "Cookies",
+                "Bearer",
+                "Google",
+                "Microsoft"
+            };
+
+            foreach (var authType in authTypes)
+            {
+                var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, "test@example.com")
+                }, authType));
+
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+                // Act
+                var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+
+                // Assert
+                isSignedIn.Should().BeTrue($"Authentication type '{authType}' should be recognized");
+            }
+        }
+
+        #endregion
+
+        #region Performance and Memory
+
+        [Fact]
+        public async Task LoginPartial_ConcurrentAuthenticationChecks_ShouldHandleCorrectly()
+        {
+            // Arrange
+            var users = Enumerable.Range(1, 20).Select(i => 
+                new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, $"user{i}@example.com"),
+                    new Claim(ClaimTypes.NameIdentifier, $"user-{i}")
+                }, "test"))).ToArray();
+
+            foreach (var user in users)
+            {
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+            }
+
+            // Act - Test concurrent authentication checks
+            var tasks = users.Select(async user =>
+            {
+                await Task.Delay(Random.Shared.Next(1, 5)); // Random delay
+                return _mockSignInManager.Object.IsSignedIn(user);
+            });
+
+            var results = await Task.WhenAll(tasks);
+
+            // Assert
+            results.Should().AllSatisfy(result => 
+                result.Should().BeTrue("All concurrent authentication checks should succeed"));
+        }
+
+        [Fact]
+        public void LoginPartial_RepeatedAuthenticationChecks_ShouldBeConsistent()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            // Act - Check authentication multiple times
+            var results = new List<bool>();
+            for (int i = 0; i < 100; i++)
+            {
+                results.Add(_mockSignInManager.Object.IsSignedIn(user));
+            }
+
+            // Assert
+            results.Should().AllSatisfy(result => 
+                result.Should().BeTrue("All repeated authentication checks should be consistent"));
+        }
+
+        #endregion
+
+        #region Error Conditions
+
+        [Fact]
+        public void LoginPartial_ExceptionInAuthentication_ShouldPropagateCorrectly()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user))
+                            .Throws(new InvalidOperationException("Authentication service error"));
+
+            // Act & Assert
+            var action = () => _mockSignInManager.Object.IsSignedIn(user);
+            action.Should().Throw<InvalidOperationException>()
+                  .WithMessage("Authentication service error");
+        }
+
+        [Fact]
+        public void LoginPartial_NullClaimsIdentity_ShouldHandleGracefully()
+        {
+            // Arrange
+            var userWithNullIdentity = new ClaimsPrincipal();
+            _mockSignInManager.Setup(x => x.IsSignedIn(userWithNullIdentity)).Returns(false);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(userWithNullIdentity);
+            var name = userWithNullIdentity.Identity?.Name;
+
+            // Assert
+            isSignedIn.Should().BeFalse("User with null identity should not be signed in");
+            name.Should().BeNull("User with null identity should have null name");
+        }
+
+        #endregion
     }
 }

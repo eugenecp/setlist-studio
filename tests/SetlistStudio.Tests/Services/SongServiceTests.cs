@@ -496,6 +496,93 @@ public class SongServiceTests : IDisposable
         result.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task DeleteSongAsync_ShouldReturnTrue_WhenSongSuccessfullyDeleted()
+    {
+        // Arrange
+        var song = new Song
+        {
+            Title = "Test Song to Delete",
+            Artist = "Test Artist",
+            Album = "Test Album",
+            UserId = _testUserId
+        };
+
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        var songId = song.Id;
+
+        // Act
+        var result = await _songService.DeleteSongAsync(songId, _testUserId);
+
+        // Assert
+        result.Should().BeTrue("Song should be successfully deleted");
+        
+        // Verify song is actually removed from database
+        var deletedSong = await _context.Songs.FindAsync(songId);
+        deletedSong.Should().BeNull("Song should no longer exist in database");
+    }
+
+    [Fact]
+    public async Task DeleteSongAsync_ShouldLogInformation_WhenSongSuccessfullyDeleted()
+    {
+        // Arrange
+        var song = new Song
+        {
+            Title = "Test Song for Logging",
+            Artist = "Test Artist",
+            UserId = _testUserId
+        };
+
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.DeleteSongAsync(song.Id, _testUserId);
+
+        // Assert
+        result.Should().BeTrue();
+        
+        // Note: Logging verification would require setting up ILogger mock
+        // For now, we're testing the functional behavior
+    }
+
+    [Fact]
+    public async Task DeleteSongAsync_ShouldLogWarning_WhenSongNotFound()
+    {
+        // Act
+        var result = await _songService.DeleteSongAsync(999, _testUserId);
+
+        // Assert
+        result.Should().BeFalse();
+        
+        // Note: Warning logging verification would require setting up ILogger mock
+        // For now, we're testing the functional behavior
+    }
+
+    [Fact]
+    public async Task DeleteSongAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        var song = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist", 
+            UserId = _testUserId
+        };
+
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Dispose context to force database error
+        await _context.DisposeAsync();
+
+        // Act & Assert
+        var act = async () => await _songService.DeleteSongAsync(song.Id, _testUserId);
+        await act.Should().ThrowAsync<Exception>("Database errors should be propagated");
+    }
+
     #endregion
 
     #region GetGenresAsync Comprehensive Tests

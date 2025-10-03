@@ -1,75 +1,64 @@
 # Copilot Instructions for Setlist Studio
 
-## Table of Contents
-- [Project Overview](#project-overview)
-- [Development Standards](#development-standards)
-- [Testing Guidelines](#testing-guidelines)
-- [Code Quality & Coverage](#code-quality--coverage)
-- [Development Workflow](#development-workflow)
-- [Sample Data & Examples](#sample-data--examples)
-- [Copilot Prompt Examples](#copilot-prompt-examples)
-- [Getting Started](#getting-started)
+## � Quick Reference
+
+### Essential Rules
+- **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
+- **Coverage Target**: 90%+ line and branch coverage
+- **Architecture**: Clean Architecture (Core/Infrastructure/Web)
+- **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
+
+### 🚨 CRITICAL: Test File Creation Workflow
+1. ✅ **Check existing**: Use `file_search` for `{SourceClass}Tests.cs`
+2. ✅ **Enhance first**: Add to base test file before creating new ones
+3. ✅ **Strict naming**: Only `Tests.cs` or `AdvancedTests.cs` suffixes
+4. ❌ **No custom names**: Never use "FocusedTests", "CoverageTests", etc.
+
+## 📚 Table of Contents
+- [🏗️ Project Architecture](#️-project-architecture)
+- [🧪 Testing Framework](#-testing-framework)
+- [📊 Coverage Standards](#-coverage-standards)
+- [🔧 Development Workflow](#-development-workflow)
+- [🎵 Sample Data Guidelines](#-sample-data-guidelines)
+- [💬 Copilot Prompts](#-copilot-prompts)
+- [🚀 Quick Start Guide](#-quick-start-guide)
 
 ---
 
-## Project Overview
+## 🏗️ Project Architecture
 
-**Setlist Studio** is a comprehensive music management application designed to help musicians organize and plan their performances. The app enables users to:
+**Setlist Studio** is a music management application for musicians to organize performances and manage their repertoire.
 
-- **Manage Artists and Songs**: Add and organize musical artists and their songs with detailed metadata
-- **Build Dynamic Setlists**: Create performance setlists with song order, transitions, BPM, and musical keys
-- **Schedule Performances**: Plan and manage upcoming shows and events
+### 🎯 Core Features
+- **Song Management**: Artists, songs, metadata (BPM, keys, genres)
+- **Setlist Creation**: Performance planning with song order and transitions
+- **User Authentication**: Secure multi-user access with OAuth providers
 
-### Target Audience
+### 🏛️ Architecture Layers
+- **SetlistStudio.Core**: Domain entities, interfaces, business logic
+- **SetlistStudio.Infrastructure**: Data access, Entity Framework, services
+- **SetlistStudio.Web**: Blazor Server UI, controllers, authentication
 
-- **Developers**: Software engineers building, maintaining, and enhancing the Setlist Studio application
-- **Musicians**: Artists, bands, and performers who need a reliable tool to organize their music and plan their shows
-
-### Technology Stack
-
-- **.NET 8**: The latest long-term support version of .NET for robust application development
-- **Blazor Server**: Interactive web UI with real-time updates
-- **Entity Framework Core**: Database ORM with SQLite/SQL Server support
-- **ASP.NET Core Identity**: Authentication and authorization
+### 🛠️ Technology Stack
+- **.NET 8**: Framework with modern C# features
+- **Blazor Server**: Real-time interactive web UI
+- **Entity Framework Core**: ORM with SQLite/SQL Server
+- **ASP.NET Core Identity**: Authentication with OAuth (Google, Microsoft, Facebook)
 - **MudBlazor**: Material Design component library
-- **xUnit**: Testing framework with comprehensive test coverage
-- **GitHub Actions**: Automated CI/CD pipelines
+- **xUnit + FluentAssertions + Bunit**: Testing framework
+- **Docker**: Containerization for deployment
+- **GitHub Actions**: CI/CD pipeline
+
+### 🎯 Quality Standards
+- **Reliability**: Comprehensive testing with graceful error handling
+- **Scalability**: Efficient queries, pagination, caching for growth
+- **Security**: OAuth authentication, input validation, no hardcoded secrets
+- **Maintainability**: Clean code, clear documentation, consistent patterns
+- **User Experience**: Realistic musical data, smooth interactions
 
 ---
 
-## Development Standards
-
-### Core Principles
-
-When working with Setlist Studio, adhere to these five core principles:
-
-#### 1. Reliability 🛡️
-Every feature must work consistently and predictably with comprehensive testing and graceful error handling.
-
-#### 2. Scalability 📈
-The application must handle growth in songs, setlists, users, and performance data as the user base expands.
-
-#### 3. Security 🔒
-Protect user data and maintain system integrity through robust security practices.
-
-#### 4. Maintainability 🔧
-Keep the codebase organized, well-documented, and easy to understand for current and future developers.
-
-#### 5. Delight ✨
-Create an enjoyable user experience with realistic, relatable content and smooth interactions.
-
-### Code Quality Requirements
-
-- **Error Handling**: Implement proper error handling with user-friendly error messages
-- **Database Integrity**: Ensure database transactions are atomic and consistent
-- **Input Validation**: Validate all user inputs on both client and server sides
-- **Security**: Never store secrets in source code; use environment variables
-- **Documentation**: Write clear, self-documenting code with meaningful names
-- **Performance**: Design efficient database queries and implement caching where appropriate
-
----
-
-## Testing Guidelines
+## 🧪 Testing Framework
 
 ### Coverage Standards
 
@@ -93,6 +82,14 @@ Setlist Studio maintains **minimum 90% code coverage requirements** for both lin
 
 Setlist Studio follows a strategic test organization approach that separates core functionality tests from specialized coverage and edge case tests.
 
+#### ⚠️ MANDATORY TEST FILE NAMING CONVENTIONS ⚠️
+
+**🔒 STRICT ENFORCEMENT REQUIRED - NO EXCEPTIONS:**
+
+1. **ALWAYS check if base test file exists FIRST**
+2. **NEVER create custom-named test files** (e.g., "FocusedTests", "CoverageTests", "SpecializedTests")  
+3. **FOLLOW EXACT naming pattern** - one source class = one test class
+
 #### Test File Structure
 
 - **Base Test Files** (e.g., `SetlistServiceTests.cs`): Core functionality and primary business logic scenarios
@@ -101,17 +98,45 @@ Setlist Studio follows a strategic test organization approach that separates cor
 
 #### Naming Conventions
 
-**Required Naming Pattern:**
+**🚨 REQUIRED NAMING PATTERN - NEVER DEVIATE:**
 - **Source File**: `{ClassName}.cs` → **Test File**: `{ClassName}Tests.cs`
 - **Advanced Tests**: `{SourceClass}AdvancedTests.cs`
 - **Razor Component**: `{ComponentName}.razor` → **Test File**: `{ComponentName}Tests.cs`
 
+**✅ CORRECT Examples:**
+- `MainLayout.razor` → `MainLayoutTests.cs`
+- `SetlistService.cs` → `SetlistServiceTests.cs`
+- `Program.cs` → `ProgramTests.cs`
+
+**❌ PROHIBITED Examples:**
+- `MainLayoutFocusedTests.cs` ← WRONG
+- `MainLayoutCoverageTests.cs` ← WRONG
+- `SetlistServiceUnitTests.cs` ← WRONG
+- `ProgramConfigurationTests.cs` ← WRONG
+
+#### 📋 Test File Creation Workflow - MANDATORY STEPS
+
+**STEP 1: Always Check Base Test File First**
+```bash
+# Use file_search tool in VS Code or:
+# Linux/Mac: find . -name "{ClassName}Tests.cs"  
+# Windows: Get-ChildItem -Recurse -Name "*{ClassName}Tests.cs"
+# VS Code: Use file_search tool with "{ClassName}Tests.cs"
+```
+
+**STEP 2: Determine Appropriate Action**
+- ✅ **If base test exists**: Enhance existing `{ClassName}Tests.cs` with core functionality tests
+- ✅ **If base test missing**: Create `{ClassName}Tests.cs` for core functionality FIRST
+- ✅ **If base test >1,400 lines**: ONLY THEN create `{ClassName}AdvancedTests.cs`
+
 #### When to Create Advanced Test Files
 
-- **File Size**: When base test files exceed ~1,400 lines
-- **Different Purposes**: When tests target specific coverage gaps rather than core business logic
+**🔒 STRICT CRITERIA - ALL MUST BE MET:**
+- **File Size**: Base test files exceed ~1,400 lines
+- **Different Purposes**: Tests target specific coverage gaps rather than core business logic
 - **Specialized Testing**: Error handling, validation boundaries, configuration scenarios
 - **Coverage Targeting**: Tests specifically to reach 90%+ line and branch coverage
+- **Base Tests Complete**: Core functionality is fully tested in base test file
 
 #### Advanced Test Content Guidelines
 
@@ -121,18 +146,45 @@ Setlist Studio follows a strategic test organization approach that separates cor
 - **Authentication Scenarios**: Missing credentials, invalid tokens, authorization failures
 - **Configuration Testing**: Environment-specific settings, database provider selection
 - **Performance Edge Cases**: Large datasets, concurrent operations, resource limits
+- **Edge Cases**: Null inputs, empty strings, special characters, Unicode handling
+- **Error Conditions**: Database failures, network issues, invalid configurations
+- **Authentication Scenarios**: Missing credentials, invalid tokens, authorization failures
+- **Configuration Testing**: Environment-specific settings, database provider selection
+- **Performance Edge Cases**: Large datasets, concurrent operations, resource limits
 
 ### Test Organization Best Practices
 
+**🚨 ENFORCEMENT RULES:**
+- **Naming Compliance**: NO custom test file names allowed - follow exact patterns only
+- **File Size Limits**: Base test files under 1,500 lines; create advanced tests when exceeded
+- **Single Responsibility**: Each test file focuses on ONE source class only
+- **Check Before Create**: Always verify base test file exists before creating any test
 - **Maintainability**: Keep individual test files under 1,500 lines for easy navigation
-- **Single Responsibility**: Each test file focuses on one primary concern
 - **Clear Separation**: Base tests cover happy paths; advanced tests cover edge cases
 - **Consistent Naming**: Use descriptive test method names: `MethodName_Scenario_ExpectedResult`
 - **Documentation**: Include comprehensive XML documentation for advanced test files
 
+### 🛡️ Test File Validation Checklist
+
+**Before creating ANY test file, verify:**
+- [ ] Checked if `{SourceClass}Tests.cs` exists using `file_search` tool
+- [ ] Using exact naming pattern: `{SourceClass}Tests.cs` or `{SourceClass}AdvancedTests.cs`
+- [ ] NOT using custom names like "FocusedTests", "CoverageTests", "SpecializedTests"
+- [ ] Base test file exists and is >1,400 lines (if creating advanced tests)
+- [ ] Tests target single source class/component only
+- [ ] Following test organization hierarchy (base → advanced)
+
+**✅ VALIDATION EXAMPLE:**
+```bash
+# 1. Check existing: file_search for "MainLayoutTests.cs"
+# 2. If found: Enhance MainLayoutTests.cs with new tests
+# 3. If not found: Create MainLayoutTests.cs (not MainLayoutFocusedTests.cs)
+# 4. Advanced tests: Only if MainLayoutTests.cs >1,400 lines → MainLayoutAdvancedTests.cs
+```
+
 ---
 
-## Code Quality & Coverage
+## 📊 Coverage Standards
 
 ### Running Coverage Analysis
 
@@ -185,7 +237,7 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ---
 
-## Development Workflow
+## 🔧 Development Workflow
 
 ### Version Control
 - **Git-based workflow**: Feature branches with pull request reviews
@@ -203,9 +255,24 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 - **Component Tests**: Blazor component rendering and interaction tests
 - **Advanced Tests**: Edge cases, error conditions, and coverage gaps
 
+### Common Commands
+```bash
+# Run all tests
+dotnet test
+
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
+
+# Run specific test class
+dotnet test --filter "FullyQualifiedName~SetlistServiceTests"
+
+# Run tests and generate coverage report
+./scripts/run-tests-clean.ps1
+```
+
 ---
 
-## Sample Data & Examples
+## 🎵 Sample Data Guidelines
 
 Use realistic musical data in all examples, tests, and documentation:
 
@@ -228,20 +295,28 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
-## Copilot Prompt Examples
+## 💬 Copilot Prompts
 
 ### Testing & Quality Assurance
 
+**🚨 ALWAYS follow these naming conventions - NO EXCEPTIONS:**
+
 ```
-"Write comprehensive unit tests for the setlist creation endpoint, including validation edge cases"
+"Check if SetlistServiceTests.cs exists, then enhance it with comprehensive unit tests for the setlist creation endpoint"
 
-"Create SongServiceAdvancedTests.cs file with edge case testing for null inputs, Unicode characters, and validation boundaries"
+"First verify SongServiceTests.cs exists, then create SongServiceAdvancedTests.cs ONLY IF base file exceeds 1,400 lines"
 
-"Generate ProgramAdvancedTests.cs file targeting authentication configuration scenarios and database provider selection logic"
+"Check if ProgramTests.cs exists first, then create ProgramAdvancedTests.cs for authentication configuration scenarios"
 
-"Write advanced tests for SetlistService focusing on position adjustment edge cases and error handling scenarios"
+"Enhance existing SetlistServiceTests.cs with position adjustment tests, create SetlistServiceAdvancedTests.cs only if needed"
 
-"Create comprehensive test file targeting specific coverage gaps identified in the coverage report"
+"First check if MainLayoutTests.cs exists, then enhance it with core functionality tests before considering advanced tests"
+
+"Verify LoginTests.cs exists, then add authentication edge cases to the base file or create LoginAdvancedTests.cs if base file is too large"
+
+"Always follow {SourceClass}Tests.cs naming pattern - NEVER create custom-named test files like 'FocusedTests' or 'CoverageTests'"
+
+"Before creating any test file, use file_search to check if base test file exists, then enhance existing file or create properly named new file"
 
 "Write validation boundary tests covering minimum/maximum values, field length limits, and required field validation"
 
@@ -304,7 +379,7 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
-## Getting Started
+## 🚀 Quick Start Guide
 
 When contributing to Setlist Studio:
 
@@ -330,6 +405,20 @@ When contributing to Setlist Studio:
 - [ ] Write tests first (TDD approach recommended)
 - [ ] Ensure 90%+ line and branch coverage for new code
 - [ ] Submit pull request with clear description and test evidence
+
+---
+
+## 🔒 FINAL ENFORCEMENT REMINDER
+
+**Every time you create or modify tests, you MUST:**
+
+1. **CHECK FIRST**: Use `file_search` to verify if `{SourceClass}Tests.cs` exists
+2. **ENHANCE EXISTING**: Add to base test file before creating new files
+3. **FOLLOW NAMING**: Only use `{SourceClass}Tests.cs` or `{SourceClass}AdvancedTests.cs`
+4. **NO CUSTOM NAMES**: Never create "FocusedTests", "CoverageTests", "SpecializedTests", etc.
+5. **VALIDATE SIZE**: Create advanced tests only when base file exceeds 1,400 lines
+
+**This is not optional - it's mandatory for all test file operations.**
 
 ---
 
