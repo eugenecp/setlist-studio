@@ -170,8 +170,8 @@ public class SongServiceAdvancedTests : IDisposable
         // Arrange
         var song = new Song
         {
-            Title = fieldType == "Title" ? value : "Valid Title",
-            Artist = fieldType == "Artist" ? value : "Valid Artist",
+            Title = fieldType == "Title" ? value ?? string.Empty : "Valid Title",
+            Artist = fieldType == "Artist" ? value ?? string.Empty : "Valid Artist",
             UserId = _testUserId
         };
 
