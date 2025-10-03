@@ -898,6 +898,268 @@ public class SetlistServiceTests : IDisposable
         result.Should().Be(false, "Should return false when ordering is empty");
     }
 
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldAdjustPositions_WhenInsertingAtSpecificPosition()
+    {
+        // Arrange - Create setlist with existing songs
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var song1 = new Song { Title = "Song 1", Artist = "Artist 1", UserId = "test-user" };
+        var song2 = new Song { Title = "Song 2", Artist = "Artist 1", UserId = "test-user" };
+        var song3 = new Song { Title = "Song 3", Artist = "Artist 1", UserId = "test-user" };
+        var newSong = new Song { Title = "New Song", Artist = "Artist 1", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.AddRange(song1, song2, song3, newSong);
+        await _context.SaveChangesAsync();
+
+        // Add existing songs in order
+        await _service.AddSongToSetlistAsync(setlist.Id, song1.Id, "test-user", 1);
+        await _service.AddSongToSetlistAsync(setlist.Id, song2.Id, "test-user", 2);
+        await _service.AddSongToSetlistAsync(setlist.Id, song3.Id, "test-user", 3);
+
+        // Act - Insert new song at position 2
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, newSong.Id, "test-user", 2);
+
+        // Assert
+        result.Should().NotBeNull("Should successfully add song at specific position");
+        result!.Position.Should().Be(2, "New song should be at position 2");
+
+        // Verify position adjustments
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        setlistSongs.Should().HaveCount(4, "Should have 4 songs total");
+        setlistSongs[0].SongId.Should().Be(song1.Id, "Song 1 should remain at position 1");
+        setlistSongs[0].Position.Should().Be(1);
+        setlistSongs[1].SongId.Should().Be(newSong.Id, "New song should be at position 2");
+        setlistSongs[1].Position.Should().Be(2);
+        setlistSongs[2].SongId.Should().Be(song2.Id, "Song 2 should be shifted to position 3");
+        setlistSongs[2].Position.Should().Be(3);
+        setlistSongs[3].SongId.Should().Be(song3.Id, "Song 3 should be shifted to position 4");
+        setlistSongs[3].Position.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldAdjustMultiplePositions_WhenInsertingAtBeginning()
+    {
+        // Arrange - Create setlist with multiple existing songs
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var existingSongs = new List<Song>();
+        for (int i = 1; i <= 5; i++)
+        {
+            existingSongs.Add(new Song { Title = $"Song {i}", Artist = "Artist", UserId = "test-user" });
+        }
+        var newSong = new Song { Title = "New First Song", Artist = "Artist", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.AddRange(existingSongs);
+        _context.Songs.Add(newSong);
+        await _context.SaveChangesAsync();
+
+        // Add existing songs
+        for (int i = 0; i < existingSongs.Count; i++)
+        {
+            await _service.AddSongToSetlistAsync(setlist.Id, existingSongs[i].Id, "test-user", i + 1);
+        }
+
+        // Act - Insert new song at position 1 (beginning)
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, newSong.Id, "test-user", 1);
+
+        // Assert
+        result.Should().NotBeNull("Should successfully add song at beginning");
+        result!.Position.Should().Be(1, "New song should be at position 1");
+
+        // Verify all positions shifted correctly
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        setlistSongs.Should().HaveCount(6, "Should have 6 songs total");
+        setlistSongs[0].SongId.Should().Be(newSong.Id, "New song should be first");
+        setlistSongs[0].Position.Should().Be(1);
+
+        // All existing songs should be shifted up by 1
+        for (int i = 1; i <= 5; i++)
+        {
+            setlistSongs[i].SongId.Should().Be(existingSongs[i - 1].Id, $"Song {i} should be at correct position");
+            setlistSongs[i].Position.Should().Be(i + 1, $"Song {i} should have position {i + 1}");
+        }
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldNotAdjustPositions_WhenInsertingAtEnd()
+    {
+        // Arrange - Create setlist with existing songs
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var song1 = new Song { Title = "Song 1", Artist = "Artist 1", UserId = "test-user" };
+        var song2 = new Song { Title = "Song 2", Artist = "Artist 1", UserId = "test-user" };
+        var newSong = new Song { Title = "New Song", Artist = "Artist 1", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.AddRange(song1, song2, newSong);
+        await _context.SaveChangesAsync();
+
+        // Add existing songs
+        await _service.AddSongToSetlistAsync(setlist.Id, song1.Id, "test-user", 1);
+        await _service.AddSongToSetlistAsync(setlist.Id, song2.Id, "test-user", 2);
+
+        // Act - Insert new song at the end (position higher than existing)
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, newSong.Id, "test-user", 10);
+
+        // Assert
+        result.Should().NotBeNull("Should successfully add song at end");
+        result!.Position.Should().Be(10, "New song should be at requested position");
+
+        // Verify no position adjustments occurred
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        setlistSongs.Should().HaveCount(3, "Should have 3 songs total");
+        setlistSongs[0].Position.Should().Be(1, "First song position unchanged");
+        setlistSongs[1].Position.Should().Be(2, "Second song position unchanged");
+        setlistSongs[2].Position.Should().Be(10, "New song at requested position");
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldNotAdjustPositions_WhenNoPositionSpecified()
+    {
+        // Arrange - Create setlist with existing songs
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var song1 = new Song { Title = "Song 1", Artist = "Artist 1", UserId = "test-user" };
+        var newSong = new Song { Title = "New Song", Artist = "Artist 1", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.AddRange(song1, newSong);
+        await _context.SaveChangesAsync();
+
+        // Add existing song
+        await _service.AddSongToSetlistAsync(setlist.Id, song1.Id, "test-user", 1);
+
+        // Act - Add new song without specifying position (should append to end)
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, newSong.Id, "test-user");
+
+        // Assert
+        result.Should().NotBeNull("Should successfully add song without position");
+        
+        // Verify no position adjustments occurred
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        setlistSongs.Should().HaveCount(2, "Should have 2 songs total");
+        setlistSongs[0].Position.Should().Be(1, "First song position unchanged");
+        // New song should be at next available position
+        setlistSongs[1].Position.Should().Be(2, "New song should be at position 2");
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldReturnNull_WhenSongAlreadyInSetlist()
+    {
+        // Arrange - Create setlist with existing song
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var song = new Song { Title = "Song 1", Artist = "Artist 1", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Add song first time
+        await _service.AddSongToSetlistAsync(setlist.Id, song.Id, "test-user", 1);
+
+        // Act - Try to add same song again
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, song.Id, "test-user", 2);
+
+        // Assert - Should return null because duplicates are not allowed
+        result.Should().BeNull("Duplicate songs are not allowed in setlist");
+        
+        var setlistSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id && ss.SongId == song.Id)
+            .ToListAsync();
+
+        setlistSongs.Should().HaveCount(1, "Should only have 1 instance of the song");
+    }
+
+
+
+    [Fact]
+    public async Task RemoveSongFromSetlistAsync_ShouldAdjustPositions_WhenRemovingFromMiddle()
+    {
+        // Arrange - Create setlist with multiple songs
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = "test-user",
+            Description = "Test"
+        };
+
+        var song1 = new Song { Title = "Song 1", Artist = "Artist 1", UserId = "test-user" };
+        var song2 = new Song { Title = "Song 2", Artist = "Artist 1", UserId = "test-user" };
+        var song3 = new Song { Title = "Song 3", Artist = "Artist 1", UserId = "test-user" };
+
+        _context.Setlists.Add(setlist);
+        _context.Songs.AddRange(song1, song2, song3);
+        await _context.SaveChangesAsync();
+
+        // Add songs in order
+        var ss1 = await _service.AddSongToSetlistAsync(setlist.Id, song1.Id, "test-user", 1);
+        var ss2 = await _service.AddSongToSetlistAsync(setlist.Id, song2.Id, "test-user", 2);
+        var ss3 = await _service.AddSongToSetlistAsync(setlist.Id, song3.Id, "test-user", 3);
+
+        // Act - Remove middle song
+        var result = await _service.RemoveSongFromSetlistAsync(setlist.Id, ss2!.Id, "test-user");
+
+        // Assert
+        result.Should().Be(true, "Should successfully remove song");
+
+        // Verify positions adjusted
+        var remainingSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == setlist.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        remainingSongs.Should().HaveCount(2, "Should have 2 songs remaining");
+        remainingSongs[0].SongId.Should().Be(song1.Id, "Song 1 should remain at position 1");
+        remainingSongs[0].Position.Should().Be(1);
+        remainingSongs[1].SongId.Should().Be(song3.Id, "Song 3 should be adjusted to position 2");
+        remainingSongs[1].Position.Should().Be(2);
+    }
+
     #endregion
 
     #region Validation Tests
@@ -1165,6 +1427,278 @@ public class SetlistServiceTests : IDisposable
         result.IsEncore.Should().Be(true);
         result.IsOptional.Should().Be(false);
     }
+
+    #region Additional Coverage Tests for 90% Target
+
+    [Fact]
+    public async Task GetSetlistsAsync_ShouldReturnFilteredSetlists_WhenSearchTermMatchesVenue()
+    {
+        // Arrange
+        var userId = "user-123";
+        var searchTerm = "madison";
+        
+        var setlist1 = new Setlist { Name = "Concert 1", Venue = "Madison Square Garden", UserId = userId, CreatedAt = DateTime.UtcNow };
+        var setlist2 = new Setlist { Name = "Concert 2", Venue = "Red Rocks", UserId = userId, CreatedAt = DateTime.UtcNow };
+        
+        _context.Setlists.AddRange(setlist1, setlist2);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (setlists, totalCount) = await _service.GetSetlistsAsync(userId, searchTerm);
+
+        // Assert
+        setlists.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+        setlists.First().Venue.Should().Contain("Madison");
+    }
+
+    [Fact]
+    public async Task GetSetlistsAsync_ShouldReturnAllSetlists_WhenNoFiltersApplied()
+    {
+        // Arrange
+        var userId = "user-123";
+        
+        var setlists = new[]
+        {
+            new Setlist { Name = "Setlist 1", UserId = userId, IsTemplate = true, IsActive = true, CreatedAt = DateTime.UtcNow },
+            new Setlist { Name = "Setlist 2", UserId = userId, IsTemplate = false, IsActive = false, CreatedAt = DateTime.UtcNow },
+            new Setlist { Name = "Setlist 3", UserId = userId, IsTemplate = true, IsActive = false, CreatedAt = DateTime.UtcNow }
+        };
+        
+        _context.Setlists.AddRange(setlists);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _service.GetSetlistsAsync(userId);
+
+        // Assert
+        result.Should().HaveCount(3);
+        totalCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetSetlistByIdAsync_ShouldIncludeSetlistSongsAndSongs_WhenSetlistHasSongs()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist { Name = "Test Setlist", UserId = userId, CreatedAt = DateTime.UtcNow };
+        var song = new Song { Title = "Test Song", Artist = "Test Artist", UserId = userId };
+        
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        var setlistSong = new SetlistSong
+        {
+            SetlistId = setlist.Id,
+            SongId = song.Id,
+            Position = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.GetSetlistByIdAsync(setlist.Id, userId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.SetlistSongs.Should().HaveCount(1);
+        result.SetlistSongs.First().Song.Should().NotBeNull();
+        result.SetlistSongs.First().Song.Title.Should().Be("Test Song");
+    }
+
+    [Fact]
+    public async Task CreateSetlistAsync_ShouldSetCreatedAtTimestamp_WhenCreatingSetlist()
+    {
+        // Arrange
+        var setlist = new Setlist
+        {
+            Name = "Timestamped Setlist",
+            UserId = "user-123"
+        };
+        var beforeCreation = DateTime.UtcNow;
+
+        // Act
+        var result = await _service.CreateSetlistAsync(setlist);
+
+        // Assert
+        var afterCreation = DateTime.UtcNow;
+        result.CreatedAt.Should().BeAfter(beforeCreation.AddSeconds(-1));
+        result.CreatedAt.Should().BeBefore(afterCreation.AddSeconds(1));
+        result.UpdatedAt.Should().BeCloseTo(result.CreatedAt, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task DeleteSetlistAsync_ShouldReturnFalse_WhenUserUnauthorized()
+    {
+        // Arrange
+        var ownerId = "owner-123";
+        var unauthorizedUserId = "other-456";
+        var setlist = new Setlist { Name = "Protected Setlist", UserId = ownerId, CreatedAt = DateTime.UtcNow };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.DeleteSetlistAsync(setlist.Id, unauthorizedUserId);
+
+        // Assert
+        result.Should().BeFalse();
+        var stillExists = await _context.Setlists.FindAsync(setlist.Id);
+        stillExists.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldReturnNull_WhenUserUnauthorizedForSetlist()
+    {
+        // Arrange
+        var ownerId = "owner-123";
+        var unauthorizedUserId = "other-456";
+        var setlist = new Setlist { Name = "Protected Setlist", UserId = ownerId, CreatedAt = DateTime.UtcNow };
+        var song = new Song { Title = "Test Song", Artist = "Test Artist", UserId = unauthorizedUserId };
+        
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, song.Id, unauthorizedUserId);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldReturnNull_WhenUserUnauthorizedForSong()
+    {
+        // Arrange
+        var userId = "user-123";
+        var otherUserId = "other-456";
+        var setlist = new Setlist { Name = "User Setlist", UserId = userId, CreatedAt = DateTime.UtcNow };
+        var song = new Song { Title = "Protected Song", Artist = "Test Artist", UserId = otherUserId };
+        
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.AddSongToSetlistAsync(setlist.Id, song.Id, userId);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RemoveSongFromSetlistAsync_ShouldReturnFalse_WhenUserUnauthorized()
+    {
+        // Arrange
+        var ownerId = "owner-123";
+        var unauthorizedUserId = "other-456";
+        var setlist = new Setlist { Name = "Protected Setlist", UserId = ownerId, CreatedAt = DateTime.UtcNow };
+        var song = new Song { Title = "Test Song", Artist = "Test Artist", UserId = ownerId };
+        
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        var setlistSong = new SetlistSong
+        {
+            SetlistId = setlist.Id,
+            SongId = song.Id,
+            Position = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.RemoveSongFromSetlistAsync(setlist.Id, song.Id, unauthorizedUserId);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ReorderSetlistSongsAsync_ShouldReturnFalse_WhenUserUnauthorized()
+    {
+        // Arrange
+        var ownerId = "owner-123";
+        var unauthorizedUserId = "other-456";
+        var setlist = new Setlist { Name = "Protected Setlist", UserId = ownerId, CreatedAt = DateTime.UtcNow };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        var ordering = new[] { 1, 2, 3 };
+
+        // Act
+        var result = await _service.ReorderSetlistSongsAsync(setlist.Id, ordering, unauthorizedUserId);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateSetlistSongAsync_ShouldReturnNull_WhenUserUnauthorized()
+    {
+        // Arrange
+        var ownerId = "owner-123";
+        var unauthorizedUserId = "other-456";
+        var setlist = new Setlist { Name = "Protected Setlist", UserId = ownerId, CreatedAt = DateTime.UtcNow };
+        var song = new Song { Title = "Test Song", Artist = "Test Artist", UserId = ownerId };
+        
+        _context.Setlists.Add(setlist);
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        var setlistSong = new SetlistSong
+        {
+            SetlistId = setlist.Id,
+            SongId = song.Id,
+            Position = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.UpdateSetlistSongAsync(
+            setlistSong.Id,
+            unauthorizedUserId,
+            performanceNotes: "Unauthorized update");
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CopySetlistAsync_ShouldLogAndReturnNull_WhenNewNameIsEmpty()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist { Name = "Source Setlist", UserId = userId, CreatedAt = DateTime.UtcNow };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            _service.CopySetlistAsync(setlist.Id, "", userId));
+    }
+
+    [Fact]
+    public async Task CopySetlistAsync_ShouldLogAndReturnNull_WhenNewNameIsWhitespace()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist { Name = "Source Setlist", UserId = userId, CreatedAt = DateTime.UtcNow };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            _service.CopySetlistAsync(setlist.Id, "   ", userId));
+    }
+
+    #endregion
 
     #endregion
 }
