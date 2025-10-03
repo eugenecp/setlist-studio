@@ -36,4 +36,9 @@
     <ProjectReference Include="..\..\src\SetlistStudio.Web\SetlistStudio.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="**\backup\**" />
+    <None Include="**\backup\**" />
+  </ItemGroup>
+
 </Project>

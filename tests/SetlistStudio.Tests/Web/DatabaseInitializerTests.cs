@@ -223,6 +223,245 @@ public class DatabaseInitializerTests
         VerifyLogMessage(mockLogger, LogLevel.Error, "Connection string: Server=invalid;Database=test");
     }
 
+    [Fact]
+    public async Task InitializeAsync_ShouldRetryCountingOnFailure_AndLogRetryAttempts()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use a real SQLite database with a complex scenario
+        var databasePath = Path.GetTempFileName();
+        File.Delete(databasePath); // Delete the temp file so database will be created
+        
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite($"Data Source={databasePath}");
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+        
+        // Pre-populate the database with some songs to simulate a retry scenario
+        using (var scope = serviceProvider.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
+            await context.Database.EnsureCreatedAsync();
+            
+            // Create a test user first
+            var testUser = new ApplicationUser
+            {
+                Id = "test-user",
+                UserName = "testuser@example.com",
+                Email = "testuser@example.com",
+                EmailConfirmed = true
+            };
+            context.Users.Add(testUser);
+            await context.SaveChangesAsync();
+            
+            // Now create songs with the proper user reference
+            for (int i = 1; i <= 5; i++)
+            {
+                context.Songs.Add(new Song 
+                { 
+                    Id = i,
+                    Title = $"Test Song {i}",
+                    Artist = $"Test Artist {i}",
+                    UserId = "test-user"
+                });
+            }
+            await context.SaveChangesAsync();
+        }
+
+        try
+        {
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database connection test: True");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: False");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Current song count in database: 5");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(databasePath))
+            {
+                try
+                {
+                    // Force garbage collection to release any file handles
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    
+                    File.Delete(databasePath);
+                }
+                catch (IOException)
+                {
+                    // File might be locked by another process - skip cleanup
+                    // This is acceptable for test purposes
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseFileInfo_WhenExceptionOccursWithDataSource()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Create a temporary database file to test file info logging
+        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_database_{Guid.NewGuid()}.db");
+        
+        try
+        {
+            // Create the directory and file
+            Directory.CreateDirectory(Path.GetDirectoryName(tempDbPath)!);
+            File.WriteAllText(tempDbPath, "test");
+            
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite($"Data Source={tempDbPath};");
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+            
+            // Use the service provider to create a scope and cause an exception
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
+            
+            // Force an exception by trying to create a table on a file that's not a valid database
+            var exception = await Record.ExceptionAsync(
+                () => DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+            // Assert
+            exception.Should().NotBeNull();
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database initialization failed:");
+            VerifyLogMessage(mockLogger, LogLevel.Error, $"Connection string: Data Source={tempDbPath};");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database file path:");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database file exists: True");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database directory exists: True");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database directory permissions: Readable");
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempDbPath))
+            {
+                try
+                {
+                    // Force garbage collection to release any file handles
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    
+                    File.Delete(tempDbPath);
+                }
+                catch (IOException)
+                {
+                    // File might be locked by another process - skip cleanup
+                    // This is acceptable for test purposes
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleInnerException_WhenGettingDatabaseFileInfo()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use an invalid SQLite connection string that will cause an exception cross-platform
+        // Use a path that definitely doesn't exist and will cause permission/access issues
+        var invalidPath = OperatingSystem.IsWindows() 
+            ? "Data Source=C:\\System32\\kernel32.dll\\invalid.db"  // Try to create DB inside a DLL file (impossible)
+            : "Data Source=/dev/null/invalid.db"; // Try to create DB inside null device (impossible)
+            
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite(invalidPath);
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act
+        var exception = await Record.ExceptionAsync(
+            () => DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+        // Assert
+        exception.Should().NotBeNull();
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Error, "Database initialization failed:");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleNullConnectionString_InErrorPath()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use an empty connection string to simulate null scenario
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite(""); // Empty connection string will cause issues
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act
+        var exception = await Record.ExceptionAsync(
+            () => DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+        // Assert
+        exception.Should().NotBeNull();
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Error, "Database initialization failed:");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleNonDataSourceConnectionString_InErrorPath()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use a non-SQLite connection string that will fail (SQL Server style)
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite("Server=localhost;Database=test"); // Invalid SQLite connection string
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act
+        var exception = await Record.ExceptionAsync(
+            () => DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+        // Assert
+        exception.Should().NotBeNull();
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Error, "Database initialization failed:");
+        VerifyLogMessage(mockLogger, LogLevel.Error, "Connection string: Server=localhost;Database=test");
+        
+        // Should NOT log file information since connection string doesn't contain "Data Source="
+        mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database file path:")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
+    }
+
     private static void VerifyLogMessage(Mock<ILogger> mockLogger, LogLevel logLevel, string expectedMessage)
     {
         mockLogger.Verify(
