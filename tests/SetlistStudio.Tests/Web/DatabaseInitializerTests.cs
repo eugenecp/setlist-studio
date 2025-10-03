@@ -378,10 +378,15 @@ public class DatabaseInitializerTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
-        // Use an invalid SQLite connection string that will cause an exception
+        // Use an invalid SQLite connection string that will cause an exception cross-platform
+        // Use a path that definitely doesn't exist and will cause permission/access issues
+        var invalidPath = OperatingSystem.IsWindows() 
+            ? "Data Source=C:\\System32\\kernel32.dll\\invalid.db"  // Try to create DB inside a DLL file (impossible)
+            : "Data Source=/dev/null/invalid.db"; // Try to create DB inside null device (impossible)
+            
         services.AddDbContext<SetlistStudioDbContext>(options =>
         {
-            options.UseSqlite("Data Source=\\invalid\\path\\database.db"); // Invalid path that will cause failure
+            options.UseSqlite(invalidPath);
         });
         
         var serviceProvider = services.BuildServiceProvider();
