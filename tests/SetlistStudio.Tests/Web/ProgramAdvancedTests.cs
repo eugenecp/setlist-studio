@@ -12,6 +12,7 @@ using SetlistStudio.Infrastructure.Data;
 using Xunit;
 using Microsoft.AspNetCore.Identity;
 using System.Reflection;
+using Microsoft.Extensions.Hosting;
 
 namespace SetlistStudio.Tests.Web;
 
@@ -673,6 +674,134 @@ public class ProgramAdvancedTests : IDisposable
         {
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnvironment);
         }
+    }
+
+    #endregion
+
+    #region Error Handling Tests
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldThrowException_WhenDevelopmentNotInContainer()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Development");
+        
+        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", null);
+        
+        var testException = new Exception("Test database error");
+
+        try
+        {
+            // Act & Assert
+            var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, testException);
+            action.Should().Throw<TargetInvocationException>()
+                  .WithInnerException<InvalidOperationException>()
+                  .Which.Message.Should().Be("Database initialization failed in development environment");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+        }
+    }
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldNotThrow_WhenDevelopmentInContainer()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Development");
+        
+        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+        
+        var testException = new Exception("Test database error");
+
+        try
+        {
+            // Act & Assert - Should not throw
+            var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, testException);
+            action.Should().NotThrow("container environments should continue without database");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+        }
+    }
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldNotThrow_WhenProductionEnvironment()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Production");
+        
+        var testException = new Exception("Test database error");
+
+        // Act & Assert - Should not throw
+        var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, testException);
+        action.Should().NotThrow("production environments should continue without database");
+    }
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldNotThrow_WhenStagingEnvironment()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Staging");
+        
+        var testException = new Exception("Test database error");
+
+        // Act & Assert - Should not throw
+        var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, testException);
+        action.Should().NotThrow("staging environments should continue without database");
+    }
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldHandleNullException()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Production");
+
+        // Act & Assert - Should handle null exception gracefully
+        var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, null!);
+        action.Should().NotThrow("should handle null exceptions gracefully");
+    }
+
+    [Fact]
+    public void HandleDatabaseInitializationError_ShouldHandleComplexException()
+    {
+        // Arrange
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(e => e.EnvironmentName).Returns("Production");
+        
+        var innerException = new ArgumentException("Inner test error");
+        var complexException = new InvalidOperationException("Complex test error", innerException);
+
+        // Act & Assert - Should handle complex exceptions gracefully
+        var action = () => HandleDatabaseInitializationErrorViaReflection(mockEnvironment.Object, complexException);
+        action.Should().NotThrow("should handle complex exceptions gracefully");
+    }
+
+    #endregion
+
+    #region Helper Methods for Error Handling Tests
+
+    private static void HandleDatabaseInitializationErrorViaReflection(IWebHostEnvironment environment, Exception exception)
+    {
+        var programType = typeof(Program);
+        
+        var method = programType.GetMethods(BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)
+            .FirstOrDefault(m => m.Name.Contains("HandleDatabaseInitializationError"));
+        
+        if (method == null)
+        {
+            throw new InvalidOperationException("HandleDatabaseInitializationError method not found");
+        }
+        
+        method.Invoke(null, new object[] { environment, exception });
     }
 
     #endregion

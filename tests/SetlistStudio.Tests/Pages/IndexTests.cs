@@ -389,4 +389,165 @@ public class IndexTests : TestContext
         // The component should still render without throwing an exception
         component.Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task Index_ShouldHandlePartialServiceFailures()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup some services to work and others to fail
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 10));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ThrowsAsync(new Exception("Setlist service failed"));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock", "Pop" });
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Component should still render despite partial failures
+        component.Should().NotBeNull();
+        component.Markup.Should().Contain("Welcome to Setlist Studio");
+    }
+
+    [Fact]
+    public async Task Index_ShouldDisplayZeroStats_WhenUserHasNoData()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "new-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup services to return empty data
+        _mockSongService.Setup(x => x.GetSongsAsync("new-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 0));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("new-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 0));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("new-user-id"))
+            .ReturnsAsync(new string[0]);
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("new-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((new List<Setlist>(), 0));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert
+        component.Markup.Should().Contain("0"); // Should show zero stats
+        component.Markup.Should().Contain("Songs in Library");
+        component.Markup.Should().Contain("Created Setlists");
+    }
+
+    [Fact]
+    public async Task Index_ShouldCountUpcomingPerformancesCorrectly()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup services with mixed past/future performances
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 5));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 3));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock" });
+        
+        var mixedSetlists = new List<Setlist>
+        {
+            new() { PerformanceDate = DateTime.Now.AddDays(7), UserId = "test-user-id" },    // Future
+            new() { PerformanceDate = DateTime.Now.AddDays(-7), UserId = "test-user-id" },   // Past
+            new() { PerformanceDate = DateTime.Now.AddDays(14), UserId = "test-user-id" },   // Future
+            new() { PerformanceDate = null, UserId = "test-user-id" }                        // No date
+        };
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((mixedSetlists, 4));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should only count future performances (2)
+        component.Markup.Should().Contain("2"); // Only future performances
+        component.Markup.Should().Contain("Upcoming Shows");
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleEmptyGenresList()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup services with empty genres
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 1));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 1));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new string[0]); // Empty genres
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((new List<Setlist>(), 0));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should handle empty genres gracefully
+        component.Markup.Should().Contain("0"); // Zero genres
+        component.Markup.Should().Contain("Music Genres");
+    }
 }

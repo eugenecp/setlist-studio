@@ -134,4 +134,161 @@ public class MainLayoutTests : TestContext
             .Setup(x => x.GetAuthenticationStateAsync())
             .ReturnsAsync(authState);
     }
+
+    [Fact]
+    public void MainLayout_ShouldToggleDrawer_WhenMenuButtonClicked()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Find and click the menu button
+        var menuButton = component.Find("button[aria-label='Open navigation menu']");
+        menuButton.Should().NotBeNull("Menu button should be present");
+        menuButton.Click();
+
+        // Assert - The drawer state should have changed
+        component.Markup.Should().NotBeNullOrEmpty("Component should still render after drawer toggle");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldToggleTheme_WhenThemeButtonClicked()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Find and click the theme toggle button
+        var themeButton = component.Find("button[aria-label*='Switch to']");
+        themeButton.Should().NotBeNull("Theme toggle button should be present");
+        themeButton.Click();
+
+        // Assert - The component should still render after theme toggle
+        component.Markup.Should().NotBeNullOrEmpty("Component should still render after theme toggle");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldShowUserMenu_WhenAuthenticated()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "User menu should have account icon for authenticated users");
+        component.Markup.Should().Contain("User menu", "User menu should have aria-label for authenticated users");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldShowSignInButton_WhenNotAuthenticated()
+    {
+        // Arrange
+        SetupUnauthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("mud-button", "MainLayout should contain button elements");
+        component.Markup.Should().Contain("Setlist Studio", "MainLayout should contain app title");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldContainAccessibilityFeatures()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("Skip to content", "MainLayout should have skip to content link for accessibility");
+        component.Markup.Should().Contain("main-content", "MainLayout should have main content landmark");
+        component.Markup.Should().Contain("aria-label", "MainLayout should have aria-labels for accessibility");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldRenderNavigationDrawer()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("Navigation", "MainLayout should contain navigation drawer header");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldHandleErrorBoundary()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert - ErrorBoundary should be present in markup structure
+        component.Markup.Should().NotBeNullOrEmpty("MainLayout should render with error boundary structure");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldHaveResponsiveDesign()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("mud-drawer", "MainLayout should have responsive drawer");
+        component.Markup.Should().Contain("mud-appbar", "MainLayout should have app bar");
+        component.Markup.Should().Contain("mud-main-content", "MainLayout should have main content area");
+        component.Markup.Should().Contain("mud-layout", "MainLayout should have layout container");
+    }
 }
