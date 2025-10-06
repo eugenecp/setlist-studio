@@ -65,6 +65,14 @@ jobs:
         export ASPNETCORE_ENVIRONMENT=Test
         export DOTNET_ENVIRONMENT=Test
         
+        # Add mock OAuth credentials to improve coverage
+        export Authentication__Google__ClientId="ci-test-google-client"
+        export Authentication__Google__ClientSecret="ci-test-google-secret"
+        export Authentication__Microsoft__ClientId="ci-test-microsoft-client"
+        export Authentication__Microsoft__ClientSecret="ci-test-microsoft-secret"
+        export Authentication__Facebook__AppId="ci-test-facebook-app"
+        export Authentication__Facebook__AppSecret="ci-test-facebook-secret"
+        
         # Run tests with build to avoid file locking issues
         dotnet test SetlistStudio.sln \
           --configuration Release \
