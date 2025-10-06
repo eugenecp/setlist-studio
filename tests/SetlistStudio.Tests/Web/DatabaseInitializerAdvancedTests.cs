@@ -101,6 +101,272 @@ public class DatabaseInitializerAdvancedTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
+        // Create a temporary file path that exists but will cause SQLite issues
+        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_invalid_{Guid.NewGuid()}.db");
+        
+        // Create the directory path that doesn't exist to force a failure
+        var invalidPath = Path.Combine("Z:\\nonexistent-drive", "invalid-database.db");
+        
+        try
+        {
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite($"Data Source={invalidPath}");
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Act & Assert - Expect SQLite exception to be thrown and caught by the service
+            var exception = await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () =>
+                await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+            
+            // Verify the expected log messages were called
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempDbPath))
+            {
+                try { File.Delete(tempDbPath); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleComplexDatabaseScenarios()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite("Data Source=:memory:");
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act
+        await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+        // Assert
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "In-memory database detected - skipping initialization for test environment");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleProductionDatabase()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use SQLite file database (production scenario)
+        var tempDbPath = Path.GetTempFileName() + ".db";
+        try
+        {
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite($"Data Source={tempDbPath}");
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+            File.Exists(tempDbPath).Should().BeTrue("Database file should be created");
+            
+            // Dispose service provider to close database connections
+            if (serviceProvider is IDisposable disposable)
+                disposable.Dispose();
+        }
+        finally
+        {
+            // Cleanup with retry to handle file locks
+            await CleanupTempFile(tempDbPath);
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleDatabaseCreationFailure()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Use invalid path that should cause creation to fail
+        var invalidPath = Path.Combine("Z:", "nonexistent", "invalid.db");
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseSqlite($"Data Source={invalidPath}");
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act & Assert - Should throw exception due to invalid path but log appropriately
+        var exception = await Record.ExceptionAsync(() => 
+            DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+        
+        exception.Should().NotBeNull("Should throw exception for invalid database path");
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleExistingDatabaseWithData()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        var tempDbPath = Path.GetTempFileName() + ".db";
+        try
+        {
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite($"Data Source={tempDbPath}");
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Pre-create database with some data
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<SetlistStudioDbContext>();
+                await context.Database.EnsureCreatedAsync();
+                
+                // Create a test user first to satisfy foreign key constraint
+                var user = new ApplicationUser
+                {
+                    Id = "test-user",
+                    UserName = "testuser@example.com",
+                    Email = "testuser@example.com",
+                    EmailConfirmed = true
+                };
+                context.Users.Add(user);
+                
+                // Add some test data with proper foreign key reference
+                var song = new Song
+                {
+                    Title = "Test Song",
+                    Artist = "Test Artist",
+                    UserId = user.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Songs.Add(song);
+                
+                // Save changes and detach entities to avoid tracking conflicts
+                await context.SaveChangesAsync();
+                context.ChangeTracker.Clear();
+            }
+
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database initialization completed successfully");
+            
+            // Dispose service provider to close database connections
+            if (serviceProvider is IDisposable disposable)
+                disposable.Dispose();
+        }
+        finally
+        {
+            // Cleanup with retry to handle file locks
+            await CleanupTempFile(tempDbPath);
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleDbContextCreationException()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        // Don't register DbContext to cause service resolution failure
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act & Assert - Should throw exception for missing DbContext
+        var exception = await Record.ExceptionAsync(() => 
+            DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+        
+        exception.Should().NotBeNull("Should throw exception when DbContext is not registered");
+        exception.Should().BeOfType<InvalidOperationException>();
+        // No logging expected since exception occurs during service resolution
+    }
+
+    [Fact] 
+    public async Task InitializeAsync_ShouldHandleMultipleConcurrentInitializations()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        services.AddDbContext<SetlistStudioDbContext>(options =>
+        {
+            options.UseInMemoryDatabase("concurrent-test");
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Act - Run multiple initializations concurrently
+        var tasks = Enumerable.Range(0, 5).Select(_ => 
+            DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+        
+        await Task.WhenAll(tasks);
+
+        // Assert - All should complete without throwing
+        VerifyLogMessage(mockLogger, LogLevel.Information, "Starting database initialization...");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseConnectionTest()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
+        var tempDbPath = Path.GetTempFileName() + ".db";
+        try
+        {
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite($"Data Source={tempDbPath}");
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database connection test:");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result:");
+            
+            // Dispose service provider to close database connections
+            if (serviceProvider is IDisposable disposable)
+                disposable.Dispose();
+        }
+        finally
+        {
+            // Cleanup with retry to handle file locks
+            await CleanupTempFile(tempDbPath);
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldHandleEmptyConnectionString()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var services = new ServiceCollection();
+        
         // Create a temporary file path for testing
         var tempDbPath = Path.GetTempFileName();
         File.Delete(tempDbPath); // Delete so we can test creation
@@ -577,6 +843,49 @@ public class DatabaseInitializerAdvancedTests
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeastOnce,
             $"Expected log message '{expectedMessage}' at level {logLevel} was not found");
+    }
+    
+    private static async Task CleanupTempFile(string filePath)
+    {
+        if (!File.Exists(filePath)) return;
+        
+        // Force garbage collection to help close any remaining handles
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        
+        // Retry cleanup to handle file locks
+        for (int i = 0; i < 5; i++)
+        {
+            try
+            {
+                File.Delete(filePath);
+                return;
+            }
+            catch (IOException) when (i < 4)
+            {
+                // Wait progressively longer and retry if file is locked
+                await Task.Delay((i + 1) * 200);
+                
+                // Force garbage collection again after the delay
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            catch (UnauthorizedAccessException) when (i < 4)
+            {
+                // Handle access denied scenarios
+                await Task.Delay((i + 1) * 200);
+            }
+            catch (Exception)
+            {
+                // Catch any other exceptions on the last attempt and ignore them
+                // The temporary file will be cleaned up by the OS temp folder cleanup
+                if (i == 4) return;
+                throw;
+            }
+        }
+        
+        // If we still can't delete, don't fail the test
+        // In a real test environment, this file will be cleaned up by temp folder cleanup
     }
 
     #endregion

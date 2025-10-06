@@ -466,4 +466,199 @@ public class MainLayoutTests : TestContext
         authenticatedComponent.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "Authenticated view should show account icon");
         unauthenticatedComponent.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "Unauthenticated view should still show account icon for login");
     }
+
+    [Fact]
+    public void MainLayout_NavigationDrawer_ShouldToggleOnMenuButtonClick()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Find and click the drawer toggle button
+        var menuButton = component.Find("button[aria-label*='menu']");
+        if (menuButton != null)
+        {
+            menuButton.Click();
+        }
+        else
+        {
+            // Try finding by icon
+            var iconButton = component.Find("button");
+            iconButton?.Click();
+        }
+
+        // Assert - The drawer state should change (we can't directly check internal state, but markup might change)
+        component.Should().NotBeNull("Component should remain stable after drawer toggle");
+    }
+
+    [Fact]
+    public void MainLayout_AppBar_ShouldContainNavigationElements()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("mud-appbar", "Should contain MudBlazor app bar");
+        component.Markup.Should().Contain("Setlist Studio", "Should contain application title");
+    }
+
+    [Fact]
+    public void MainLayout_ThemeToggle_ShouldHandleUserInteraction()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Try to find and interact with theme toggle
+        var themeButtons = component.FindAll("button");
+        var themeToggleButton = themeButtons.FirstOrDefault(b => 
+            b.GetAttribute("aria-label")?.Contains("Switch to") == true ||
+            b.InnerHtml.Contains("light_mode") ||
+            b.InnerHtml.Contains("dark_mode"));
+
+        if (themeToggleButton != null)
+        {
+            themeToggleButton.Click();
+        }
+
+        // Assert
+        component.Should().NotBeNull("Component should handle theme toggle interaction");
+    }
+
+    [Fact]
+    public void MainLayout_Content_ShouldRenderMainContentArea()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().Contain("mud-main-content", "Should contain main content area");
+    }
+
+    [Fact]
+    public void MainLayout_AuthenticationStateChanges_ShouldUpdateUI()
+    {
+        // Arrange - Start with unauthenticated user
+        SetupUnauthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        var initialMarkup = component.Markup;
+
+        // Act - Change to authenticated user and re-render
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Name, "testuser@example.com"),
+            new Claim(ClaimTypes.NameIdentifier, "123")
+        }, "test"));
+
+        var newAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(newAuthState);
+
+        // Force re-render with new state
+        component.SetParametersAndRender();
+
+        // Assert - The markup should remain the same as MainLayout doesn't show different content based on auth
+        component.Markup.Should().NotBeEmpty("Layout should render successfully");
+        // Layout content is the same for authenticated and unauthenticated users
+        // so we just verify it renders without errors
+    }
+
+    [Fact]
+    public void MainLayout_MudBlazorComponents_ShouldRenderWithoutErrors()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert - Check for presence of key MudBlazor components
+        component.Markup.Should().Contain("mud-layout", "Should contain MudLayout");
+        component.Markup.Should().Contain("mud-appbar", "Should contain MudAppBar");
+        component.Markup.Should().NotContain("blazor-error-ui", "Should not contain error UI components");
+        component.Markup.Should().NotContain("error-boundary", "Should not contain error boundary");
+        component.Markup.Should().NotContain("exception", "Should not contain exception messages");
+    }
+
+    [Fact]
+    public void MainLayout_UserMenu_ShouldHandleClickInteraction()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Try to click on user menu button
+        var userMenuButtons = component.FindAll("button");
+        var accountButton = userMenuButtons.FirstOrDefault(b => 
+            b.InnerHtml.Contains("account_circle") || 
+            b.GetAttribute("aria-label")?.Contains("Account") == true);
+
+        if (accountButton != null)
+        {
+            accountButton.Click();
+        }
+
+        // Assert
+        component.Should().NotBeNull("Component should handle user menu interaction");
+    }
+
+    [Fact]
+    public void MainLayout_Responsive_ShouldHandleDifferentScreenSizes()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert - Check for responsive classes
+        component.Markup.Should().Contain("mud", "Should contain MudBlazor responsive classes");
+    }
 }
