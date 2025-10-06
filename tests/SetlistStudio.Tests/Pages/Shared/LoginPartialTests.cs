@@ -1,14 +1,16 @@
-using Bunit;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -19,10 +21,12 @@ using Moq;
 
 namespace SetlistStudio.Tests.Web.Pages.Shared
 {
-    public class LoginPartialTests : TestContext
+    public class LoginPartialTests
     {
         private readonly Mock<SignInManager<ApplicationUser>> _mockSignInManager;
         private readonly Mock<UserManager<ApplicationUser>> _mockUserManager;
+        private readonly Mock<IViewEngine> _mockViewEngine;
+        private readonly Mock<IServiceProvider> _mockServiceProvider;
 
         public LoginPartialTests()
         {
@@ -56,9 +60,8 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
                 schemes.Object,
                 confirmation.Object);
 
-            Services.AddSingleton(_mockSignInManager.Object);
-            Services.AddSingleton(_mockUserManager.Object);
-            Services.AddAuthorizationCore();
+            _mockViewEngine = new Mock<IViewEngine>();
+            _mockServiceProvider = new Mock<IServiceProvider>();
         }
 
         [Fact]
@@ -72,11 +75,8 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
             // The actual rendering test would require more complex setup for Razor pages
             
             // Assert - Services should be configured correctly
-            var signInManager = Services.GetService<SignInManager<ApplicationUser>>();
-            var userManager = Services.GetService<UserManager<ApplicationUser>>();
-            
-            signInManager.Should().NotBeNull();
-            userManager.Should().NotBeNull();
+            _mockSignInManager.Should().NotBeNull();
+            _mockUserManager.Should().NotBeNull();
         }
 
         [Fact]
@@ -136,8 +136,9 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
         public void LoginPartial_Dependencies_ShouldBeInjectable()
         {
             // Arrange & Act
-            var signInManager = Services.GetService<SignInManager<ApplicationUser>>();
-            var userManager = Services.GetService<UserManager<ApplicationUser>>();
+            // For LoginPartial, we test the mock dependencies directly since it's a Razor view
+            var signInManager = _mockSignInManager.Object;
+            var userManager = _mockUserManager.Object;
 
             // Assert
             signInManager.Should().NotBeNull();

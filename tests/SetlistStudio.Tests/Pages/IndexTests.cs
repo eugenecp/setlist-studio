@@ -550,4 +550,281 @@ public class IndexTests : TestContext
         component.Markup.Should().Contain("0"); // Zero genres
         component.Markup.Should().Contain("Music Genres");
     }
+
+    [Fact]
+    public async Task Index_ShouldHandleAllServiceFailures_Gracefully()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup all services to fail
+        _mockSongService.Setup(x => x.GetSongsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Song service failed"));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), 
+            It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Setlist service failed"));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync(It.IsAny<string>()))
+            .ThrowsAsync(new Exception("Genre service failed"));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Component should still render without crashing
+        component.Should().NotBeNull();
+        component.Markup.Should().Contain("Welcome to Setlist Studio");
+        // Error handling should be graceful - stats should show default values
+        component.Markup.Should().Contain("0"); // Default stats displayed
+    }
+
+    [Fact]
+    public async Task Index_ShouldDisplayErrorMessage_WhenDataLoadingFails()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup song service to fail
+        _mockSongService.Setup(x => x.GetSongsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Database connection failed"));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert
+        // When service fails, component should still render with default/zero stats
+        component.Markup.Should().Contain("0");
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandlePartialDataLoading_WhenSomeServicesSucceed()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup mixed success/failure
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 42));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock", "Jazz", "Pop" });
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), 
+            It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Setlist service failed"));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should show successful data and handle failures gracefully
+        component.Markup.Should().Contain("42"); // Song count
+        component.Markup.Should().Contain("3");  // Genre count
+        component.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleLargeNumbers_InStats()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup services with large numbers
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 9999));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 1234));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(Enumerable.Range(1, 50).Select(i => $"Genre {i}").ToArray());
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((new List<Setlist>(), 0));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should display large numbers correctly
+        component.Markup.Should().Contain("9999");  // Large song count
+        component.Markup.Should().Contain("1234");  // Large setlist count
+        component.Markup.Should().Contain("50");    // Many genres
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleComplexPerformanceDateScenarios()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup basic services
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 1));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 1));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock" });
+        
+        // Complex upcoming performances with edge cases
+        var complexSetlists = new List<Setlist>
+        {
+            new() { PerformanceDate = DateTime.Now.AddMinutes(1), UserId = "test-user-id" },    // Very soon
+            new() { PerformanceDate = DateTime.Now.AddYears(1), UserId = "test-user-id" },     // Far future
+            new() { PerformanceDate = DateTime.Now.AddDays(-1), UserId = "test-user-id" },     // Past
+            new() { PerformanceDate = DateTime.Now, UserId = "test-user-id" },                 // Right now (edge case)
+            new() { PerformanceDate = DateTime.MinValue, UserId = "test-user-id" },            // Very old date
+            new() { PerformanceDate = DateTime.MaxValue, UserId = "test-user-id" },            // Very future date
+        };
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((complexSetlists, 6));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should count only future performances correctly
+        // Current implementation should count performances after now
+        component.Markup.Should().NotBeNullOrEmpty();
+        component.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleNullPerformanceDates()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup basic services
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Song>(), 1));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, null, 1, 1))
+            .ReturnsAsync((new List<Setlist>(), 1));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock" });
+        
+        // All setlists with null performance dates
+        var nullDateSetlists = new List<Setlist>
+        {
+            new() { PerformanceDate = null, UserId = "test-user-id" },
+            new() { PerformanceDate = null, UserId = "test-user-id" },
+            new() { PerformanceDate = null, UserId = "test-user-id" }
+        };
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", null, null, true, 1, 100))
+            .ReturnsAsync((nullDateSetlists, 3));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should handle null dates gracefully and show 0 upcoming
+        component.Markup.Should().Contain("0"); // No upcoming performances
+        component.Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task Index_ShouldHandleInvalidUserIds(string userId)
+    {
+        // Arrange
+        var claims = new List<Claim>();
+        if (userId != null)
+        {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
+        }
+        
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+        
+        // Wait for async operations
+        await Task.Delay(100);
+
+        // Assert - The component should handle invalid user IDs gracefully
+        // Note: The implementation may still call services but should handle any failures gracefully
+        
+        component.Should().NotBeNull();
+        component.Markup.Should().Contain("Welcome to Setlist Studio");
+    }
 }

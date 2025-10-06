@@ -96,4 +96,115 @@ public class Pages__HostTests : IClassFixture<WebApplicationFactory<Program>>
         var validPostStatusCodes = new[] { HttpStatusCode.OK, HttpStatusCode.MethodNotAllowed, HttpStatusCode.Found, HttpStatusCode.BadRequest };
         validPostStatusCodes.Should().Contain(postResponse.StatusCode);
     }
+
+    [Fact]
+    public async Task Host_ShouldHandleCustomHeaders_WhenProvided()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Custom-Header", "TestValue");
+        client.DefaultRequestHeaders.Add("User-Agent", "TestAgent/1.0");
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleQueryParameters_WhenProvided()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host?test=value&param=123");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("/_Host")]
+    [InlineData("/_host")]  // Test case sensitivity
+    [InlineData("/_HOST")]  // Test case sensitivity
+    public async Task Host_ShouldHandleCaseVariations_WhenRequested(string path)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync(path);
+
+        // Assert
+        // Should either work or give a consistent response (not crash)
+        var validStatusCodes = new[] { HttpStatusCode.OK, HttpStatusCode.NotFound };
+        validStatusCodes.Should().Contain(response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Host_ShouldContainBlazorServerElements_WhenRendered()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().NotBeEmpty();
+        // The _Host page typically contains Blazor server elements
+        content.Should().Contain("Setlist Studio", "should contain app title");
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleConcurrentRequests_WhenMultipleClientsMakeRequests()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var tasks = new List<Task<HttpResponseMessage>>();
+
+        // Act - Make multiple concurrent requests
+        for (int i = 0; i < 5; i++)
+        {
+            tasks.Add(client.GetAsync("/_Host"));
+        }
+
+        var responses = await Task.WhenAll(tasks);
+
+        // Assert
+        responses.Should().HaveCount(5);
+        responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Host_ShouldHaveCorrectContentType_WhenRendered()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("text/html");
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleSlowRequests_WithTimeout()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30); // Set a reasonable timeout
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }

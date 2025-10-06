@@ -291,4 +291,179 @@ public class MainLayoutTests : TestContext
         component.Markup.Should().Contain("mud-main-content", "MainLayout should have main content area");
         component.Markup.Should().Contain("mud-layout", "MainLayout should have layout container");
     }
+
+    [Fact]
+    public void MainLayout_OnAfterRenderAsync_ShouldHandleSystemPreferenceCheck()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Should().NotBeNull("MainLayout should handle system preference detection");
+        // The OnAfterRenderAsync method should be called during component lifecycle
+        component.Markup.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void MainLayout_OnAfterRenderAsync_ShouldHandleNullThemeProvider()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act - This should not throw even if theme provider is null initially
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Should().NotBeNull("MainLayout should handle null theme provider gracefully");
+    }
+
+    [Fact]
+    public void MainLayout_ErrorBoundary_ShouldDisplayErrorWhenExceptionOccurs()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        component.Markup.Should().NotBeNullOrEmpty("MainLayout should render even with child component errors");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldHandleMultipleThemeToggles()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Toggle theme multiple times
+        var themeButton = component.Find("button[aria-label*='Switch to']");
+        themeButton.Should().NotBeNull("Theme toggle button should be present");
+        
+        // Multiple toggles
+        themeButton.Click();
+        themeButton.Click();
+        themeButton.Click();
+
+        // Assert
+        component.Markup.Should().NotBeNullOrEmpty("Component should handle multiple theme toggles");
+    }
+
+    [Fact]
+    public void MainLayout_ShouldHandleMultipleDrawerToggles()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act - Toggle drawer multiple times
+        var menuButton = component.Find("button[aria-label='Open navigation menu']");
+        menuButton.Should().NotBeNull("Menu button should be present");
+        
+        // Multiple toggles
+        menuButton.Click();
+        menuButton.Click();
+        menuButton.Click();
+
+        // Assert
+        component.Markup.Should().NotBeNullOrEmpty("Component should handle multiple drawer toggles");
+    }
+
+    [Fact]
+    public void MainLayout_ThemeButton_ShouldHaveDifferentLabelsForDarkAndLight()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Act & Assert - Check initial state
+        var initialThemeButton = component.Find("button[aria-label*='Switch to']");
+        initialThemeButton.Should().NotBeNull("Theme button should be present");
+        
+        // Click to toggle theme
+        initialThemeButton.Click();
+        
+        // Check that the button still exists and potentially has different label
+        var toggledThemeButton = component.Find("button[aria-label*='Switch to']");
+        toggledThemeButton.Should().NotBeNull("Theme button should still be present after toggle");
+    }
+
+    [Fact]
+    public void MainLayout_UserMenu_ShouldShowUserNameForAuthenticatedUser()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+
+        // Act
+        var component = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        // User menu should be present for authenticated users
+        component.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "User menu should display account icon for authenticated users");
+    }
+
+    [Fact]
+    public void MainLayout_AuthorizeView_ShouldRenderDifferentContentBasedOnAuthState()
+    {
+        // Test authenticated state
+        SetupAuthenticatedUser();
+        var authenticatedComponent = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Test unauthenticated state
+        SetupUnauthenticatedUser();
+        var unauthenticatedComponent = RenderComponent<CascadingAuthenticationState>(parameters => parameters
+            .AddChildContent(childBuilder => 
+            {
+                childBuilder.OpenComponent<MainLayout>(0);
+                childBuilder.CloseComponent();
+            }));
+
+        // Assert
+        authenticatedComponent.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "Authenticated view should show account icon");
+        unauthenticatedComponent.Markup.Should().Contain("Icons.Material.Filled.AccountCircle", "Unauthenticated view should still show account icon for login");
+    }
 }

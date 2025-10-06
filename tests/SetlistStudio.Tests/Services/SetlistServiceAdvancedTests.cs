@@ -20,7 +20,6 @@ public class SetlistServiceAdvancedTests : IDisposable
     private readonly SetlistService _service;
     private readonly Mock<ILogger<SetlistService>> _mockLogger;
     private readonly string _testUserId = "test-user-123";
-    private readonly string _otherUserId = "other-user-456";
 
     public SetlistServiceAdvancedTests()
     {
