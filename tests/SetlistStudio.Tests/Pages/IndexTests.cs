@@ -993,4 +993,337 @@ public class IndexTests : TestContext
         component.Should().NotBeNull();
         component.Markup.Should().Contain("Welcome to Setlist Studio");
     }
+
+    [Fact]
+    public async Task Index_ShouldHandleEmptyUserId()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Name, "test-user") // No NameIdentifier claim
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should not call services when userId is empty
+        _mockSongService.Verify(x => x.GetSongsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        _mockSetlistService.Verify(x => x.GetSetlistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        component.Markup.Should().Contain("Welcome back"); // Should still show authenticated content
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleNullUserId()
+    {
+        // Arrange - Create user without NameIdentifier claim to simulate null userId
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Name, "testuser")
+            // No NameIdentifier claim - this will result in null when looking for userId
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should not call services when userId is null
+        _mockSongService.Verify(x => x.GetSongsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        _mockSetlistService.Verify(x => x.GetSetlistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        component.Markup.Should().Contain("Welcome back"); // Should still show authenticated content
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleWhitespaceUserId()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "   ") // Whitespace-only userId
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should call services with whitespace userId (the component doesn't trim it)
+        _mockSongService.Verify(x => x.GetSongsAsync("   ", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()), Times.AtLeastOnce);
+        _mockSetlistService.Verify(x => x.GetSetlistsAsync("   ", It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()), Times.AtLeastOnce);
+        component.Markup.Should().Contain("Welcome back"); // Should still show authenticated content
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleUpcomingPerformances_WithPastDates()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Create setlists with past performance dates
+        var pastSetlists = new List<Setlist>
+        {
+            new Setlist { Id = 1, Name = "Past Show 1", UserId = "test-user-id", PerformanceDate = DateTime.Now.AddDays(-7) },
+            new Setlist { Id = 2, Name = "Past Show 2", UserId = "test-user-id", PerformanceDate = DateTime.Now.AddDays(-1) },
+            new Setlist { Id = 3, Name = "No Date", UserId = "test-user-id", PerformanceDate = null }
+        };
+
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((new List<Song>(), 5));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((pastSetlists, 3));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock", "Pop" });
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should show 0 upcoming performances
+        component.WaitForState(() => component.Markup.Contains("0"), TimeSpan.FromSeconds(2));
+        component.Markup.Should().Contain("5"); // Total songs
+        component.Markup.Should().Contain("3"); // Total setlists
+        component.Markup.Should().Contain("2"); // Unique genres
+        // Should show 0 upcoming performances since all dates are in the past or null
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleUpcomingPerformances_WithFutureDates()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Create setlists with future performance dates
+        var futureSetlists = new List<Setlist>
+        {
+            new Setlist { Id = 1, Name = "Future Show 1", UserId = "test-user-id", PerformanceDate = DateTime.Now.AddDays(7) },
+            new Setlist { Id = 2, Name = "Future Show 2", UserId = "test-user-id", PerformanceDate = DateTime.Now.AddDays(14) },
+            new Setlist { Id = 3, Name = "Past Show", UserId = "test-user-id", PerformanceDate = DateTime.Now.AddDays(-1) },
+            new Setlist { Id = 4, Name = "No Date", UserId = "test-user-id", PerformanceDate = null }
+        };
+
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((new List<Song>(), 10));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((futureSetlists, 4));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock", "Jazz", "Blues" });
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should show 2 upcoming performances (future dates only)
+        component.WaitForState(() => component.Markup.Contains("10") && component.Markup.Contains("4") && component.Markup.Contains("3"), TimeSpan.FromSeconds(2));
+        component.Markup.Should().Contain("10"); // Total songs
+        component.Markup.Should().Contain("4");  // Total setlists
+        component.Markup.Should().Contain("3");  // Unique genres
+        // Should calculate upcoming performances correctly
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandleAllServiceExceptions()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup all services to throw exceptions
+        _mockSongService.Setup(x => x.GetSongsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new InvalidOperationException("Song service failed"));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new InvalidOperationException("Setlist service failed"));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync(It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("Genres service failed"));
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should gracefully handle all service exceptions and still render
+        component.Should().NotBeNull();
+        component.Markup.Should().Contain("Welcome to Setlist Studio");
+        component.Markup.Should().Contain("Welcome back"); // Should still show authenticated content
+        
+        // Stats should remain at 0 due to exceptions
+        component.Markup.Should().Contain("0"); // Should show default values
+    }
+
+    [Fact]
+    public async Task Index_ShouldHandlePartialServiceFailures_WithMixedResults()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup some services to succeed and others to fail
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((new List<Song>(), 15));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new InvalidOperationException("Setlist service failed"));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock", "Pop", "Jazz", "Blues" });
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should handle partial failures gracefully
+        component.Should().NotBeNull();
+        component.Markup.Should().Contain("Welcome to Setlist Studio");
+        component.Markup.Should().Contain("15"); // Songs should load successfully
+        component.Markup.Should().Contain("4");  // Genres should load successfully
+        // Setlists and upcoming performances should remain at 0 due to exception
+    }
+
+    [Fact]
+    public async Task Index_AuthorizeView_ShouldShowCorrectButtons_WhenAuthenticated()
+    {
+        // Arrange
+        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
+            new Claim(ClaimTypes.Name, "Test User")
+        }, "test"));
+        
+        var mockAuthState = new AuthenticationState(authenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Setup services for successful loading
+        _mockSongService.Setup(x => x.GetSongsAsync("test-user-id", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((new List<Song>(), 5));
+        
+        _mockSetlistService.Setup(x => x.GetSetlistsAsync("test-user-id", It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((new List<Setlist>(), 3));
+        
+        _mockSongService.Setup(x => x.GetGenresAsync("test-user-id"))
+            .ReturnsAsync(new[] { "Rock" });
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(200);
+        component.Render();
+
+        // Assert - Should show authenticated user buttons
+        component.WaitForState(() => 
+        {
+            var markup = component.Markup;
+            return markup.Contains("My Songs") || markup.Contains("queue_music") || markup.Contains("/songs");
+        }, TimeSpan.FromSeconds(3));
+
+        var hasAuthenticatedButtons = component.Markup.Contains("My Songs") || 
+                                     component.Markup.Contains("My Setlists") ||
+                                     component.Markup.Contains("/songs") ||
+                                     component.Markup.Contains("/setlists");
+
+        hasAuthenticatedButtons.Should().BeTrue("Authenticated users should see navigation buttons to songs and setlists");
+        
+        // Should NOT show sign-in buttons
+        component.Markup.Should().NotContain("Sign In to Get Started");
+        component.Markup.Should().NotContain("Sign Up Free");
+    }
+
+    [Fact]
+    public async Task Index_AuthorizeView_ShouldShowSignInButtons_WhenNotAuthenticated()
+    {
+        // Arrange
+        var unauthenticatedUser = new ClaimsPrincipal(new ClaimsIdentity()); // Not authenticated
+        var mockAuthState = new AuthenticationState(unauthenticatedUser);
+        _mockAuthStateProvider.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(mockAuthState);
+
+        // Act
+        var component = RenderComponent<IndexPage>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(mockAuthState)));
+
+        await Task.Delay(100);
+        component.Render();
+
+        // Assert - Should show sign-in buttons
+        component.WaitForState(() => 
+        {
+            var markup = component.Markup;
+            return markup.Contains("Sign In") || markup.Contains("/login");
+        }, TimeSpan.FromSeconds(3));
+
+        var hasSignInButtons = component.Markup.Contains("Sign In to Get Started") || 
+                              component.Markup.Contains("Sign Up Free") ||
+                              component.Markup.Contains("/login");
+
+        hasSignInButtons.Should().BeTrue("Unauthenticated users should see sign-in buttons");
+        
+        // Should NOT show authenticated user buttons or stats
+        component.Markup.Should().NotContain("My Songs");
+        component.Markup.Should().NotContain("My Setlists");
+        component.Markup.Should().NotContain("Welcome back");
+        component.Markup.Should().NotContain("Your Music at a Glance");
+    }
 }

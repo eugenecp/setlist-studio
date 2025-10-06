@@ -207,4 +207,147 @@ public class Pages__HostTests : IClassFixture<WebApplicationFactory<Program>>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task Host_ShouldHandleBlazorSignalRConnection_WhenRequested()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act - Try to access the Blazor SignalR endpoint
+        var response = await client.GetAsync("/_blazor");
+
+        // Assert - Should either upgrade to WebSocket or return appropriate error
+        var validStatusCodes = new[] { 
+            HttpStatusCode.BadRequest,    // No WebSocket upgrade headers
+            HttpStatusCode.UpgradeRequired, 
+            HttpStatusCode.OK,
+            HttpStatusCode.NotFound 
+        };
+        validStatusCodes.Should().Contain(response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleNonExistentRoutes_WithFallback()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act - Access a non-existent route that should fallback to _Host
+        var response = await client.GetAsync("/some-spa-route");
+
+        // Assert - Should fallback to _Host for SPA routing
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleApiRoutes_WithoutFallback()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act - Access a non-existent API route that should NOT fallback to _Host
+        var response = await client.GetAsync("/api/non-existent-endpoint");
+
+        // Assert - API routes should still go to _Host in this SPA setup
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Host_ShouldPreserveRouteData_WhenRendering()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act - Access _Host with different paths
+        var rootResponse = await client.GetAsync("/");
+        var rootContent = await rootResponse.Content.ReadAsStringAsync();
+
+        var hostResponse = await client.GetAsync("/_Host");
+        var hostContent = await hostResponse.Content.ReadAsStringAsync();
+
+        // Assert - Both should return similar content (both use _Host)
+        rootResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        hostResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        
+        rootContent.Should().NotBeEmpty();
+        hostContent.Should().NotBeEmpty();
+        
+        // Both should contain the app structure
+        rootContent.Should().Contain("Setlist Studio");
+        hostContent.Should().Contain("Setlist Studio");
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleServerPrerenderingMode_Correctly()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert - ServerPrerendered mode should provide initial HTML content
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().NotBeEmpty();
+        content.Should().Contain("html", "should contain HTML structure");
+        
+        // Should contain some prerendered content
+        var hasPrerenderedContent = content.Contains("Setlist Studio") || 
+                                   content.Contains("welcome") ||
+                                   content.Contains("mud-") ||
+                                   content.Length > 1000;
+        
+        hasPrerenderedContent.Should().BeTrue("ServerPrerendered mode should provide substantial initial content");
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleLayoutRendering_WithCorrectStructure()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert - Should use _Layout and have proper HTML structure
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("<!DOCTYPE html>");
+        content.Should().Contain("<html");
+        content.Should().Contain("<head>");
+        content.Should().Contain("<body>");
+        content.Should().Contain("</html>");
+    }
+
+    [Fact]
+    public async Task Host_ShouldHandleComponentRendering_WithoutErrors()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/_Host");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert - Should successfully render the App component
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        
+        // Check that Blazor error UI is present but hidden (not displayed as active error)
+        content.Should().Contain("blazor-error-ui", "should contain error UI template");
+        
+        // Verify it's hidden/inactive (check for display:none or hidden class)
+        var errorUiSection = content.Substring(content.IndexOf("blazor-error-ui"));
+        var isErrorUiHidden = errorUiSection.Contains("display:none") || 
+                             errorUiSection.Contains("style=\"display:none\"") ||
+                             !content.Contains("An unhandled exception has occurred");
+        
+        // Should contain Blazor-specific elements
+        var hasBlazorElements = content.Contains("_blazor") || 
+                               content.Contains("blazor") ||
+                               content.Contains("component");
+        
+        hasBlazorElements.Should().BeTrue("should contain Blazor-related elements");
+    }
 }

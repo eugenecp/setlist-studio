@@ -95,10 +95,304 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
 
             _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
 
-            // Act & Assert
-            // This validates the SignInManager setup for the logic
+            var context = CreateViewContext(user);
+
+            // Act
             var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
-            isSignedIn.Should().BeTrue();
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeTrue("User should be signed in");
+            renderedContent.Should().Contain("Hello test@example.com!", "Should display user's name");
+            renderedContent.Should().Contain("Logout", "Should display logout button");
+            renderedContent.Should().Contain("/Account/Manage/Index", "Should link to account management");
+            renderedContent.Should().NotContain("Register", "Should not show register link");
+            renderedContent.Should().NotContain("Login", "Should not show login link");
+        }
+
+        [Fact]
+        public void LoginPartial_WhenUserNotSignedIn_ShouldShowRegisterAndLogin()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity()); // Anonymous user
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(false);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeFalse("User should not be signed in");
+            renderedContent.Should().Contain("Register", "Should display register link");
+            renderedContent.Should().Contain("Login", "Should display login link");
+            renderedContent.Should().Contain("/Account/Register", "Should link to registration");
+            renderedContent.Should().Contain("/Account/Login", "Should link to login");
+            renderedContent.Should().NotContain("Hello", "Should not display user greeting");
+            renderedContent.Should().NotContain("Logout", "Should not show logout button");
+        }
+
+        [Fact]
+        public void LoginPartial_WhenUserSignedInWithNullName_ShouldHandleGracefully()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+                // No Name claim
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeTrue("User should be signed in");
+            renderedContent.Should().Contain("Hello !", "Should handle null name gracefully");
+            renderedContent.Should().Contain("Logout", "Should display logout button");
+            renderedContent.Should().NotContain("Register", "Should not show register link");
+            renderedContent.Should().NotContain("Login", "Should not show login link");
+        }
+
+        [Fact]
+        public void LoginPartial_WhenUserSignedInWithEmptyName_ShouldHandleGracefully()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, ""),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeTrue("User should be signed in");
+            renderedContent.Should().Contain("Hello !", "Should handle empty name gracefully");
+            renderedContent.Should().Contain("Logout", "Should display logout button");
+        }
+
+        [Fact]
+        public void LoginPartial_WhenUserHasLongName_ShouldDisplayCorrectly()
+        {
+            // Arrange
+            var longName = "verylongusername@somelongdomainname.com";
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, longName),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeTrue("User should be signed in");
+            renderedContent.Should().Contain($"Hello {longName}!", "Should display full long name");
+            renderedContent.Should().Contain("Logout", "Should display logout button");
+        }
+
+        [Fact]
+        public void LoginPartial_WhenUserHasSpecialCharactersInName_ShouldDisplayCorrectly()
+        {
+            // Arrange
+            var specialName = "user+test@domain.com";
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, specialName),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var isSignedIn = _mockSignInManager.Object.IsSignedIn(user);
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            isSignedIn.Should().BeTrue("User should be signed in");
+            renderedContent.Should().Contain($"Hello {specialName}!", "Should display name with special characters");
+            renderedContent.Should().Contain("Logout", "Should display logout button");
+        }
+
+        [Fact]
+        public void LoginPartial_ShouldContainCorrectCssClasses()
+        {
+            // Arrange - Test both authenticated and unauthenticated states
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            var unauthenticatedUser = new ClaimsPrincipal(new ClaimsIdentity());
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(authenticatedUser)).Returns(true);
+            _mockSignInManager.Setup(x => x.IsSignedIn(unauthenticatedUser)).Returns(false);
+
+            // Act
+            var authenticatedContext = CreateViewContext(authenticatedUser);
+            var unauthenticatedContext = CreateViewContext(unauthenticatedUser);
+
+            var authenticatedContent = RenderViewToString("_LoginPartial", authenticatedContext);
+            var unauthenticatedContent = RenderViewToString("_LoginPartial", unauthenticatedContext);
+
+            // Assert - Both should have proper CSS classes
+            authenticatedContent.Should().Contain("navbar-nav", "Should have navbar navigation classes");
+            authenticatedContent.Should().Contain("nav-item", "Should have nav item classes");
+            authenticatedContent.Should().Contain("nav-link", "Should have nav link classes");
+
+            unauthenticatedContent.Should().Contain("navbar-nav", "Should have navbar navigation classes");
+            unauthenticatedContent.Should().Contain("nav-item", "Should have nav item classes");
+            unauthenticatedContent.Should().Contain("nav-link", "Should have nav link classes");
+        }
+
+        [Fact]
+        public void LoginPartial_LogoutForm_ShouldHaveCorrectAttributes()
+        {
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            renderedContent.Should().Contain("form", "Should contain form element");
+            renderedContent.Should().Contain("method=\"post\"", "Should use POST method");
+            renderedContent.Should().Contain("/Account/Logout", "Should point to logout page");
+            renderedContent.Should().Contain("button", "Should contain logout button");
+            renderedContent.Should().Contain("type=\"submit\"", "Button should be submit type");
+        }
+
+        [Fact]
+        public void LoginPartial_Links_ShouldHaveCorrectUrls()
+        {
+            // Arrange
+            var unauthenticatedUser = new ClaimsPrincipal(new ClaimsIdentity());
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(unauthenticatedUser)).Returns(false);
+            _mockSignInManager.Setup(x => x.IsSignedIn(authenticatedUser)).Returns(true);
+
+            var unauthenticatedContext = CreateViewContext(unauthenticatedUser);
+            var authenticatedContext = CreateViewContext(authenticatedUser);
+
+            // Act
+            var unauthenticatedContent = RenderViewToString("_LoginPartial", unauthenticatedContext);
+            var authenticatedContent = RenderViewToString("_LoginPartial", authenticatedContext);
+
+            // Assert - Unauthenticated user links
+            unauthenticatedContent.Should().Contain("/Account/Register", "Should link to registration");
+            unauthenticatedContent.Should().Contain("/Account/Login", "Should link to login");
+
+            // Assert - Authenticated user links
+            authenticatedContent.Should().Contain("/Account/Manage/Index", "Should link to account management");
+            authenticatedContent.Should().Contain("/Account/Logout", "Should link to logout");
+        }
+
+        [Theory]
+        [InlineData("user@domain.com")]
+        [InlineData("test.user+tag@example.co.uk")]
+        [InlineData("simple")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void LoginPartial_ShouldHandleVariousUserNames_WhenAuthenticated(string userName)
+        {
+            // Arrange
+            var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, "test-user-id") };
+            if (userName != null)
+            {
+                claims.Add(new Claim(ClaimTypes.Name, userName));
+            }
+
+            var user = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            renderedContent.Should().Contain("Hello", "Should show greeting");
+            renderedContent.Should().Contain("Logout", "Should show logout");
+            renderedContent.Should().NotContain("Register", "Should not show register");
+            renderedContent.Should().NotContain("Login", "Should not show login link");
+
+            if (!string.IsNullOrEmpty(userName))
+            {
+                renderedContent.Should().Contain(userName, "Should display the user name");
+            }
+        }
+
+        [Fact]
+        public void LoginPartial_ShouldRenderCorrectStructure_ForBothStates()
+        {
+            // Arrange
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "test@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            var unauthenticatedUser = new ClaimsPrincipal(new ClaimsIdentity());
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(authenticatedUser)).Returns(true);
+            _mockSignInManager.Setup(x => x.IsSignedIn(unauthenticatedUser)).Returns(false);
+
+            // Act
+            var authenticatedContext = CreateViewContext(authenticatedUser);
+            var unauthenticatedContext = CreateViewContext(unauthenticatedUser);
+
+            var authenticatedContent = RenderViewToString("_LoginPartial", authenticatedContext);
+            var unauthenticatedContent = RenderViewToString("_LoginPartial", unauthenticatedContext);
+
+        // Assert - Both should have ul structure (allowing for whitespace)
+        authenticatedContent.Should().Contain("<ul class=\"navbar-nav\">");
+        authenticatedContent.Should().Contain("</ul>");
+
+        unauthenticatedContent.Should().Contain("<ul class=\"navbar-nav\">");
+        unauthenticatedContent.Should().Contain("</ul>");            // Both should have nav items
+            authenticatedContent.Should().Contain("<li class=\"nav-item\">");
+            unauthenticatedContent.Should().Contain("<li class=\"nav-item\">");
+
+            // Count of nav items should be correct
+            var authenticatedItemCount = authenticatedContent.Split("<li class=\"nav-item\">").Length - 1;
+            var unauthenticatedItemCount = unauthenticatedContent.Split("<li class=\"nav-item\">").Length - 1;
+
+            authenticatedItemCount.Should().Be(2, "Authenticated state should have 2 nav items (Manage, Logout)");
+            unauthenticatedItemCount.Should().Be(2, "Unauthenticated state should have 2 nav items (Register, Login)");
         }
 
         [Fact]
@@ -787,7 +1081,14 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
 
         private ViewContext CreateViewContext()
         {
+            return CreateViewContext(new ClaimsPrincipal(new ClaimsIdentity())); // Anonymous user by default
+        }
+
+        private ViewContext CreateViewContext(ClaimsPrincipal user)
+        {
             var httpContext = new DefaultHttpContext();
+            httpContext.User = user; // Set the user on the HttpContext
+            
             var serviceCollection = new ServiceCollection();
             serviceCollection.AddScoped<SignInManager<ApplicationUser>>(_ => _mockSignInManager.Object);
             serviceCollection.AddScoped<UserManager<ApplicationUser>>(_ => _mockUserManager.Object);
