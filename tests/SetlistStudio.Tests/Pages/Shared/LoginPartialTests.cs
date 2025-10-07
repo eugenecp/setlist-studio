@@ -1138,5 +1138,337 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
         }
 
         #endregion
+
+        #region Edge Case and Coverage Tests
+
+        [Fact]
+        public void LoginPartial_SignInManagerIsSignedIn_ShouldBeCalledCorrectly()
+        {
+            // This specifically targets the SignInManager.IsSignedIn(User) call in the Razor view
+            
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "testuser@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            // Setup mock to ensure IsSignedIn is called
+            _mockSignInManager.Setup(x => x.IsSignedIn(It.IsAny<ClaimsPrincipal>())).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            _mockSignInManager.Verify(x => x.IsSignedIn(It.IsAny<ClaimsPrincipal>()), Times.AtLeastOnce, 
+                "SignInManager.IsSignedIn should be called from the Razor view");
+            
+            renderedContent.Should().Contain("Hello testuser@example.com!", "Should display authenticated user content");
+        }
+
+        [Fact]
+        public void LoginPartial_UserIdentityName_ShouldHandleNullIdentity()
+        {
+            // This targets the User.Identity?.Name null-conditional operator in the Razor view
+            
+            // Arrange: User with null Identity
+            var user = new ClaimsPrincipal(); // No identity set
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            renderedContent.Should().Contain("Hello !", "Should handle null identity gracefully");
+            renderedContent.Should().Contain("/Account/Manage/Index", "Should still show management link");
+            renderedContent.Should().Contain("Logout", "Should show logout button");
+        }
+
+        [Fact]
+        public void LoginPartial_AuthenticatedState_ShouldShowCorrectLinks()
+        {
+            // This targets all the authenticated user branches in the Razor view
+            
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "authenticated@user.com"),
+                new Claim(ClaimTypes.NameIdentifier, "auth-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            // Test all authenticated branches
+            renderedContent.Should().Contain("/Account/Manage/Index", "Should contain manage account link");
+            renderedContent.Should().Contain("title=\"Manage\"", "Should have manage title attribute");
+            renderedContent.Should().Contain("/Account/Logout", "Should contain logout form action");
+            renderedContent.Should().Contain("method=\"post\"", "Should use POST method for logout");
+            renderedContent.Should().Contain("type=\"submit\"", "Should have submit button");
+            renderedContent.Should().Contain("class=\"nav-link btn btn-link text-dark\"", "Should have correct CSS classes");
+            
+            // Ensure unauthenticated content is not present
+            renderedContent.Should().NotContain("/Account/Register", "Should not show register link when authenticated");
+            renderedContent.Should().NotContain("/Account/Login", "Should not show login link when authenticated");
+        }
+
+        [Fact]
+        public void LoginPartial_UnauthenticatedState_ShouldShowCorrectLinks()
+        {
+            // This targets all the unauthenticated user branches in the Razor view
+            
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity()); // Anonymous user
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(false);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            // Test all unauthenticated branches
+            renderedContent.Should().Contain("/Account/Register", "Should contain register link");
+            renderedContent.Should().Contain("/Account/Login", "Should contain login link");
+            renderedContent.Should().Contain("class=\"nav-link text-dark\"", "Should have correct CSS classes");
+            
+            // Ensure authenticated content is not present
+            renderedContent.Should().NotContain("/Account/Manage/Index", "Should not show manage link when not authenticated");
+            renderedContent.Should().NotContain("/Account/Logout", "Should not show logout when not authenticated");
+            renderedContent.Should().NotContain("Hello", "Should not show greeting when not authenticated");
+        }
+
+        [Fact]
+        public void LoginPartial_ReturnUrl_ShouldBeConfiguredCorrectly()
+        {
+            // This targets the asp-route-returnUrl configuration in the logout form
+            
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "testuser@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "test-user-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            // The form should be configured correctly for logout functionality
+            renderedContent.Should().Contain("asp-area=\"Identity\"", "Should target Identity area");
+            renderedContent.Should().Contain("asp-page=\"/Account/Logout\"", "Should target logout page");
+            renderedContent.Should().Contain("method=\"post\"", "Should use POST method for logout");
+        }
+
+        [Fact]
+        public void LoginPartial_CssClasses_ShouldBeAppliedCorrectly()
+        {
+            // This tests the CSS class applications throughout the component
+            
+            // Arrange - Test both authenticated and unauthenticated states
+            var testCases = new[]
+            {
+                (isAuthenticated: true, userName: "test@example.com"),
+                (isAuthenticated: false, userName: "")
+            };
+
+            foreach (var (isAuthenticated, userName) in testCases)
+            {
+                var user = isAuthenticated 
+                    ? new ClaimsPrincipal(new ClaimsIdentity(new[]
+                      {
+                          new Claim(ClaimTypes.Name, userName),
+                          new Claim(ClaimTypes.NameIdentifier, "test-id")
+                      }, "test"))
+                    : new ClaimsPrincipal(new ClaimsIdentity());
+
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(isAuthenticated);
+
+                var context = CreateViewContext(user);
+
+                // Act
+                var renderedContent = RenderViewToString("_LoginPartial", context);
+
+                // Assert
+                renderedContent.Should().Contain("class=\"navbar-nav\"", $"Should have navbar-nav class (authenticated: {isAuthenticated})");
+                renderedContent.Should().Contain("class=\"nav-item\"", $"Should have nav-item class (authenticated: {isAuthenticated})");
+                renderedContent.Should().Contain("class=\"nav-link text-dark\"", $"Should have nav-link text-dark class (authenticated: {isAuthenticated})");
+                
+                if (isAuthenticated)
+                {
+                    renderedContent.Should().Contain("class=\"form-inline\"", "Should have form-inline class for logout form");
+                    renderedContent.Should().Contain("class=\"nav-link btn btn-link text-dark\"", "Should have button classes for logout");
+                }
+            }
+        }
+
+        [Fact]
+        public void LoginPartial_FormAttributes_ShouldBeConfiguredForLogout()
+        {
+            // This targets the form configuration for logout functionality
+            
+            // Arrange
+            var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.Name, "formtest@example.com"),
+                new Claim(ClaimTypes.NameIdentifier, "form-test-id")
+            }, "test"));
+
+            _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(true);
+
+            var context = CreateViewContext(user);
+
+            // Act
+            var renderedContent = RenderViewToString("_LoginPartial", context);
+
+            // Assert
+            // Test all form attributes and structure
+            renderedContent.Should().Contain("<form", "Should contain form element");
+            renderedContent.Should().Contain("method=\"post\"", "Should use POST method");
+            renderedContent.Should().Contain("asp-area=\"Identity\"", "Should target Identity area");
+            renderedContent.Should().Contain("asp-page=\"/Account/Logout\"", "Should target logout page");
+            renderedContent.Should().Contain("<button", "Should contain button element");
+            renderedContent.Should().Contain("type=\"submit\"", "Should be submit button");
+            renderedContent.Should().Contain("</form>", "Should close form element");
+        }
+
+        [Fact]
+        public void LoginPartial_NavigationStructure_ShouldBeCorrect()
+        {
+            // This tests the overall HTML structure of the component
+            
+            // Arrange - Test both states
+            var states = new[] { true, false };
+            
+            foreach (var isAuthenticated in states)
+            {
+                var user = isAuthenticated 
+                    ? new ClaimsPrincipal(new ClaimsIdentity(new[]
+                      {
+                          new Claim(ClaimTypes.Name, "structure@test.com"),
+                          new Claim(ClaimTypes.NameIdentifier, "structure-test-id")
+                      }, "test"))
+                    : new ClaimsPrincipal(new ClaimsIdentity());
+
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(isAuthenticated);
+
+                var context = CreateViewContext(user);
+
+                // Act
+                var renderedContent = RenderViewToString("_LoginPartial", context);
+
+                // Assert
+                renderedContent.Should().Contain("<ul", $"Should start with ul element (authenticated: {isAuthenticated})");
+                renderedContent.Should().Contain("</ul>", $"Should end with ul closing tag (authenticated: {isAuthenticated})");
+                renderedContent.Should().Contain("<li", $"Should contain li elements (authenticated: {isAuthenticated})");
+                renderedContent.Should().Contain("</li>", $"Should close li elements (authenticated: {isAuthenticated})");
+                
+                // Count navigation items
+                var navItemCount = renderedContent.Split("class=\"nav-item\"").Length - 1;
+                navItemCount.Should().Be(2, $"Should have exactly 2 navigation items (authenticated: {isAuthenticated})");
+            }
+        }
+
+        [Fact]
+        public void LoginPartial_AllBranches_ShouldBeExecutable()
+        {
+            // This is a comprehensive test to ensure all code paths in the Razor view are covered
+            
+            // Arrange: Test all possible user states
+            var testScenarios = new[]
+            {
+                // Scenario 1: Authenticated user with full name 
+                (
+                    IsAuthenticated: true,
+                    UserName: "fullname@example.com",
+                    HasIdentity: true,
+                    Description: "Authenticated user with name"
+                ),
+                // Scenario 2: Authenticated user with null name
+                (
+                    IsAuthenticated: true,
+                    UserName: (string?)null,
+                    HasIdentity: true,
+                    Description: "Authenticated user with null name"
+                ),
+                // Scenario 3: Authenticated user with empty name
+                (
+                    IsAuthenticated: true,
+                    UserName: "",
+                    HasIdentity: true,
+                    Description: "Authenticated user with empty name"
+                ),
+                // Scenario 4: Authenticated user with no identity
+                (
+                    IsAuthenticated: true,
+                    UserName: (string?)null,
+                    HasIdentity: false,
+                    Description: "Authenticated user with no identity"
+                ),
+                // Scenario 5: Unauthenticated user
+                (
+                    IsAuthenticated: false,
+                    UserName: (string?)null,
+                    HasIdentity: false,
+                    Description: "Unauthenticated user"
+                )
+            };
+
+            foreach (var scenario in testScenarios)
+            {
+                // Arrange
+                ClaimsPrincipal user;
+                
+                if (scenario.HasIdentity && scenario.IsAuthenticated)
+                {
+                    var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, "test-id") };
+                    if (!string.IsNullOrEmpty(scenario.UserName))
+                    {
+                        claims.Add(new Claim(ClaimTypes.Name, scenario.UserName));
+                    }
+                    user = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+                }
+                else
+                {
+                    user = new ClaimsPrincipal(new ClaimsIdentity());
+                }
+
+                _mockSignInManager.Setup(x => x.IsSignedIn(user)).Returns(scenario.IsAuthenticated);
+
+                var context = CreateViewContext(user);
+
+                // Act
+                var renderedContent = RenderViewToString("_LoginPartial", context);
+
+                // Assert
+                renderedContent.Should().NotBeNullOrEmpty($"Should render content for scenario: {scenario.Description}");
+                
+                if (scenario.IsAuthenticated)
+                {
+                    renderedContent.Should().Contain("Hello", $"Should show greeting for authenticated user: {scenario.Description}");
+                    renderedContent.Should().Contain("Logout", $"Should show logout for authenticated user: {scenario.Description}");
+                }
+                else
+                {
+                    renderedContent.Should().Contain("Register", $"Should show register for unauthenticated user: {scenario.Description}");
+                    renderedContent.Should().Contain("Login", $"Should show login for unauthenticated user: {scenario.Description}");
+                }
+            }
+        }
+
+        #endregion
     }
 }

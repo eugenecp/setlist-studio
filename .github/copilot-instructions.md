@@ -1,6 +1,6 @@
 # Copilot Instructions for Setlist Studio
 
-## � Quick Reference
+## Quick Reference
 
 ### Essential Rules
 - **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
@@ -8,38 +8,29 @@
 - **Architecture**: Clean Architecture (Core/Infrastructure/Web)
 - **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
 
-### 🚨 CRITICAL: Test File Creation Workflow
-1. ✅ **Check existing**: Use `file_search` for `{SourceClass}Tests.cs`
-2. ✅ **Enhance first**: Add to base test file before creating new ones
-3. ✅ **Strict naming**: Only `Tests.cs` or `AdvancedTests.cs` suffixes
-4. ❌ **No custom names**: Never use "FocusedTests", "CoverageTests", etc.
-
-## 📚 Table of Contents
-- [🏗️ Project Architecture](#️-project-architecture)
-- [🧪 Testing Framework](#-testing-framework)
-- [📊 Coverage Standards](#-coverage-standards)
-- [🔧 Development Workflow](#-development-workflow)
-- [🎵 Sample Data Guidelines](#-sample-data-guidelines)
-- [💬 Copilot Prompts](#-copilot-prompts)
-- [🚀 Quick Start Guide](#-quick-start-guide)
+### CRITICAL: Test File Creation Workflow
+1. **Check existing**: Use `file_search` for `{SourceClass}Tests.cs`
+2. **Enhance first**: Add to base test file before creating new ones
+3. **Strict naming**: Only `Tests.cs` or `AdvancedTests.cs` suffixes
+4. **No custom names**: Never use "FocusedTests", "CoverageTests", etc.
 
 ---
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 **Setlist Studio** is a music management application for musicians to organize performances and manage their repertoire.
 
-### 🎯 Core Features
+### Core Features
 - **Song Management**: Artists, songs, metadata (BPM, keys, genres)
 - **Setlist Creation**: Performance planning with song order and transitions
 - **User Authentication**: Secure multi-user access with OAuth providers
 
-### 🏛️ Architecture Layers
+### Architecture Layers
 - **SetlistStudio.Core**: Domain entities, interfaces, business logic
 - **SetlistStudio.Infrastructure**: Data access, Entity Framework, services
 - **SetlistStudio.Web**: Blazor Server UI, controllers, authentication
 
-### 🛠️ Technology Stack
+### Technology Stack
 - **.NET 8**: Framework with modern C# features
 - **Blazor Server**: Real-time interactive web UI
 - **Entity Framework Core**: ORM with SQLite/SQL Server
@@ -49,7 +40,7 @@
 - **Docker**: Containerization for deployment
 - **GitHub Actions**: CI/CD pipeline
 
-### 🎯 Quality Standards
+### Quality Standards
 - **Reliability**: Comprehensive testing with graceful error handling
 - **Scalability**: Efficient queries, pagination, caching for growth
 - **Security**: OAuth authentication, input validation, no hardcoded secrets
@@ -58,18 +49,18 @@
 
 ---
 
-## 🧪 Testing Framework
+## Testing Framework
 
 ### Coverage Standards
 
 Setlist Studio maintains **minimum 90% code coverage requirements** for both line and branch coverage at file and project levels.
 
 **Quality Metrics Requirements:**
-- ✅ **Line Coverage**: Each file must achieve at least 90% line coverage
-- ✅ **Branch Coverage**: Each file must achieve at least 90% branch coverage
-- ✅ **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
-- ✅ **CRAP Score**: All methods must maintain passing CRAP scores
-- ✅ **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
+- **Line Coverage**: Each file must achieve at least 90% line coverage
+- **Branch Coverage**: Each file must achieve at least 90% branch coverage
+- **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
+- **CRAP Score**: All methods must maintain passing CRAP scores
+- **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
 
 ### Test Framework Requirements
 
@@ -82,9 +73,9 @@ Setlist Studio maintains **minimum 90% code coverage requirements** for both lin
 
 Setlist Studio follows a strategic test organization approach that separates core functionality tests from specialized coverage and edge case tests.
 
-#### ⚠️ MANDATORY TEST FILE NAMING CONVENTIONS ⚠️
+#### MANDATORY TEST FILE NAMING CONVENTIONS
 
-**🔒 STRICT ENFORCEMENT REQUIRED - NO EXCEPTIONS:**
+**STRICT ENFORCEMENT REQUIRED - NO EXCEPTIONS:**
 
 1. **ALWAYS check if base test file exists FIRST**
 2. **NEVER create custom-named test files** (e.g., "FocusedTests", "CoverageTests", "SpecializedTests")  
@@ -98,23 +89,23 @@ Setlist Studio follows a strategic test organization approach that separates cor
 
 #### Naming Conventions
 
-**🚨 REQUIRED NAMING PATTERN - NEVER DEVIATE:**
+**REQUIRED NAMING PATTERN - NEVER DEVIATE:**
 - **Source File**: `{ClassName}.cs` → **Test File**: `{ClassName}Tests.cs`
 - **Advanced Tests**: `{SourceClass}AdvancedTests.cs`
 - **Razor Component**: `{ComponentName}.razor` → **Test File**: `{ComponentName}Tests.cs`
 
-**✅ CORRECT Examples:**
+**CORRECT Examples:**
 - `MainLayout.razor` → `MainLayoutTests.cs`
 - `SetlistService.cs` → `SetlistServiceTests.cs`
 - `Program.cs` → `ProgramTests.cs`
 
-**❌ PROHIBITED Examples:**
+**PROHIBITED Examples:**
 - `MainLayoutFocusedTests.cs` ← WRONG
 - `MainLayoutCoverageTests.cs` ← WRONG
 - `SetlistServiceUnitTests.cs` ← WRONG
 - `ProgramConfigurationTests.cs` ← WRONG
 
-#### 📋 Test File Creation Workflow - MANDATORY STEPS
+#### Test File Creation Workflow - MANDATORY STEPS
 
 **STEP 1: Always Check Base Test File First**
 ```bash
@@ -125,13 +116,13 @@ Setlist Studio follows a strategic test organization approach that separates cor
 ```
 
 **STEP 2: Determine Appropriate Action**
-- ✅ **If base test exists**: Enhance existing `{ClassName}Tests.cs` with core functionality tests
-- ✅ **If base test missing**: Create `{ClassName}Tests.cs` for core functionality FIRST
-- ✅ **If base test >1,400 lines**: ONLY THEN create `{ClassName}AdvancedTests.cs`
+- **If base test exists**: Enhance existing `{ClassName}Tests.cs` with core functionality tests
+- **If base test missing**: Create `{ClassName}Tests.cs` for core functionality FIRST
+- **If base test >1,400 lines**: ONLY THEN create `{ClassName}AdvancedTests.cs`
 
 #### When to Create Advanced Test Files
 
-**🔒 STRICT CRITERIA - ALL MUST BE MET:**
+**STRICT CRITERIA - ALL MUST BE MET:**
 - **File Size**: Base test files exceed ~1,400 lines
 - **Different Purposes**: Tests target specific coverage gaps rather than core business logic
 - **Specialized Testing**: Error handling, validation boundaries, configuration scenarios
@@ -154,7 +145,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 
 ### Test Organization Best Practices
 
-**🚨 ENFORCEMENT RULES:**
+**ENFORCEMENT RULES:**
 - **Naming Compliance**: NO custom test file names allowed - follow exact patterns only
 - **File Size Limits**: Base test files under 1,500 lines; create advanced tests when exceeded
 - **Single Responsibility**: Each test file focuses on ONE source class only
@@ -164,7 +155,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 - **Consistent Naming**: Use descriptive test method names: `MethodName_Scenario_ExpectedResult`
 - **Documentation**: Include comprehensive XML documentation for advanced test files
 
-### 🛡️ Test File Validation Checklist
+### Test File Validation Checklist
 
 **Before creating ANY test file, verify:**
 - [ ] Checked if `{SourceClass}Tests.cs` exists using `file_search` tool
@@ -174,7 +165,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 - [ ] Tests target single source class/component only
 - [ ] Following test organization hierarchy (base → advanced)
 
-**✅ VALIDATION EXAMPLE:**
+**VALIDATION EXAMPLE:**
 ```bash
 # 1. Check existing: file_search for "MainLayoutTests.cs"
 # 2. If found: Enhance MainLayoutTests.cs with new tests
@@ -184,7 +175,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 
 ---
 
-## 📊 Coverage Standards
+## Coverage Standards
 
 ### Running Coverage Analysis
 
@@ -237,7 +228,7 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ---
 
-## 🔧 Development Workflow
+## Development Workflow
 
 ### Version Control
 - **Git-based workflow**: Feature branches with pull request reviews
@@ -272,7 +263,7 @@ dotnet test --filter "FullyQualifiedName~SetlistServiceTests"
 
 ---
 
-## 🎵 Sample Data Guidelines
+## Sample Data Guidelines
 
 Use realistic musical data in all examples, tests, and documentation:
 
@@ -295,11 +286,11 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
-## 💬 Copilot Prompts
+## Copilot Prompts
 
 ### Testing & Quality Assurance
 
-**🚨 ALWAYS follow these naming conventions - NO EXCEPTIONS:**
+**ALWAYS follow these naming conventions - NO EXCEPTIONS:**
 
 ```
 "Check if SetlistServiceTests.cs exists, then enhance it with comprehensive unit tests for the setlist creation endpoint"
@@ -379,7 +370,7 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 When contributing to Setlist Studio:
 
@@ -408,7 +399,7 @@ When contributing to Setlist Studio:
 
 ---
 
-## 🔒 FINAL ENFORCEMENT REMINDER
+## FINAL ENFORCEMENT REMINDER
 
 **Every time you create or modify tests, you MUST:**
 
@@ -422,4 +413,4 @@ When contributing to Setlist Studio:
 
 ---
 
-**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world. 🎵
+**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world.
