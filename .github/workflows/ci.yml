@@ -64,7 +64,7 @@ jobs:
         # Set test environment to avoid database conflicts
         export ASPNETCORE_ENVIRONMENT=Test
         export DOTNET_ENVIRONMENT=Test
-        
+
         # Run tests with build to avoid file locking issues
         dotnet test SetlistStudio.sln \
           --configuration Release \

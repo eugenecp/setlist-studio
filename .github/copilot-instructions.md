@@ -1,89 +1,184 @@
 # Copilot Instructions for Setlist Studio
 
-## Project Description
+## Quick Reference
 
-**Setlist Studio** is a comprehensive music management application designed to help musicians organize and plan their performances. The app enables users to:
+### Essential Rules
+- **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
+- **Coverage Target**: 90%+ line and branch coverage
+- **Architecture**: Clean Architecture (Core/Infrastructure/Web)
+- **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
 
-- **Manage Artists and Songs**: Add and organize musical artists and their songs with detailed metadata
-- **Build Dynamic Setlists**: Create performance setlists with song order, transitions, BPM, and musical keys
-- **Schedule Performances**: Plan and manage upcoming shows and events
+### CRITICAL: Test File Creation Workflow
+1. **Check existing**: Use `file_search` for `{SourceClass}Tests.cs`
+2. **Enhance first**: Add to base test file before creating new ones
+3. **Strict naming**: Only `Tests.cs` or `AdvancedTests.cs` suffixes
+4. **No custom names**: Never use "FocusedTests", "CoverageTests", etc.
 
-### Target Audience
+---
 
-This application serves two primary audiences:
+## Project Architecture
 
-- **Developers**: Software engineers building, maintaining, and enhancing the Setlist Studio application
-- **Musicians**: Artists, bands, and performers who need a reliable tool to organize their music and plan their shows
+**Setlist Studio** is a music management application for musicians to organize performances and manage their repertoire.
 
-## Tools and Setup
+### Core Features
+- **Song Management**: Artists, songs, metadata (BPM, keys, genres)
+- **Setlist Creation**: Performance planning with song order and transitions
+- **User Authentication**: Secure multi-user access with OAuth providers
 
-Setlist Studio is built using modern .NET technologies and follows industry best practices:
+### Architecture Layers
+- **SetlistStudio.Core**: Domain entities, interfaces, business logic
+- **SetlistStudio.Infrastructure**: Data access, Entity Framework, services
+- **SetlistStudio.Web**: Blazor Server UI, controllers, authentication
 
 ### Technology Stack
-- **.NET 8**: The latest long-term support version of .NET for robust application development
-- **RESTful APIs**: Well-designed endpoints for seamless data interaction
-- **Authentication & Authorization**: Secure user management and access control
-- **Comprehensive Logging**: Detailed application monitoring and debugging capabilities
-- **Database Integration**: Persistent storage for artists, songs, setlists, and performance data
-- **Automated Testing**: Unit, integration, and end-to-end testing suites
+- **.NET 8**: Framework with modern C# features
+- **Blazor Server**: Real-time interactive web UI
+- **Entity Framework Core**: ORM with SQLite/SQL Server
+- **ASP.NET Core Identity**: Authentication with OAuth (Google, Microsoft, Facebook)
+- **MudBlazor**: Material Design component library
+- **xUnit + FluentAssertions + Bunit**: Testing framework
+- **Docker**: Containerization for deployment
+- **GitHub Actions**: CI/CD pipeline
 
-### Development Workflow
-- **GitHub Actions**: Automated CI/CD pipelines for building, testing, and deployment
-- **Version Control**: Git-based workflow with feature branches and pull request reviews
+### Quality Standards
+- **Reliability**: Comprehensive testing with graceful error handling
+- **Scalability**: Efficient queries, pagination, caching for growth
+- **Security**: OAuth authentication, input validation, no hardcoded secrets
+- **Maintainability**: Clean code, clear documentation, consistent patterns
+- **User Experience**: Realistic musical data, smooth interactions
 
-## Key Principles
+---
 
-When working with Setlist Studio, please adhere to these core principles:
+## Testing Framework
 
-### 1. Reliability 🛡️
-Every feature must work consistently and predictably. All functionality should be thoroughly tested and handle edge cases gracefully.
+### Coverage Standards
 
-**Guidelines:**
-- Write comprehensive unit and integration tests for all new features
-- Implement proper error handling and user-friendly error messages
-- Ensure database transactions are atomic and consistent
-- Test boundary conditions (empty setlists, maximum song limits, etc.)
-
-#### Code Coverage Standards
-Setlist Studio maintains a **minimum 90% code coverage requirement for each individual file** to ensure reliability and confidence in our codebase.
+Setlist Studio maintains **minimum 90% code coverage requirements** for both line and branch coverage at file and project levels.
 
 **Quality Metrics Requirements:**
-- ✅ **Code Coverage**: Each individual file must achieve at least 90% line coverage
-- ✅ **CRAP Score**: All methods must maintain acceptable complexity-to-coverage ratios
-- ✅ **Cyclomatic Complexity**: All methods must stay within acceptable complexity thresholds
+- **Line Coverage**: Each file must achieve at least 90% line coverage
+- **Branch Coverage**: Each file must achieve at least 90% branch coverage
+- **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
+- **CRAP Score**: All methods must maintain passing CRAP scores
+- **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
 
-**Individual File Coverage Requirements:**
-- **Each file must achieve at least 90% line coverage**
-- New code must include tests that achieve 90%+ coverage for the modified files
-- Pull requests should not reduce coverage below 90% for any existing file
-- **All new files must achieve 90% coverage before merge**
-- Focus on achieving high individual file coverage, not just overall project coverage
+### Test Framework Requirements
 
-**Testing Framework Requirements:**
 - **xUnit**: Primary testing framework for all unit and integration tests
 - **Moq**: For creating mocks and stubs of dependencies
 - **FluentAssertions**: For readable, expressive test assertions
+- **Bunit**: For Blazor component testing
 
-**Coverage Guidelines:**
-- All new code must include comprehensive tests covering normal cases, error scenarios, and edge cases
-- **Each individual file must maintain at least 90% line coverage**
-- Tests must cover all conditional branches (if/else statements, try/catch blocks, switch cases)
-- Each test should be small, focused, and clearly named describing what it tests
-- Test names should follow the pattern: `MethodName_Scenario_ExpectedResult`
-- Mock external dependencies to ensure tests are isolated and fast
-- Use realistic musical data in test examples (songs, artists, BPMs, keys)
-- **Focus on achieving high individual file coverage, not just overall project coverage**
+### Test File Organization
 
-**Test Organization:**
-- Group related tests in nested classes or separate test files
-- Use descriptive test method names that explain the scenario being tested
-- Include comments for complex test setups or assertions
-- Ensure tests are deterministic and can run in any order
+Setlist Studio follows a strategic test organization approach that separates core functionality tests from specialized coverage and edge case tests.
 
-**Coverage Reporting and Analysis:**
-Setlist Studio uses comprehensive coverage reporting to track and maintain code quality. All coverage reports are generated in the `CoverageReport` directory for easy analysis and review.
+#### MANDATORY TEST FILE NAMING CONVENTIONS
 
-**Running Coverage Analysis:**
+**STRICT ENFORCEMENT REQUIRED - NO EXCEPTIONS:**
+
+1. **ALWAYS check if base test file exists FIRST**
+2. **NEVER create custom-named test files** (e.g., "FocusedTests", "CoverageTests", "SpecializedTests")  
+3. **FOLLOW EXACT naming pattern** - one source class = one test class
+
+#### Test File Structure
+
+- **Base Test Files** (e.g., `SetlistServiceTests.cs`): Core functionality and primary business logic scenarios
+- **Advanced Test Files** (e.g., `SetlistServiceAdvancedTests.cs`): Edge cases, error conditions, validation boundaries
+- **Specialized Test Files** (e.g., `ProgramAdvancedTests.cs`): Environment-specific configurations, startup logic
+
+#### Naming Conventions
+
+**REQUIRED NAMING PATTERN - NEVER DEVIATE:**
+- **Source File**: `{ClassName}.cs` → **Test File**: `{ClassName}Tests.cs`
+- **Advanced Tests**: `{SourceClass}AdvancedTests.cs`
+- **Razor Component**: `{ComponentName}.razor` → **Test File**: `{ComponentName}Tests.cs`
+
+**CORRECT Examples:**
+- `MainLayout.razor` → `MainLayoutTests.cs`
+- `SetlistService.cs` → `SetlistServiceTests.cs`
+- `Program.cs` → `ProgramTests.cs`
+
+**PROHIBITED Examples:**
+- `MainLayoutFocusedTests.cs` ← WRONG
+- `MainLayoutCoverageTests.cs` ← WRONG
+- `SetlistServiceUnitTests.cs` ← WRONG
+- `ProgramConfigurationTests.cs` ← WRONG
+
+#### Test File Creation Workflow - MANDATORY STEPS
+
+**STEP 1: Always Check Base Test File First**
+```bash
+# Use file_search tool in VS Code or:
+# Linux/Mac: find . -name "{ClassName}Tests.cs"  
+# Windows: Get-ChildItem -Recurse -Name "*{ClassName}Tests.cs"
+# VS Code: Use file_search tool with "{ClassName}Tests.cs"
+```
+
+**STEP 2: Determine Appropriate Action**
+- **If base test exists**: Enhance existing `{ClassName}Tests.cs` with core functionality tests
+- **If base test missing**: Create `{ClassName}Tests.cs` for core functionality FIRST
+- **If base test >1,400 lines**: ONLY THEN create `{ClassName}AdvancedTests.cs`
+
+#### When to Create Advanced Test Files
+
+**STRICT CRITERIA - ALL MUST BE MET:**
+- **File Size**: Base test files exceed ~1,400 lines
+- **Different Purposes**: Tests target specific coverage gaps rather than core business logic
+- **Specialized Testing**: Error handling, validation boundaries, configuration scenarios
+- **Coverage Targeting**: Tests specifically to reach 90%+ line and branch coverage
+- **Base Tests Complete**: Core functionality is fully tested in base test file
+
+#### Advanced Test Content Guidelines
+
+- **Validation Boundaries**: Test min/max values, field length limits, required field validation
+- **Edge Cases**: Null inputs, empty strings, special characters, Unicode handling
+- **Error Conditions**: Database failures, network issues, invalid configurations
+- **Authentication Scenarios**: Missing credentials, invalid tokens, authorization failures
+- **Configuration Testing**: Environment-specific settings, database provider selection
+- **Performance Edge Cases**: Large datasets, concurrent operations, resource limits
+- **Edge Cases**: Null inputs, empty strings, special characters, Unicode handling
+- **Error Conditions**: Database failures, network issues, invalid configurations
+- **Authentication Scenarios**: Missing credentials, invalid tokens, authorization failures
+- **Configuration Testing**: Environment-specific settings, database provider selection
+- **Performance Edge Cases**: Large datasets, concurrent operations, resource limits
+
+### Test Organization Best Practices
+
+**ENFORCEMENT RULES:**
+- **Naming Compliance**: NO custom test file names allowed - follow exact patterns only
+- **File Size Limits**: Base test files under 1,500 lines; create advanced tests when exceeded
+- **Single Responsibility**: Each test file focuses on ONE source class only
+- **Check Before Create**: Always verify base test file exists before creating any test
+- **Maintainability**: Keep individual test files under 1,500 lines for easy navigation
+- **Clear Separation**: Base tests cover happy paths; advanced tests cover edge cases
+- **Consistent Naming**: Use descriptive test method names: `MethodName_Scenario_ExpectedResult`
+- **Documentation**: Include comprehensive XML documentation for advanced test files
+
+### Test File Validation Checklist
+
+**Before creating ANY test file, verify:**
+- [ ] Checked if `{SourceClass}Tests.cs` exists using `file_search` tool
+- [ ] Using exact naming pattern: `{SourceClass}Tests.cs` or `{SourceClass}AdvancedTests.cs`
+- [ ] NOT using custom names like "FocusedTests", "CoverageTests", "SpecializedTests"
+- [ ] Base test file exists and is >1,400 lines (if creating advanced tests)
+- [ ] Tests target single source class/component only
+- [ ] Following test organization hierarchy (base → advanced)
+
+**VALIDATION EXAMPLE:**
+```bash
+# 1. Check existing: file_search for "MainLayoutTests.cs"
+# 2. If found: Enhance MainLayoutTests.cs with new tests
+# 3. If not found: Create MainLayoutTests.cs (not MainLayoutFocusedTests.cs)
+# 4. Advanced tests: Only if MainLayoutTests.cs >1,400 lines → MainLayoutAdvancedTests.cs
+```
+
+---
+
+## Coverage Standards
+
+### Running Coverage Analysis
+
 ```bash
 # Run tests with coverage collection
 dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults/[TestRun]
@@ -95,38 +190,8 @@ reportgenerator -reports:"./TestResults/[TestRun]/*/coverage.cobertura.xml" -tar
 # Navigate to ./CoverageReport/[TestRun]/index.html
 ```
 
-**Coverage Report Structure:**
-- **CoverageReport/**: Root directory for all coverage analysis reports
-  - **[TestRun]/**: Timestamped or named subdirectories for different test runs
-    - **index.html**: Main coverage report with summary and detailed breakdowns
-    - **[Assembly]_[Class].html**: Detailed line-by-line coverage for specific classes
-    - **report.css**: Styling for coverage reports
+### Coverage Analysis Commands
 
-**Coverage Analysis Guidelines:**
-- Generate coverage reports for all major code changes and pull requests
-- Review line-by-line coverage for newly added classes and methods
-- **Identify and address any files with less than 90% individual coverage**
-- Use coverage reports to find untested edge cases and error handling paths
-- **Focus on achieving high individual file coverage, not just overall project coverage**
-- Document any intentionally excluded code with appropriate justification
-- **Prioritize files below 90% coverage for immediate testing improvements**
-
-**Coverage Report Interpretation:**
-- **Green bars**: Well-covered code (>90% coverage)
-- **Yellow bars**: Moderately covered code (70-90% coverage) - needs attention
-- **Red bars**: Poorly covered code (<70% coverage) - requires immediate improvement
-- **Risk Hotspots**: High complexity code with low coverage - prioritize for testing
-- **Branch Coverage**: Measures all conditional paths (if/else, switch, try/catch)
-
-**Quality Metrics Analysis:**
-- **CRAP Score**: Change Risk Anti-Patterns score combining complexity and coverage
-  - Target: Keep CRAP score low by maintaining high test coverage on complex methods
-  - Action: Break down methods with high CRAP scores or add comprehensive tests
-- **Cyclomatic Complexity**: Measures code complexity through decision points
-  - Target: Break down methods with high complexity or ensure comprehensive testing
-  - Action: Refactor complex methods into smaller, more testable units
-
-**Example Coverage Analysis Commands:**
 ```bash
 # Quick coverage check for current changes
 dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults/QuickCheck
@@ -139,123 +204,68 @@ reportgenerator -reports:"./TestResults/FullAnalysis/*/coverage.cobertura.xml" -
 reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./CoverageReport/Comparison" -reporttypes:Html -historydirectory:"./CoverageReport/History"
 ```
 
-### 2. Scalability 📈
-The application must handle growth in songs, setlists, users, and performance data as the user base expands.
+### Coverage Improvement Methodology
 
-**Guidelines:**
-- Design efficient database queries and indexing strategies
-- Implement pagination for large data sets
-- Use caching where appropriate to reduce database load
-- Structure code to support horizontal scaling when needed
+1. **Identify Gaps**: Use coverage reports to find files below 90% line/branch coverage
+2. **Analyze Uncovered Code**: Determine if gaps are in core logic (add to base tests) or edge cases (create advanced tests)
+3. **Strategic Testing**: Create targeted advanced tests for authentication, validation, error handling
+4. **Validate Impact**: Run coverage analysis after adding advanced tests to measure improvement
+5. **Maintain Quality**: Ensure all new tests follow naming conventions and documentation standards
 
-### 3. Security 🔒
-Protect user data and maintain system integrity through robust security practices.
+### Coverage Report Structure
 
-**Guidelines:**
-- Validate all user inputs on both client and server sides
-- Never store secrets, API keys, or sensitive data in source code
-- Use environment variables and secure configuration management
-- Implement proper authentication and authorization checks
-- Sanitize data to prevent injection attacks
+- **CoverageReport/**: Root directory for all coverage analysis reports
+  - **[TestRun]/**: Timestamped or named subdirectories for different test runs
+    - **index.html**: Main coverage report with summary and detailed breakdowns
+    - **[Assembly]_[Class].html**: Detailed line-by-line coverage for specific classes
 
-### 4. Maintainability 🔧
-Keep the codebase organized, well-documented, and easy to understand for current and future developers.
+### Quality Metrics Analysis
 
-**Guidelines:**
-- Follow consistent naming conventions and coding standards
-- Write clear, self-documenting code with meaningful variable and method names
-- Maintain up-to-date documentation for APIs and complex business logic
-- Organize code into logical modules and maintain separation of concerns
-- Keep dependencies up to date and minimize technical debt
+- **CRAP Score**: Change Risk Anti-Patterns score combining complexity and coverage
+  - Target: Keep CRAP score low by maintaining high test coverage on complex methods
+- **Cyclomatic Complexity**: Measures code complexity through decision points
+  - Target: Break down methods with high complexity or ensure comprehensive testing
 
-### 5. Delight ✨
-Create an enjoyable user experience with realistic, relatable content and smooth interactions.
+---
 
-**Guidelines:**
-- Use realistic music examples in documentation, tests, and sample data
-- Include diverse genres, artists, and musical styles in examples
-- Provide helpful default values (e.g., common BPM ranges, popular keys)
-- Create intuitive user interfaces and clear user feedback
-- Use authentic musical terminology and metadata
+## Development Workflow
 
-## Example Prompts for GitHub Copilot
+### Version Control
+- **Git-based workflow**: Feature branches with pull request reviews
+- **Branch naming**: `feature/[issue-number]-[short-description]`
+- **Commit messages**: Clear, descriptive messages following conventional commits
 
-Use these example prompts to get the most out of GitHub Copilot while maintaining our key principles:
+### CI/CD Pipeline
+- **GitHub Actions**: Automated building, testing, and deployment
+- **Quality Gates**: All tests must pass with 90%+ coverage before merge
+- **Code Review**: All changes require peer review and approval
 
-### Reliability Examples
-```
-"Write comprehensive unit tests for the setlist creation endpoint, including validation edge cases"
+### Test Execution Strategy
+- **Unit Tests**: Fast, isolated tests for individual components
+- **Integration Tests**: Database and service integration scenarios
+- **Component Tests**: Blazor component rendering and interaction tests
+- **Advanced Tests**: Edge cases, error conditions, and coverage gaps
 
-"Create integration tests for the artist and song relationship management"
+### Common Commands
+```bash
+# Run all tests
+dotnet test
 
-"Add error handling for database connection failures in the performance scheduling service"
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
 
-"Write tests that verify setlist ordering is maintained correctly when songs are added or removed"
+# Run specific test class
+dotnet test --filter "FullyQualifiedName~SetlistServiceTests"
 
-"Analyze current code coverage and identify classes/methods missing tests to reach 90% coverage"
-
-"Write xUnit tests using Moq and FluentAssertions for the SongService covering normal cases, null inputs, and exception scenarios"
-
-"Create test cases for all branches in the SetlistService AddSong method including duplicate song handling"
-
-"Generate unit tests for entity validation covering valid data, invalid BPM ranges, and missing required fields"
-
-"Write tests for all conditional logic in the authentication service including successful login, failed login, and account lockout scenarios"
-
-"Generate a coverage report in CoverageReport/NewFeature and analyze which classes need additional testing"
-
-"Run coverage analysis and create tests for all uncovered branches in the Program.cs startup configuration"
-
-"Review the coverage report in CoverageReport/Latest and identify critical paths with less than 90% coverage"
+# Run tests and generate coverage report
+./scripts/run-tests-clean.ps1
 ```
 
-### Scalability Examples
-```
-"Optimize the query for fetching large setlists with song metadata using Entity Framework"
-
-"Implement pagination for the artists endpoint to handle thousands of artists efficiently"
-
-"Redesign the setlist storage to support better performance with 10,000+ songs per user"
-
-"Add caching layer for frequently accessed song and artist data"
-```
-
-### Security Examples
-```
-"Add input validation for BPM values to ensure they're between 40 and 250"
-
-"Implement authorization checks to ensure users can only access their own setlists"
-
-"Add data sanitization for artist names and song titles to prevent XSS attacks"
-
-"Create validation rules for musical keys to only accept valid key signatures (C, C#, Db, etc.)"
-```
-
-### Maintainability Examples
-```
-"Refactor the Song and Setlist classes with clearer property names and comprehensive XML documentation"
-
-"Organize the API controllers into logical folders and add consistent routing patterns"
-
-"Create a comprehensive README with setup instructions and API documentation"
-
-"Add inline comments explaining the complex setlist transition logic"
-```
-
-### Delight Examples
-```
-"Generate Swagger API examples using realistic song data like 'Bohemian Rhapsody' by Queen (BPM: 72, Key: Bb)"
-
-"Create seed data with a diverse mix of musical genres including rock, jazz, classical, and electronic music"
-
-"Add sample setlists for different types of performances (wedding, concert, practice session)"
-
-"Design user-friendly error messages that use musical terminology musicians will understand"
-```
+---
 
 ## Sample Data Guidelines
 
-When creating examples, tests, or documentation, use realistic musical data:
+Use realistic musical data in all examples, tests, and documentation:
 
 ### Song Examples
 - **Classic Rock**: "Sweet Child O' Mine" by Guns N' Roses (BPM: 125, Key: D)
@@ -276,14 +286,131 @@ When creating examples, tests, or documentation, use realistic musical data:
 
 ---
 
-## Getting Started
+## Copilot Prompts
+
+### Testing & Quality Assurance
+
+**ALWAYS follow these naming conventions - NO EXCEPTIONS:**
+
+```
+"Check if SetlistServiceTests.cs exists, then enhance it with comprehensive unit tests for the setlist creation endpoint"
+
+"First verify SongServiceTests.cs exists, then create SongServiceAdvancedTests.cs ONLY IF base file exceeds 1,400 lines"
+
+"Check if ProgramTests.cs exists first, then create ProgramAdvancedTests.cs for authentication configuration scenarios"
+
+"Enhance existing SetlistServiceTests.cs with position adjustment tests, create SetlistServiceAdvancedTests.cs only if needed"
+
+"First check if MainLayoutTests.cs exists, then enhance it with core functionality tests before considering advanced tests"
+
+"Verify LoginTests.cs exists, then add authentication edge cases to the base file or create LoginAdvancedTests.cs if base file is too large"
+
+"Always follow {SourceClass}Tests.cs naming pattern - NEVER create custom-named test files like 'FocusedTests' or 'CoverageTests'"
+
+"Before creating any test file, use file_search to check if base test file exists, then enhance existing file or create properly named new file"
+
+"Write validation boundary tests covering minimum/maximum values, field length limits, and required field validation"
+
+"Generate authentication scenario tests for missing credentials, invalid tokens, and authorization failures"
+
+"Create performance edge case tests for large datasets, concurrent operations, and resource exhaustion scenarios"
+
+"Analyze current code coverage and identify classes/methods missing tests to reach 90% line and branch coverage"
+
+"Generate coverage report in CoverageReport/NewFeature and analyze which classes need additional testing"
+```
+
+### Architecture & Scalability
+
+```
+"Optimize the query for fetching large setlists with song metadata using Entity Framework"
+
+"Implement pagination for the artists endpoint to handle thousands of artists efficiently"
+
+"Add caching layer for frequently accessed song and artist data"
+
+"Redesign the setlist storage to support better performance with 10,000+ songs per user"
+```
+
+### Security & Validation
+
+```
+"Add input validation for BPM values to ensure they're between 40 and 250"
+
+"Implement authorization checks to ensure users can only access their own setlists"
+
+"Create validation rules for musical keys to only accept valid key signatures (C, C#, Db, etc.)"
+
+"Add data sanitization for artist names and song titles to prevent XSS attacks"
+```
+
+### User Experience & Content
+
+```
+"Generate Swagger API examples using realistic song data like 'Bohemian Rhapsody' by Queen (BPM: 72, Key: Bb)"
+
+"Create seed data with a diverse mix of musical genres including rock, jazz, classical, and electronic music"
+
+"Add sample setlists for different types of performances (wedding, concert, practice session)"
+
+"Design user-friendly error messages that use musical terminology musicians will understand"
+```
+
+### Code Organization
+
+```
+"Refactor the Song and Setlist classes with clearer property names and comprehensive XML documentation"
+
+"Organize the API controllers into logical folders and add consistent routing patterns"
+
+"Create a comprehensive README with setup instructions and API documentation"
+
+"Add inline comments explaining the complex setlist transition logic"
+```
+
+---
+
+## Quick Start Guide
 
 When contributing to Setlist Studio:
 
 1. **Read the codebase**: Familiarize yourself with existing patterns and conventions
 2. **Follow the principles**: Keep reliability, scalability, security, maintainability, and delight in mind
-3. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-4. **Test thoroughly**: Ensure your code works correctly and handles edge cases
-5. **Document your work**: Add clear comments and update documentation as needed
+3. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
+4. **Use realistic examples**: When creating tests or documentation, use authentic musical data
+5. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
+6. **Organize tests strategically**: 
+   - Add core functionality tests to base test files (e.g., `SetlistServiceTests.cs`)
+   - Create advanced test files for edge cases, error handling, and coverage gaps when base files exceed ~1,400 lines
+   - Use the `{SourceClass}AdvancedTests.cs` naming pattern for specialized testing scenarios
+7. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
+8. **Document your work**: Add clear comments and update documentation as needed
 
-Remember: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world.
+### Quick Start Checklist
+
+- [ ] Clone repository and set up development environment
+- [ ] Run `dotnet test` to ensure all tests pass
+- [ ] Generate coverage report to understand current coverage status
+- [ ] Review existing code patterns and test organization
+- [ ] Create feature branch following naming conventions
+- [ ] Write tests first (TDD approach recommended)
+- [ ] Ensure 90%+ line and branch coverage for new code
+- [ ] Submit pull request with clear description and test evidence
+
+---
+
+## FINAL ENFORCEMENT REMINDER
+
+**Every time you create or modify tests, you MUST:**
+
+1. **CHECK FIRST**: Use `file_search` to verify if `{SourceClass}Tests.cs` exists
+2. **ENHANCE EXISTING**: Add to base test file before creating new files
+3. **FOLLOW NAMING**: Only use `{SourceClass}Tests.cs` or `{SourceClass}AdvancedTests.cs`
+4. **NO CUSTOM NAMES**: Never create "FocusedTests", "CoverageTests", "SpecializedTests", etc.
+5. **VALIDATE SIZE**: Create advanced tests only when base file exceeds 1,400 lines
+
+**This is not optional - it's mandatory for all test file operations.**
+
+---
+
+**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world.

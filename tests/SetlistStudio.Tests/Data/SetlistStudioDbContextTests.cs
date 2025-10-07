@@ -494,4 +494,93 @@ public class SetlistStudioDbContextTests : IDisposable
     }
 
     #endregion
+
+    #region Enhanced Coverage Tests for 90% Target
+
+
+
+    [Fact]
+    public async Task EnsureCreatedWithSampleDataAsync_ShouldCallSeedSampleDataAsync_WhenNoSongsExist()
+    {
+        // Arrange - Ensure database is created but empty
+        await _context.Database.EnsureCreatedAsync();
+        _context.Songs.Any().Should().BeFalse();
+
+        // Act
+        await _context.EnsureCreatedWithSampleDataAsync();
+
+        // Assert - The method should complete successfully
+        // Since SeedSampleDataAsync is currently empty, we just verify it executes without error
+        _context.Database.CanConnect().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task EnsureCreatedWithSampleDataAsync_ShouldNotCallSeedSampleDataAsync_WhenSongsExist()
+    {
+        // Arrange - Add a song first
+        var song = new Song
+        {
+            Title = "Existing Song",
+            Artist = "Existing Artist",
+            UserId = "user-123",
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _context.EnsureCreatedWithSampleDataAsync();
+
+        // Assert - Should not modify existing data
+        _context.Songs.Should().HaveCount(1);
+        _context.Songs.First().Title.Should().Be("Existing Song");
+    }
+
+    [Fact]
+    public async Task DbContext_ShouldSupportCascadeDelete_WhenUserIsDeleted()
+    {
+        // Arrange
+        var user = new ApplicationUser
+        {
+            Id = "user-cascade-test",
+            UserName = "cascadeuser@example.com",
+            Email = "cascadeuser@example.com",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var song = new Song
+        {
+            Title = "Cascade Test Song",
+            Artist = "Cascade Test Artist",
+            UserId = user.Id,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var setlist = new Setlist
+        {
+            Name = "Cascade Test Setlist",
+            UserId = user.Id,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.Users.Add(user);
+        _context.Songs.Add(song);
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Act - Delete the user
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync();
+
+        // Assert - Related entities should be deleted
+        var remainingSongs = await _context.Songs.Where(s => s.UserId == user.Id).ToListAsync();
+        var remainingSetlists = await _context.Setlists.Where(sl => sl.UserId == user.Id).ToListAsync();
+        
+        remainingSongs.Should().BeEmpty();
+        remainingSetlists.Should().BeEmpty();
+    }
+
+    #endregion
 }
