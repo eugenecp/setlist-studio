@@ -456,7 +456,16 @@ jobs:
         fi
         
         # Analyze CodeQL static analysis results
-        echo "| CodeQL | ✅ Complete | Static analysis completed |" >> security-summary.md
+        codeql_status="✅ Complete | Static analysis completed"
+        for sarif_file in ./results/*.sarif; do
+          if [ -f "$sarif_file" ]; then
+            if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" > /dev/null; then
+              codeql_status="⚠️ Issues | Vulnerabilities found"
+              break
+            fi
+          fi
+        done
+        echo "| CodeQL | $codeql_status |" >> security-summary.md
         
         # Analyze Semgrep SAST results
         if grep -q "CI scan completed successfully" semgrep.log 2>/dev/null; then
