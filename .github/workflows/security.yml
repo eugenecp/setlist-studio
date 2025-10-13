@@ -62,7 +62,7 @@ jobs:
         # --only-verified: Only report secrets that can be verified as valid
         # --json: Output in JSON format for programmatic processing
         # --no-update: Don't update TruffleHog database (faster execution)
-      continue-on-error: true # Don't fail the entire workflow if secrets are found
+      continue-on-error: false # Fail workflow if secrets are found
     
     # Step 4: Initialize GitHub's CodeQL static analysis security scanning
     # CodeQL analyzes code for security vulnerabilities and coding errors
@@ -97,22 +97,9 @@ jobs:
     - name: 🔐 Advanced SAST with Semgrep (Community)
       uses: semgrep/semgrep-action@v1
       with:
-        config: >-
-          p/security-audit              # General security vulnerability patterns
-          p/secrets                     # Secret detection rules
-          p/csharp                      # C#-specific security patterns
-          p/dockerfile                  # Docker security best practices
-          p/owasp-top-ten              # OWASP Top 10 vulnerability patterns
-          p/kubernetes                  # Kubernetes configuration security
-          p/github-actions             # GitHub Actions workflow security
-          p/command-injection           # Command injection vulnerabilities
-          p/sql-injection               # SQL injection patterns
-          p/xss                         # Cross-site scripting detection
-          p/insecure-transport          # Insecure transport detection
-        generateSarif: "1"             # Generate SARIF format for GitHub integration
-        auditOn: push                  # Trigger audit on code push
+        config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/kubernetes p/github-actions p/command-injection p/sql-injection p/xss p/insecure-transport
         publishToken: ""               # Use community version (no token)
-      continue-on-error: true          # Don't fail workflow on security findings
+  continue-on-error: true          # Continue on error for SAST findings (informational)
     
     # Step 8: Build Docker image for container security scanning
     # Creates a Docker image to analyze for vulnerabilities and misconfigurations
@@ -159,7 +146,7 @@ jobs:
           --failOnCVSS 4                           # Fail on CVSS score >= 4.0 (Medium+)
           --suppression dependency-check-suppressions.xml  # Suppression file for false positives
           --out reports/dependency-check/          # Output directory for reports
-      continue-on-error: true                      # Don't fail workflow on vulnerabilities found
+  continue-on-error: false                      # Fail workflow on high/critical vulnerabilities
     
     # Step 12: License compliance verification for legal and security requirements
     # Analyzes project dependencies for license compatibility and compliance issues
@@ -236,7 +223,7 @@ jobs:
           trivy-docker-results.sarif           # Docker security scan results
           trivy-fs-results.sarif               # Filesystem security scan results
           semgrep.sarif                        # Semgrep SAST analysis results
-      continue-on-error: true                  # Don't fail workflow on upload issues
+  continue-on-error: true                  # Continue on error for artifact upload issues
     
     # Step 15: Generate comprehensive security report combining all scan results
     # Creates a unified security report aggregating findings from all security tools
@@ -340,17 +327,19 @@ jobs:
     
     # Step 18: Security alert and notification system
     # Sends notifications about security findings (can be extended with Slack, email, etc.)
+    # Uses total_issues variable calculated in this job context
     - name: 🚨 Security Alert on Issues
       if: always()                         # Run regardless of previous step results
       run: |
         # This would integrate with notification systems in production
-        echo "Security scan completed"
+        echo "Security scan completed with comprehensive analysis"
         if [ $total_issues -gt 0 ]; then
           echo "⚠️ Security issues found: $total_issues"
+          echo "📋 Check the comprehensive security report for details"
           # In a real setup, you might send notifications to Slack, email, etc.
-          # Example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Security issues found"}' $SLACK_WEBHOOK
+          # Example: curl -X POST -H 'Content-type: application/json' --data '{"text":"🚨 Security Alert: '"$total_issues"' issues found in security scan"}' $SLACK_WEBHOOK
         else
-          echo "✅ No security issues found"
+          echo "✅ No security issues found - all scans passed"
         fi
 
   # JOB 2: Security Baseline Compliance Check

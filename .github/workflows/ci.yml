@@ -295,7 +295,7 @@ jobs:
         base: main                      # Compare against main branch
         head: HEAD                      # Scan up to current commit
         extra_args: --debug --only-verified # Verbose output, verified secrets only
-      continue-on-error: true           # Don't fail build, but report security issues
+      continue-on-error: false           # Fail build if secrets are found
     
     # Step 4: .NET-specific vulnerability scanning for NuGet packages
     # Analyzes dependencies for known security vulnerabilities
@@ -359,18 +359,9 @@ jobs:
     - name: 🔐 Semgrep SAST Scan (Community)
       uses: semgrep/semgrep-action@v1
       with:
-        config: >-
-          p/security-audit              # General security vulnerability patterns
-          p/secrets                     # Secret detection rules
-          p/csharp                      # C#-specific security patterns
-          p/dockerfile                  # Docker security best practices
-          p/owasp-top-ten              # OWASP Top 10 vulnerability patterns
-          p/command-injection           # Command injection vulnerabilities
-          p/sql-injection               # SQL injection patterns
-          p/xss                         # Cross-site scripting detection
-        generateSarif: "1"             # Generate SARIF format for GitHub integration
+        config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
         publishToken: ""               # Use community version (no token)
-      continue-on-error: true          # Don't fail workflow on security findings
+      continue-on-error: true          # Continue on error for SAST findings (informational)
     
     # Step 9: Filesystem security scanning with Trivy
     # Analyzes project files and dependencies for vulnerabilities
@@ -382,7 +373,7 @@ jobs:
         format: 'sarif'                   # SARIF format for GitHub integration
         output: 'trivy-results.sarif'     # Output file name
         severity: 'CRITICAL,HIGH,MEDIUM'  # Scan for these severity levels
-      continue-on-error: true             # Don't fail workflow on vulnerabilities
+      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
     
     # Step 10: Upload Trivy scan results to GitHub Security tab
     # Integrates container security findings with GitHub's security features
@@ -391,7 +382,7 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-results.sarif' # Trivy scan results file
-      continue-on-error: true             # Don't fail workflow on vulnerabilities
+      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
     
     # Step 10.5: Clean build artifacts before dependency scanning
     # Removes build outputs to avoid scanning temporary files
@@ -423,7 +414,7 @@ jobs:
           --scan "**/*.csproj"           # Focus on project files
           --scan "**/*.sln"              # Include solution files
           --out reports/                 # Output directory for reports
-      continue-on-error: true            # Don't fail workflow on vulnerabilities found
+      continue-on-error: false            # Fail workflow on vulnerabilities found
     
     # Step 12: Generate comprehensive security scan summary
     # Creates unified security report combining all scan results
