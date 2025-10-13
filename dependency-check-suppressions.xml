@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!-- 
+        Dependency Check Suppressions for Setlist Studio
+        
+        This file contains suppressions for false positive vulnerabilities
+        identified by OWASP Dependency Check.
+        
+        Only add suppressions for confirmed false positives after careful review.
+        Each suppression should include:
+        - Reason for suppression
+        - Review date  
+        - Reviewer name
+    -->
+    
+    <!-- Example suppression - remove if not needed -->
+    <!--
+    <suppress>
+        <notes><![CDATA[
+            Suppression for false positive on test dependency
+            Reviewed: 2024-10-13
+            Reviewer: Security Team
+            Reason: This vulnerability affects a test-only dependency and does not impact production
+        ]]></notes>
+        <packageUrl regex="true">^pkg:nuget/.*Test.*@.*$</packageUrl>
+        <cve>CVE-XXXX-XXXX</cve>
+    </suppress>
+    -->
+    
+    <!-- 
+        Guidelines for adding suppressions:
+        
+        1. Only suppress confirmed false positives
+        2. Always include detailed notes with:
+           - Review date
+           - Reviewer name  
+           - Specific reason for suppression
+        3. Use specific CVE IDs rather than broad suppressions
+        4. Regularly review and remove outdated suppressions
+        5. Consider alternative approaches (dependency updates) before suppressing
+    -->
+    
+</suppressions>

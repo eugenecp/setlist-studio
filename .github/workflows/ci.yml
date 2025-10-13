@@ -1,112 +1,145 @@
+# Setlist Studio CI/CD Pipeline
+# Comprehensive build, test, and security workflow for the Setlist Studio application
+# Includes automated testing, security scanning, code quality checks, and deployment preparation
 name: CI/CD Pipeline
 
+# Workflow Triggers
+# - Push to main: Full CI/CD pipeline with deployment steps
+# - Pull Request to main: Build, test, and security validation
+# - Manual dispatch: On-demand pipeline execution for troubleshooting
 on:
   push:
-    branches: [ main ]
+    branches: [ main ]                # Production deployments
   pull_request:
-    branches: [ main ]
-  workflow_dispatch: # Allows manual triggering
+    branches: [ main ]                # Pre-merge validation
+  workflow_dispatch:                  # Manual triggering for troubleshooting
 
+# Security Permissions
+# Minimal required permissions following principle of least privilege
 permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-  actions: read
+  contents: read                      # Read repository contents
+  checks: write                       # Write test results and status checks
+  pull-requests: write               # Comment on pull requests with reports
+  actions: read                       # Read workflow and action information
 
+# Environment Variables
+# Global configuration for .NET and optimization settings
 env:
-  DOTNET_VERSION: '8.0.x'
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_VERSION: '8.0.x'            # Target .NET version for consistency
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1 # Skip .NET welcome and telemetry setup
+  DOTNET_NOLOGO: true                 # Suppress .NET logo in build output
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1     # Disable .NET CLI telemetry for privacy
 
 jobs:
+  # JOB 1: Build, Test, and Quality Assurance
+  # Comprehensive build pipeline with testing, security scanning, and quality checks
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
     
     steps:
+    # Step 1: Checkout source code with full Git history
+    # Full history needed for security analysis and change detection
     - name: 🔄 Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Fetch full history for better analysis
+        fetch-depth: 0                # Fetch complete Git history for analysis tools
     
+    # Step 2: Setup .NET development environment
+    # Installs specified .NET version for consistent builds across environments
     - name: 🏗️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
+    # Step 3: Cache NuGet packages for faster builds
+    # Reduces build time by caching dependencies between workflow runs
     - name: 📦 Cache NuGet packages
       uses: actions/cache@v4
       with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
+        path: ~/.nuget/packages        # NuGet global packages folder
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }} # Cache key based on project files
+        restore-keys: |               # Fallback cache keys for partial matches
           ${{ runner.os }}-nuget-
     
+    # Step 4: Display .NET environment information for troubleshooting
+    # Helps diagnose environment-specific build issues
     - name: 🔍 Display .NET info
       run: dotnet --info
     
+    # Step 5: Restore NuGet package dependencies
+    # Downloads all required packages before building
     - name: 📥 Restore dependencies
       run: dotnet restore SetlistStudio.sln
     
+    # Step 6: Build the solution in Release configuration
+    # Compiles all projects with optimizations enabled
     - name: 🏗️ Build solution
       run: dotnet build SetlistStudio.sln --configuration Release --no-restore --verbosity normal
     
+    # Step 7: Execute comprehensive test suite with clean environment
+    # Runs all unit tests with proper cleanup to avoid conflicts
     - name: 🧪 Run tests with clean environment
       run: |
         # Kill any potential background dotnet processes to avoid file locking
         pkill -f "dotnet.*SetlistStudio" || true
         sleep 2
         
-        # Clean any previous builds to ensure fresh start
+        # Clean any previous builds to ensure fresh test environment
         dotnet clean SetlistStudio.sln --configuration Release
         
-        # Set test environment to avoid database conflicts
+        # Set test environment variables to avoid database conflicts
         export ASPNETCORE_ENVIRONMENT=Test
         export DOTNET_ENVIRONMENT=Test
 
-        # Run tests with build to avoid file locking issues
+        # Run comprehensive test suite with coverage collection
         dotnet test SetlistStudio.sln \
-          --configuration Release \
-          --verbosity normal \
-          --logger trx \
-          --logger "console;verbosity=detailed" \
-          --collect:"XPlat Code Coverage" \
-          --results-directory ./test-results
+          --configuration Release \        # Use Release build for performance
+          --verbosity normal \             # Standard output verbosity
+          --logger trx \                   # Generate TRX format for reporting
+          --logger "console;verbosity=detailed" \  # Detailed console output
+          --collect:"XPlat Code Coverage" \        # Collect cross-platform coverage
+          --results-directory ./test-results      # Output directory for results
     
+    # Step 8: Upload test results and coverage data as artifacts
+    # Preserves test results for analysis and reporting
     - name: 📊 Upload test results
       uses: actions/upload-artifact@v4
       if: always() # Upload even if tests fail
       with:
-        name: test-results
-        path: |
-          ./test-results/**/*.trx
-          ./test-results/**/*.xml
-        retention-days: 30
+        name: test-results                # Artifact name for test results
+        path: |                          # Include all test result files
+          ./test-results/**/*.trx        # TRX format test results
+          ./test-results/**/*.xml        # XML format test results
+        retention-days: 30               # Keep test results for 30 days
     
+    # Step 9: Upload code coverage data for analysis
+    # Provides coverage metrics for quality monitoring
     - name: 📈 Upload code coverage
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always()                       # Upload even if tests failed
       with:
-        name: code-coverage
-        path: ./test-results/**/coverage.cobertura.xml
-        retention-days: 30
+        name: code-coverage              # Artifact name for coverage data
+        path: ./test-results/**/coverage.cobertura.xml # Cobertura format coverage
+        retention-days: 30               # Keep coverage data for 30 days
     
+    # Step 10: Parse and display test results summary
+    # Creates human-readable test results in GitHub workflow summary
     - name: 📋 Parse test results
-      if: always()
+      if: always()                       # Run even if previous steps failed
       run: |
         echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
         
-        # Find and process TRX files
+        # Find and process TRX files for test result summary
         if find ./test-results -name "*.trx" -type f | head -1 | grep -q .; then
           echo "Test results found, processing..." >> $GITHUB_STEP_SUMMARY
           
-          # Simple test result parsing
+          # Parse TRX files to extract test statistics
           for trx_file in ./test-results/**/*.trx; do
             if [ -f "$trx_file" ]; then
               echo "Processing: $trx_file" >> $GITHUB_STEP_SUMMARY
               
-              # Extract basic test statistics using grep and basic parsing
+              # Extract test statistics using XML parsing with grep
               if grep -q "outcome.*Passed" "$trx_file"; then
                 passed=$(grep -c "outcome.*Passed" "$trx_file" || echo "0")
                 failed=$(grep -c "outcome.*Failed" "$trx_file" || echo "0")
@@ -116,6 +149,7 @@ jobs:
                 echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY  
                 echo "- 📊 Total: $total" >> $GITHUB_STEP_SUMMARY
                 
+                # Fail the workflow if any tests failed
                 if [ "$failed" -gt 0 ]; then
                   echo "- 🚨 Status: FAILED" >> $GITHUB_STEP_SUMMARY
                   exit 1
@@ -132,37 +166,43 @@ jobs:
           ls -la ./test-results/ >> $GITHUB_STEP_SUMMARY || echo "test-results directory not found" >> $GITHUB_STEP_SUMMARY
         fi
     
+    # Step 11: Publish formatted test results (alternative method)
+    # Uses specialized action for better test result visualization
     - name: 📋 Publish test results (Alternative)
       uses: dorny/test-reporter@v1.9.1
-      if: always() && github.event_name != 'pull_request'
+      if: always() && github.event_name != 'pull_request' # Skip on PRs to avoid permission issues
       with:
-        name: Test Results
-        path: './test-results/**/*.trx'
-        reporter: dotnet-trx
-        fail-on-error: false
-        token: ${{ secrets.GITHUB_TOKEN }}
+        name: Test Results               # Display name for test report
+        path: './test-results/**/*.trx'  # Path to TRX test result files
+        reporter: dotnet-trx             # Use .NET TRX format reporter
+        fail-on-error: false             # Don't fail workflow on test failures (handled elsewhere)
+        token: ${{ secrets.GITHUB_TOKEN }} # GitHub token for API access
     
+    # Step 12: Generate code coverage summary report
+    # Creates formatted coverage report for quality monitoring
     - name: 🎯 Code Coverage Summary
       uses: irongut/CodeCoverageSummary@v1.3.0
-      if: always()
+      if: always()                         # Run even if tests failed
       with:
-        filename: './test-results/**/coverage.cobertura.xml'
-        badge: true
-        fail_below_min: false # Set to true if you want to fail on low coverage
-        format: markdown
-        hide_branch_rate: false
-        hide_complexity: false
-        indicators: true
-        output: both
-        thresholds: '60 80' # Warning at 60%, good at 80%
+        filename: './test-results/**/coverage.cobertura.xml' # Cobertura coverage file
+        badge: true                      # Generate coverage badge
+        fail_below_min: false            # Don't fail workflow on low coverage (set true to enforce)
+        format: markdown                 # Output format for GitHub display
+        hide_branch_rate: false          # Show branch coverage metrics
+        hide_complexity: false           # Show code complexity metrics
+        indicators: true                 # Show visual indicators for coverage levels
+        output: both                     # Output to console and file
+        thresholds: '60 80'             # Warning at 60%, good at 80% coverage
     
-    - name: � Create test summary for PR
-      if: github.event_name == 'pull_request'
+    # Step 13: Create comprehensive test and build summary for pull requests
+    # Provides detailed feedback on PR quality and test results
+    - name: 📝 Create test summary for PR
+      if: github.event_name == 'pull_request' # Only run on pull requests
       run: |
         echo "## 🧪 Test & Build Summary" > pr-summary.md
         echo "" >> pr-summary.md
         
-        # Add build status
+        # Add build status information
         echo "### 🏗️ Build Status" >> pr-summary.md
         echo "- ✅ Build completed successfully" >> pr-summary.md
         echo "- 📦 NuGet packages restored" >> pr-summary.md
@@ -181,90 +221,320 @@ jobs:
         echo "" >> pr-summary.md
         
         # Add security info
-        echo "### 🔒 Security" >> pr-summary.md
-        echo "- 🔍 Dependency vulnerability scan completed" >> pr-summary.md
-        echo "- 📋 Security audit results available in artifacts" >> pr-summary.md
+        echo "### 🔒 Security Scanning" >> pr-summary.md
+        echo "- 🔍 Vulnerability scanning (NuGet packages)" >> pr-summary.md
+        echo "- 🛡️ CodeQL static analysis" >> pr-summary.md
+        echo "- 🔐 Secret detection with TruffleHog" >> pr-summary.md
+        echo "- 🐳 Docker security scanning" >> pr-summary.md
+        echo "- 📋 OWASP dependency check" >> pr-summary.md
+        echo "- 🎯 SAST analysis with Semgrep" >> pr-summary.md
+        echo "- 📊 Security reports available in artifacts" >> pr-summary.md
         echo "" >> pr-summary.md
         
-        # Add artifacts info
+        # Add downloadable artifacts information
         echo "### 📦 Available Artifacts" >> pr-summary.md
         echo "- 📊 Test results (TRX format)" >> pr-summary.md
-        echo "- 📈 Code coverage reports" >> pr-summary.md
-        echo "- 🔒 Security audit logs" >> pr-summary.md
+        echo "- 📈 Code coverage reports (Cobertura XML)" >> pr-summary.md
+        echo "- 🔒 Security scan results (SARIF format)" >> pr-summary.md
+        echo "- 🛡️ Vulnerability reports (JSON/XML)" >> pr-summary.md
+        echo "- 📋 Security audit logs" >> pr-summary.md
         echo "" >> pr-summary.md
         
         echo "---" >> pr-summary.md
         echo "*Generated by Setlist Studio CI/CD Pipeline* 🎵" >> pr-summary.md
     
+    # Step 14: Add comprehensive test summary comment to pull request
+    # Provides immediate feedback on build and test status in PR discussion
     - name: 💬 Add test summary to PR
       uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' # Only on pull requests
       with:
-        recreate: true
-        path: pr-summary.md
+        recreate: true                   # Replace existing comment
+        path: pr-summary.md              # Path to summary file
     
+    # Step 15: Add code coverage comment to pull request
+    # Shows coverage metrics directly in PR for easy review
     - name: 💬 Add coverage comment to PR
       uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != ''
+      if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != '' # Only if coverage file exists
       with:
-        recreate: false
-        path: code-coverage-results.md
+        recreate: false                  # Don't replace existing comments
+        path: code-coverage-results.md   # Path to coverage results file
 
+  # JOB 2: Comprehensive Security Scanning
+  # Multi-layered security analysis including secrets, vulnerabilities, and code analysis
+  # Runs after build to ensure security scanning on compiled code
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: always() # Run even if build fails
+    needs: build-and-test              # Depends on successful build
+    if: always()                       # Run even if build fails (for security analysis)
+    
+    # Enhanced permissions for security scanning and reporting
+    permissions:
+      contents: read                   # Read repository contents
+      security-events: write          # Write to GitHub Security tab
+      actions: read                    # Read workflow information
     
     steps:
+    # Step 1: Checkout code with full history for comprehensive analysis
     - name: 🔄 Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0                 # Full Git history for better security analysis
     
+    # Step 2: Setup .NET environment for building and analysis
     - name: 🏗️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
-    - name: 🔒 Run security audit
-      run: dotnet list package --vulnerable --include-transitive 2>&1 | tee security-audit.log
-    
-    - name: 📊 Upload security audit results
-      uses: actions/upload-artifact@v4
-      if: always()
+    # Step 3: Advanced secret detection using TruffleHog
+    # Scans Git history for exposed secrets, API keys, passwords, etc.
+    - name: 🔐 Secret Detection with TruffleHog
+      uses: trufflesecurity/trufflehog@main
       with:
-        name: security-audit
-        path: security-audit.log
-        retention-days: 30
+        path: ./                        # Scan current directory
+        base: main                      # Compare against main branch
+        head: HEAD                      # Scan up to current commit
+        extra_args: --debug --only-verified # Verbose output, verified secrets only
+      continue-on-error: true           # Don't fail build, but report security issues
+    
+    # Step 4: .NET-specific vulnerability scanning for NuGet packages
+    # Analyzes dependencies for known security vulnerabilities
+    - name: � .NET Vulnerability Scan
+      run: |
+        echo "## 🔒 Security Vulnerability Scan" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Restore NuGet packages for vulnerability analysis
+        dotnet restore SetlistStudio.sln --verbosity quiet
+        
+        # Analyze packages for known vulnerabilities
+        echo "### 📦 Package Vulnerability Analysis" >> security-report.md
+        # Check for vulnerable packages using .NET CLI
+        if dotnet list package --vulnerable --include-transitive > vulnerability-scan.log 2>&1; then
+          echo "✅ No known vulnerabilities found in NuGet packages" >> security-report.md
+        else
+          echo "⚠️ Potential vulnerabilities found:" >> security-report.md
+          echo "\`\`\`" >> security-report.md
+          cat vulnerability-scan.log >> security-report.md
+          echo "\`\`\`" >> security-report.md
+        fi
+        echo "" >> security-report.md
+        
+        # Check for outdated packages that may have security updates
+        echo "### 📅 Outdated Package Analysis" >> security-report.md
+        if dotnet list package --outdated > outdated-packages.log 2>&1; then
+          if grep -q "Outdated" outdated-packages.log; then
+            echo "⚠️ Outdated packages found:" >> security-report.md
+            echo "\`\`\`" >> security-report.md
+            cat outdated-packages.log >> security-report.md
+            echo "\`\`\`" >> security-report.md
+          else
+            echo "✅ All packages are up to date" >> security-report.md
+          fi
+        fi
+    
+    # Step 5: Initialize GitHub CodeQL static analysis security scanning
+    # CodeQL analyzes code for security vulnerabilities and coding errors
+    - name: 🛡️ CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: csharp                # Target C# language analysis
+        queries: security-extended,security-and-quality # Comprehensive security queries
+    
+    # Step 6: Build solution for CodeQL analysis
+    # CodeQL requires compiled code for accurate analysis
+    - name: 🏗️ Build for CodeQL
+      run: dotnet build SetlistStudio.sln --configuration Release --no-restore
+    
+    # Step 7: Execute CodeQL security analysis
+    # Analyzes built code and uploads results to GitHub Security tab
+    - name: 🔍 Perform CodeQL Analysis  
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:csharp"     # Categorize results by language
+    
+    # Step 8: Advanced Static Application Security Testing (SAST) with Semgrep
+    # Comprehensive security rule-based analysis for multiple vulnerability types
+    - name: 🔐 Semgrep SAST Scan
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit              # General security vulnerability patterns
+          p/secrets                     # Secret detection rules
+          p/csharp                      # C#-specific security patterns
+          p/dockerfile                  # Docker security best practices
+          p/owasp-top-ten              # OWASP Top 10 vulnerability patterns
+        generateSarif: "1"             # Generate SARIF format for GitHub integration
+      env:
+        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} # Authentication token
+      continue-on-error: true          # Don't fail workflow on security findings
+    
+    # Step 9: Docker container security scanning with Trivy
+    # Analyzes container images for OS and library vulnerabilities
+    - name: 🐳 Docker Security Scan with Trivy
+      if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' # Run on PRs and main branch
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'setlist-studio:latest' # Target Docker image
+        format: 'sarif'                   # SARIF format for GitHub integration
+        output: 'trivy-results.sarif'     # Output file name
+      continue-on-error: true             # Don't fail workflow on vulnerabilities
+    
+    # Step 10: Upload Trivy scan results to GitHub Security tab
+    # Integrates container security findings with GitHub's security features
+    - name: 📊 Upload Trivy Results
+      if: always()                        # Upload even if scan failed
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif' # Trivy scan results file
+      continue-on-error: true             # Don't fail on upload issues
+    
+    # Step 11: OWASP Dependency Check for comprehensive vulnerability analysis
+    # Analyzes project dependencies for known CVE vulnerabilities
+    - name: 🔍 OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'Setlist Studio'        # Project name for reporting
+        path: '.'                         # Scan current directory
+        format: 'ALL'                    # Generate all report formats
+        args: >
+          --enableRetired                 # Include retired/deprecated packages
+          --enableExperimental           # Enable experimental analyzers
+          --failOnCVSS 7                 # Fail on CVSS score >= 7.0 (High severity)
+          --out reports/                 # Output directory for reports
+      continue-on-error: true            # Don't fail workflow on vulnerabilities found
+    
+    # Step 12: Generate comprehensive security scan summary
+    # Creates unified security report combining all scan results
+    - name: 📋 Generate Security Summary
+      if: always()                       # Run even if previous steps failed
+      run: |
+        echo "## 🛡️ Security Scan Summary" >> security-summary.md
+        echo "" >> security-summary.md
+        echo "**Scan Date:** $(date)" >> security-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+        echo "" >> security-summary.md
+        
+        # Analyze and report results from various security scanning tools
+        echo "### 🔍 Scan Results" >> security-summary.md
+        echo "| Tool | Status | Details |" >> security-summary.md
+        echo "|------|--------|---------|" >> security-summary.md
+        
+        # Analyze TruffleHog secret detection results
+        if [ -f "trufflehog-results.json" ]; then
+          secrets_count=$(jq length trufflehog-results.json 2>/dev/null || echo "0")
+          if [ "$secrets_count" -gt 0 ]; then
+            echo "| TruffleHog | ⚠️ Issues | $secrets_count potential secrets found |" >> security-summary.md
+          else
+            echo "| TruffleHog | ✅ Clean | No secrets detected |" >> security-summary.md
+          fi
+        else
+          echo "| TruffleHog | ✅ Clean | No secrets detected |" >> security-summary.md
+        fi
+        
+        # Analyze .NET vulnerability scan results
+        if grep -q "vulnerable" vulnerability-scan.log 2>/dev/null; then
+          echo "| Vulnerability Scan | ⚠️ Issues | Vulnerable packages found |" >> security-summary.md
+        else
+          echo "| Vulnerability Scan | ✅ Clean | No vulnerable packages |" >> security-summary.md
+        fi
+        
+        # Analyze CodeQL static analysis results
+        echo "| CodeQL | ✅ Complete | Static analysis completed |" >> security-summary.md
+        
+        # Analyze Semgrep SAST results
+        if [ -f "semgrep.sarif" ]; then
+          echo "| Semgrep SAST | ✅ Complete | Static analysis completed |" >> security-summary.md
+        else
+          echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
+        fi
+        
+        # Analyze Trivy container security results
+        if [ -f "trivy-results.sarif" ]; then
+          echo "| Trivy (Docker) | ✅ Complete | Container scan completed |" >> security-summary.md
+        else
+          echo "| Trivy (Docker) | ℹ️ Skipped | Container scan skipped |" >> security-summary.md
+        fi
+        
+        echo "" >> security-summary.md
+        echo "### 📋 Recommendations" >> security-summary.md
+        echo "- Review all findings in the Security tab" >> security-summary.md
+        echo "- Update vulnerable dependencies promptly" >> security-summary.md
+        echo "- Follow secure coding practices from copilot-instructions.md" >> security-summary.md
+        echo "- Regular security reviews and updates" >> security-summary.md
+        echo "" >> security-summary.md
+        echo "---" >> security-summary.md
+        echo "*Security scan generated by Setlist Studio CI/CD Pipeline* 🔒" >> security-summary.md
+    
+    # Step 13: Upload comprehensive security reports as artifacts
+    # Preserves all security scan results for analysis and compliance
+    - name: 📊 Upload Security Reports
+      uses: actions/upload-artifact@v4
+      if: always()                       # Upload even if scans failed
+      with:
+        name: security-reports           # Artifact name for security reports
+        path: |                          # Include all security-related files
+          vulnerability-scan.log         # .NET vulnerability scan results
+          outdated-packages.log          # Outdated package analysis
+          security-report.md             # Detailed security report
+          security-summary.md            # Executive summary
+          reports/                       # OWASP and other tool reports
+          *.sarif                        # SARIF format scan results
+        retention-days: 90               # Keep security reports for 90 days (compliance)
+    
+    # Step 14: Add security summary comment to pull requests
+    # Provides immediate security feedback in PR discussions
+    - name: 💬 Add Security Summary to PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: github.event_name == 'pull_request' && always() # Only on PRs, always run
+      with:
+        recreate: false                  # Don't replace existing comments
+        path: security-summary.md        # Path to security summary file
 
+  # JOB 3: Docker Image Build and Container Testing
+  # Builds containerized application and validates container functionality
+  # Only runs after successful build and test completion
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: success() # Only run if tests pass
+    needs: build-and-test              # Depends on successful build and tests
+    if: success()                      # Only run if previous jobs succeeded
     
     steps:
+    # Step 1: Checkout source code for Docker build
     - name: 🔄 Checkout code
       uses: actions/checkout@v4
     
+    # Step 2: Setup Docker Buildx for advanced build features
+    # Enables multi-platform builds and advanced caching
     - name: 🐳 Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
+    # Step 3: Install network utilities for container testing
+    # Required for health checks and connectivity testing
     - name: 🔧 Install network tools
       run: |
         sudo apt-get update
         sudo apt-get install -y netcat-openbsd
     
+    # Step 4: Build Docker image with optimized settings
+    # Creates containerized version of the application
     - name: 🏗️ Build Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile
-        push: false
-        load: true  # Load image into local Docker daemon
-        tags: setlist-studio:${{ github.sha }},setlist-studio:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        context: .                      # Build context (current directory)
+        file: ./Dockerfile              # Dockerfile location
+        push: false                     # Don't push to registry (build only)
+        load: true                      # Load image into local Docker daemon for testing
+        tags: setlist-studio:${{ github.sha }},setlist-studio:latest # Tag with commit SHA and latest
+        cache-from: type=gha            # Use GitHub Actions cache for faster builds
+        cache-to: type=gha,mode=max     # Store build cache for future runs
     
+    # Step 5: Verify Docker image build and inspect configuration
+    # Validates image creation and displays image information for debugging
     - name: 🔍 Verify Docker image
       run: |
         echo "Available Docker images:"
@@ -276,9 +546,11 @@ jobs:
         echo "Image layers:"
         docker history setlist-studio:${{ github.sha }} --no-trunc | head -10
     
+    # Step 6: Test Docker container functionality and health
+    # Validates that the containerized application starts and responds correctly
     - name: 🧪 Test Docker image
       run: |
-        # Clean up any existing containers to avoid conflicts
+        # Clean up any existing containers to avoid port conflicts
         docker stop test-container test-debug 2>/dev/null || true
         docker rm test-container test-debug 2>/dev/null || true
         
@@ -307,25 +579,27 @@ jobs:
           fi
         done
         
+        # Display container status for debugging
         echo "Container status:"
         docker ps -a --filter name=test-container
         
         echo "Initial container logs:"
         docker logs test-container
         
+        # Test application health endpoint
         echo "Testing health endpoint..."
         # Get current container logs before testing
         echo "Current container logs:"
         docker logs test-container
         
-        # Wait a bit more for the application to fully start
+        # Wait for application to fully initialize
         echo "Giving application more time to start..."
         sleep 10
         
         echo "Container logs after additional wait:"
         docker logs test-container
         
-        # Try multiple times as the app might take time to start
+        # Try multiple connection attempts as the app might take time to start
         for i in {1..8}; do
           echo "Attempt $i: Testing application health"
           

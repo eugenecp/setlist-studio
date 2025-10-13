@@ -19,10 +19,16 @@ updates:
     labels:
       - "dependencies"
       - "nuget"
+      - "security"
+    # Security updates get priority
+    allow:
+      - dependency-type: "all"
     ignore:
-      # Ignore major version updates for stable packages
+      # Ignore major version updates for stable packages (except security updates)
       - dependency-name: "Microsoft.*"
         update-types: ["version-update:semver-major"]
+    # Enable vulnerability alerts
+    vulnerabilities-only: false
 
   # Enable version updates for Docker
   - package-ecosystem: "docker"
@@ -42,6 +48,7 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+      - "security"
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -61,3 +68,4 @@ updates:
     labels:
       - "dependencies"  
       - "github-actions"
+      - "security"

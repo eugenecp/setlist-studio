@@ -1,0 +1,30 @@
+name: "Setlist Studio Security Analysis"
+
+disable-default-queries: false
+
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+query-filters:
+  - exclude:
+      id: cs/web/debug-binary
+      
+paths-ignore:
+  - "tests/**"
+  - "**/*.generated.cs"
+  - "**/bin/**"
+  - "**/obj/**"
+  - "TestResults/**"
+  - "CoverageReport/**"
+
+paths:
+  - "src/**"
+  - "*.cs"
+  - "*.cshtml"
+  - "*.razor"
+
+# Custom queries for .NET security
+packs:
+  - codeql/csharp-queries
+  - codeql/csharp-security-extended-queries
