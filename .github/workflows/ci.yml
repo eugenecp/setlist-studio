@@ -93,13 +93,7 @@ jobs:
         export DOTNET_ENVIRONMENT=Test
 
         # Run comprehensive test suite with coverage collection
-        dotnet test SetlistStudio.sln \
-          --configuration Release \        # Use Release build for performance
-          --verbosity normal \             # Standard output verbosity
-          --logger trx \                   # Generate TRX format for reporting
-          --logger "console;verbosity=detailed" \  # Detailed console output
-          --collect:"XPlat Code Coverage" \        # Collect cross-platform coverage
-          --results-directory ./test-results      # Output directory for results
+        dotnet test SetlistStudio.sln --configuration Release --verbosity normal --logger trx --logger "console;verbosity=detailed" --collect "XPlat Code Coverage" --results-directory ./test-results
     
     # Step 8: Upload test results and coverage data as artifacts
     # Preserves test results for analysis and reporting
@@ -251,6 +245,7 @@ jobs:
       with:
         recreate: true                   # Replace existing comment
         path: pr-summary.md              # Path to summary file
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     # Step 15: Add code coverage comment to pull request
     # Shows coverage metrics directly in PR for easy review
@@ -260,6 +255,7 @@ jobs:
       with:
         recreate: false                  # Don't replace existing comments
         path: code-coverage-results.md   # Path to coverage results file
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 2: Comprehensive Security Scanning
   # Multi-layered security analysis including secrets, vulnerabilities, and code analysis
@@ -275,6 +271,7 @@ jobs:
       contents: read                   # Read repository contents
       security-events: write          # Write to GitHub Security tab
       actions: read                    # Read workflow information
+      pull-requests: write            # Comment on pull requests with security reports
     
     steps:
     # Step 1: Checkout code with full history for comprehensive analysis
@@ -342,7 +339,7 @@ jobs:
       uses: github/codeql-action/init@v3
       with:
         languages: csharp                # Target C# language analysis
-        queries: security-extended,security-and-quality # Comprehensive security queries
+        config-file: ./.github/codeql/codeql-config.yml # Use custom configuration
     
     # Step 6: Build solution for CodeQL analysis
     # CodeQL requires compiled code for accurate analysis
@@ -493,6 +490,7 @@ jobs:
       with:
         recreate: false                  # Don't replace existing comments
         path: security-summary.md        # Path to security summary file
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 3: Docker Image Build and Container Testing
   # Builds containerized application and validates container functionality

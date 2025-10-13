@@ -1,30 +1,40 @@
+# CodeQL Analysis Configuration for Setlist Studio
+# Comprehensive security analysis configuration for C# applications
+# https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning
+
 name: "Setlist Studio Security Analysis"
 
+# Use default queries along with custom configuration
 disable-default-queries: false
 
+# Query suites to run - using only available query packs
 queries:
-  - uses: security-extended
   - uses: security-and-quality
 
+# Query filters to customize analysis
 query-filters:
   - exclude:
-      id: cs/web/debug-binary
+      id: cs/web/debug-binary  # Exclude debug binary warnings in development
       
+# Paths to ignore during analysis
 paths-ignore:
-  - "tests/**"
-  - "**/*.generated.cs"
-  - "**/bin/**"
-  - "**/obj/**"
-  - "TestResults/**"
-  - "CoverageReport/**"
+  - "tests/**"               # Exclude test files from main analysis
+  - "**/*.generated.cs"      # Exclude auto-generated files
+  - "**/bin/**"              # Exclude compiled binaries
+  - "**/obj/**"              # Exclude build artifacts
+  - "TestResults/**"         # Exclude test result files
+  - "CoverageReport/**"      # Exclude coverage reports
+  - "**/Migrations/**"       # Exclude EF Core migrations
+  - "**/*.Designer.cs"       # Exclude designer files
+  - "**/wwwroot/lib/**"      # Exclude third-party client libraries
 
+# Paths to include in analysis
 paths:
-  - "src/**"
-  - "*.cs"
-  - "*.cshtml"
-  - "*.razor"
+  - "src/**"                 # Include all source code
+  - "*.cs"                   # Include C# files in root
+  - "*.cshtml"               # Include Razor views
+  - "*.razor"                # Include Blazor components
 
-# Custom queries for .NET security
+# Query packs to use - only include available packs
 packs:
-  - codeql/csharp-queries
-  - codeql/csharp-security-extended-queries
+  - codeql/csharp-queries    # Standard C# queries

@@ -1,71 +1,88 @@
+# Dependabot configuration for automated dependency updates
+# Manages NuGet packages, Docker images, and GitHub Actions
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
 version: 2
 updates:
-  # Enable version updates for NuGet packages
+  # .NET NuGet Package Updates
+  # Monitors all .csproj and .sln files for dependency updates
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-    open-pull-requests-limit: 10
+      interval: "weekly"           # Check for updates weekly
+      day: "monday"               # Run on Mondays
+      time: "06:00"               # At 6:00 AM UTC
+      timezone: "UTC"             # Explicit timezone specification
+    open-pull-requests-limit: 10  # Allow up to 10 open PRs
     reviewers:
-      - "eugenecp"
+      - "eugenecp"                # Request review from repository owner
     assignees:
-      - "eugenecp"
+      - "eugenecp"                # Assign PRs to repository owner
     commit-message:
-      prefix: "⬆️"
-      prefix-development: "⬆️"
-      include: "scope"
+      prefix: "⬆️"                # Emoji prefix for commit messages
+      prefix-development: "⬆️"    # Same prefix for development dependencies
+      include: "scope"             # Include dependency scope in commit messages
     labels:
-      - "dependencies"
-      - "nuget"
-      - "security"
-    # Security updates get priority
+      - "dependencies"            # Label for dependency updates
+      - "nuget"                   # NuGet-specific label
+      - "security"                # Security-related updates
+    # Allow all dependency types (direct and indirect dependencies)
     allow:
       - dependency-type: "all"
     ignore:
-      # Ignore major version updates for stable packages (except security updates)
+      # Ignore major version updates for Microsoft packages to maintain stability
+      # (Security updates will still be processed regardless of this setting)
       - dependency-name: "Microsoft.*"
         update-types: ["version-update:semver-major"]
-    # Enable vulnerability alerts
-    vulnerabilities-only: false
+    # Group related dependencies together in single PRs
+    groups:
+      microsoft-packages:
+        patterns:
+          - "Microsoft.*"
+        update-types:
+          - "minor"
+          - "patch"
 
-  # Enable version updates for Docker
+  # Docker Image Updates
+  # Monitors Dockerfile and docker-compose files for base image updates
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-    open-pull-requests-limit: 5
+      interval: "weekly"           # Check for updates weekly
+      day: "monday"               # Run on Mondays
+      time: "06:00"               # At 6:00 AM UTC
+      timezone: "UTC"             # Explicit timezone specification
+    open-pull-requests-limit: 5   # Limit Docker update PRs
     reviewers:
-      - "eugenecp"
+      - "eugenecp"                # Request review from repository owner
     assignees:
-      - "eugenecp"
+      - "eugenecp"                # Assign PRs to repository owner
     commit-message:
-      prefix: "🐳"
-      include: "scope"
+      prefix: "🐳"                # Docker emoji prefix for commit messages
+      include: "scope"             # Include scope in commit messages
     labels:
-      - "dependencies"
-      - "docker"
-      - "security"
+      - "dependencies"            # Label for dependency updates
+      - "docker"                  # Docker-specific label
+      - "security"                # Security-related updates
 
-  # Enable version updates for GitHub Actions
+  # GitHub Actions Updates
+  # Monitors .github/workflows/ for action version updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-    open-pull-requests-limit: 5
+      interval: "weekly"           # Check for updates weekly
+      day: "monday"               # Run on Mondays
+      time: "06:00"               # At 6:00 AM UTC
+      timezone: "UTC"             # Explicit timezone specification
+    open-pull-requests-limit: 5   # Limit GitHub Actions update PRs
     reviewers:
-      - "eugenecp"
+      - "eugenecp"                # Request review from repository owner
     assignees:
-      - "eugenecp"
+      - "eugenecp"                # Assign PRs to repository owner
     commit-message:
-      prefix: "🔄"
-      include: "scope"
+      prefix: "🔄"                # Workflow emoji prefix for commit messages
+      include: "scope"             # Include scope in commit messages
     labels:
-      - "dependencies"  
-      - "github-actions"
-      - "security"
+      - "dependencies"            # Label for dependency updates
+      - "github-actions"          # GitHub Actions-specific label
+      - "security"                # Security-related updates

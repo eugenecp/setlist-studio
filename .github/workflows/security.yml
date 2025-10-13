@@ -332,6 +332,7 @@ jobs:
       with:
         header: security-report           # Unique header for comment identification
         path: comprehensive-security-report.md # Path to security report file
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     # Step 18: Security alert and notification system
     # Sends notifications about security findings (can be extended with Slack, email, etc.)
