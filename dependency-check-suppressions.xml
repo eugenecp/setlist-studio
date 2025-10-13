@@ -12,7 +12,7 @@
         - Review date  
         - Reviewer name
     -->
-    
+
     <!-- Suppress analysis errors on Microsoft Test Platform resource files -->
     <suppress>
         <notes><![CDATA[
@@ -21,11 +21,11 @@
             Reviewer: Security Team
             Reason: These are localization resource files for the test platform that cause
             EOFException errors during PE analysis. They don't contain executable code or vulnerabilities.
-        ]]></notes>
+        ]]>        </notes>
         <filePath regex="true">.*Microsoft\.TestPlatform\..*\.resources\.dll</filePath>
-        <cve>.*</cve>
+        <cpe>.*</cpe>
     </suppress>
-    
+
     <suppress>
         <notes><![CDATA[
             Suppression for Microsoft Visual Studio Test Platform resource files
@@ -33,11 +33,11 @@
             Reviewer: Security Team
             Reason: These are localization resource files for Visual Studio test platform that cause
             analysis errors. They are test-only dependencies and don't affect production security.
-        ]]></notes>
+        ]]>        </notes>
         <filePath regex="true">.*Microsoft\.VisualStudio\.TestPlatform\..*\.resources\.dll</filePath>
-        <cve>.*</cve>
+        <cpe>.*</cpe>
     </suppress>
-    
+
     <!-- Suppress analysis of all .resources.dll files in test directories -->
     <suppress>
         <notes><![CDATA[
@@ -46,11 +46,11 @@
             Reviewer: Security Team
             Reason: Resource files contain only localization data and cause PE analyzer errors.
             They don't contain executable code that could have security vulnerabilities.
-        ]]></notes>
+        ]]>        </notes>
         <filePath regex="true">.*/bin/.*/.*\.resources\.dll</filePath>
-        <cve>.*</cve>
+        <cpe>.*</cpe>
     </suppress>
-    
+
     <!-- 
         Guidelines for adding suppressions:
         
@@ -63,5 +63,5 @@
         4. Regularly review and remove outdated suppressions
         5. Consider alternative approaches (dependency updates) before suppressing
     -->
-    
+
 </suppressions>
