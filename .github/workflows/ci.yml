@@ -364,6 +364,8 @@ jobs:
       env:
         SEMGREP_BASELINE_REF: "5bcda95ed067f2ac4fa87848ec44bf0235c67b77" # Original Commit
       continue-on-error: true          # Don't fail workflow on security findings
+      # Save Semgrep output for summary logic
+      run: semgrep ci > semgrep.log || true
     
     # Step 9: Filesystem security scanning with Trivy
     # Analyzes project files and dependencies for vulnerabilities
@@ -457,7 +459,7 @@ jobs:
         echo "| CodeQL | ✅ Complete | Static analysis completed |" >> security-summary.md
         
         # Analyze Semgrep SAST results
-        if [ -f "semgrep.sarif" ]; then
+        if grep -q "CI scan completed successfully" semgrep.log 2>/dev/null; then
           echo "| Semgrep SAST | ✅ Complete | Static analysis completed |" >> security-summary.md
         else
           echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
