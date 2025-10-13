@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.1.xsd">
     <!-- 
         Dependency Check Suppressions for Setlist Studio
         
@@ -16,13 +16,13 @@
     <!-- Suppress CVE-2008-0660 false positive for Microsoft.AspNetCore.Authentication.Facebook -->
     <suppress>
         <notes><![CDATA[
-                    Suppression for CVE-2008-0660 (Aurigma ImageUploader/Facebook PhotoUploader ActiveX)
-                    Reviewed: 2025-10-13
-                    Reviewer: Security Team
-                    Reason: The flagged dependency is Microsoft.AspNetCore.Authentication.Facebook, an official Microsoft OAuth library. It does not use or include any ActiveX controls or vulnerable code described in CVE-2008-0660. This is a false positive due to the package name.
-                ]]>        </notes>
+            Suppression for CVE-2008-0660 (Aurigma ImageUploader/Facebook PhotoUploader ActiveX)
+            Reviewed: 2025-10-13
+            Reviewer: Security Team
+            Reason: The flagged dependency is Microsoft.AspNetCore.Authentication.Facebook, an official Microsoft OAuth library. It does not use or include any ActiveX controls or vulnerable code described in CVE-2008-0660. This is a false positive due to the package name.
+        ]]>        </notes>
+        <packageUrl regex="true">^pkg:nuget/Microsoft\.AspNetCore\.Authentication\.Facebook@.*$</packageUrl>
         <cve>CVE-2008-0660</cve>
-        <packageUrl>pkg:nuget/Microsoft.AspNetCore.Authentication.Facebook@8.0.8</packageUrl>
     </suppress>
 
     <!-- Suppress analysis errors on Microsoft Test Platform resource files -->

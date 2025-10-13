@@ -360,7 +360,7 @@ jobs:
       uses: semgrep/semgrep-action@v1
       with:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
-        output: semgrep.sarif
+        scanFullProject: true
         publishToken: ""               # Use community version (no token)
       continue-on-error: true          # Don't fail workflow on security findings
     
