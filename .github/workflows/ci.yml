@@ -476,7 +476,7 @@ jobs:
         echo "| CodeQL | $codeql_status |" >> security-summary.md
         
         # Analyze Semgrep SAST results
-        if grep -q "CI scan completed successfully" semgrep.log 2>/dev/null; then
+        if [ -f "semgrep.sarif" ]; then
           echo "| Semgrep SAST | ✅ Complete | Static analysis completed |" >> security-summary.md
         else
           echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
@@ -493,7 +493,6 @@ jobs:
           echo "| Trivy (Filesystem) | ℹ️ Skipped | Filesystem scan skipped |" >> security-summary.md
         fi
         
-        echo "" >> security-summary.md
         # Analyze OWASP Dependency Check results
         if [ -f "./reports/dependency-check-report.sarif" ]; then
           if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif > /dev/null; then
