@@ -528,33 +528,42 @@ jobs:
     - name: 🚨 Enforce Security Thresholds
       if: always() && github.event_name == 'pull_request'
       run: |
-        # Fail if OWASP Dependency Check SARIF report contains high severity vulnerabilities
-        if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif | grep -q .; then
-          echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF)"
-          exit 1
+        # Display and fail for OWASP Dependency Check SARIF high severity vulnerabilities
+        if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif | grep -q .; then
+          echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF):"
+          jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif
+          fail=1
         fi
 
-        # Fail if Trivy SARIF report contains high/critical vulnerabilities
+        # Display and fail for Trivy SARIF high/critical vulnerabilities
         if [ -f "trivy-results.sarif" ]; then
-          if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-results.sarif | grep -q .; then
-            echo "❌ High/Critical vulnerabilities found in Trivy scan (SARIF)"
-            exit 1
+          if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif | grep -q .; then
+            echo "❌ High/Critical vulnerabilities found in Trivy scan (SARIF):"
+            jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif
+            fail=1
           fi
         fi
 
-        # Fail if any CodeQL SARIF report in /results/ contains high/critical vulnerabilities
+        # Display and fail for CodeQL SARIF high/critical vulnerabilities
         for sarif_file in ./results/*.sarif; do
           if [ -f "$sarif_file" ]; then
-            if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" | grep -q .; then
-              echo "❌ High/Critical vulnerabilities found in CodeQL scan ($sarif_file)"
-              exit 1
+            if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file" | grep -q .; then
+              echo "❌ High/Critical vulnerabilities found in CodeQL scan ($sarif_file):"
+              jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file"
+              fail=1
             fi
           fi
         done
 
-        # Fail if .NET vulnerability scan found vulnerable packages
+        # Display and fail for .NET vulnerable packages
         if grep -q 'vulnerable' vulnerability-scan.log; then
-          echo "❌ Vulnerable packages found in .NET scan"
+          echo "❌ Vulnerable packages found in .NET scan:"
+          grep 'vulnerable' vulnerability-scan.log
+          fail=1
+        fi
+
+        # Fail if any issues were found
+        if [ "$fail" = "1" ]; then
           exit 1
         fi
 
