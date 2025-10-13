@@ -515,10 +515,11 @@ jobs:
         ls -la ./outdated-packages.log || echo "outdated-packages.log not found"
         ls -la ./security-report.md || echo "security-report.md not found"
         ls -la ./security-summary.md || echo "security-summary.md not found"
+        ls -la ./trufflehog-results.json || echo "trufflehog-results.json not found"
         ls -la ./reports/ || echo "reports/ directory not found"
         ls -la ./results/ || echo "results/ directory not found"
         ls -la ./*.sarif || echo "No SARIF files found"
-    
+          
     # Step 13: Upload comprehensive security reports as artifacts
     # Preserves all security scan results for analysis and compliance
     - name: 📊 Upload Security Reports
@@ -531,6 +532,7 @@ jobs:
           ./outdated-packages.log
           ./security-report.md
           ./security-summary.md
+          ./trufflehog-results.json
           ./reports/
           ./results/
           ./*.sarif
@@ -586,6 +588,16 @@ jobs:
           echo "❌ Vulnerable packages found in .NET scan:"
           grep 'vulnerable' vulnerability-scan.log
           fail=1
+        fi
+
+        # Display and fail for TruffleHog secrets detection
+        if [ -f "trufflehog-results.json" ]; then
+          secrets_count=$(jq length trufflehog-results.json 2>/dev/null || echo "0")
+          if [ "$secrets_count" -gt 0 ]; then
+            echo "❌ Secrets detected by TruffleHog: $secrets_count potential secrets found"
+            jq '.' trufflehog-results.json
+            fail=1
+          fi
         fi
 
         # Fail if any issues were found
