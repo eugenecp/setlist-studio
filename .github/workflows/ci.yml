@@ -467,12 +467,27 @@ jobs:
         
         # Analyze Trivy filesystem security results
         if [ -f "trivy-results.sarif" ]; then
-          echo "| Trivy (Filesystem) | ✅ Complete | Filesystem scan completed |" >> security-summary.md
+          if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-results.sarif > /dev/null; then
+            echo "| Trivy (Filesystem) | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
+          else
+            echo "| Trivy (Filesystem) | ✅ Complete | Filesystem scan completed |" >> security-summary.md
+          fi
         else
           echo "| Trivy (Filesystem) | ℹ️ Skipped | Filesystem scan skipped |" >> security-summary.md
         fi
         
         echo "" >> security-summary.md
+        # Analyze OWASP Dependency Check results
+        if [ -f "./reports/dependency-check-report.sarif" ]; then
+          if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif > /dev/null; then
+            echo "| OWASP Dependency Check | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
+          else
+            echo "| OWASP Dependency Check | ✅ Complete | No vulnerabilities found |" >> security-summary.md
+          fi
+        else
+          echo "| OWASP Dependency Check | ℹ️ Skipped | Dependency check skipped |" >> security-summary.md
+        fi
+
         echo "### 📋 Recommendations" >> security-summary.md
         echo "- Review all findings in the Security tab" >> security-summary.md
         echo "- Update vulnerable dependencies promptly" >> security-summary.md
