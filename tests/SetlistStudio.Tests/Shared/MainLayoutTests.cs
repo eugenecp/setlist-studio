@@ -828,7 +828,7 @@ public class MainLayoutTests : TestContext
     }
 
     [Fact]
-    public void MainLayout_NotAuthorizedView_ShouldShowSignIn_WhenNotAuthenticated()
+    public async Task MainLayout_NotAuthorizedView_ShouldShowSignIn_WhenNotAuthenticated()
     {
         // Arrange - Use Bunit's built-in authentication support
         var authContext = this.AddTestAuthorization();
@@ -837,8 +837,8 @@ public class MainLayoutTests : TestContext
         // Act - Render MainLayout directly (no need for wrapper with Bunit test auth)
         var component = RenderComponent<MainLayout>();
 
-        // Wait for component to settle
-        Task.Delay(500).Wait();
+    // Wait for component to settle
+    await Task.Delay(500);
 
         // Assert - Should show sign in elements for unauthenticated users
         var markup = component.Markup;
