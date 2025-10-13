@@ -360,10 +360,10 @@ jobs:
       uses: semgrep/semgrep-action@v1
       with:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
-        scanFullProject: true
         publishToken: ""               # Use community version (no token)
       env:
-        SEMGREP_BASELINE_REF: ""          
+        SEMGREP_BASELINE_REF: "" 
+        INPUT_GENERATESARIF: "true"  # Generate SARIF output for GitHub integration         
       continue-on-error: true          # Don't fail workflow on security findings
     
     # Step 9: Filesystem security scanning with Trivy
