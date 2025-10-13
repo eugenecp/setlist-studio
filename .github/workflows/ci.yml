@@ -490,6 +490,7 @@ jobs:
         ls -la ./security-report.md || echo "security-report.md not found"
         ls -la ./security-summary.md || echo "security-summary.md not found"
         ls -la ./reports/ || echo "reports/ directory not found"
+        ls -la ./results/ || echo "results/ directory not found"
         ls -la ./*.sarif || echo "No SARIF files found"
     
     # Step 13: Upload comprehensive security reports as artifacts
@@ -505,6 +506,7 @@ jobs:
           ./security-report.md
           ./security-summary.md
           ./reports/
+          ./results/
           ./*.sarif
         retention-days: 90
         if-no-files-found: warn
@@ -526,11 +528,29 @@ jobs:
     - name: 🚨 Enforce Security Thresholds
       if: always() && github.event_name == 'pull_request'
       run: |
-        # Fail if OWASP Dependency Check found high severity vulnerabilities
-        if grep -q 'High' ./reports/dependency-check-report.html; then
-          echo "❌ High severity vulnerabilities found in OWASP Dependency Check"
+        # Fail if OWASP Dependency Check SARIF report contains high severity vulnerabilities
+        if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif | grep -q .; then
+          echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF)"
           exit 1
         fi
+
+        # Fail if Trivy SARIF report contains high/critical vulnerabilities
+        if [ -f "trivy-results.sarif" ]; then
+          if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-results.sarif | grep -q .; then
+            echo "❌ High/Critical vulnerabilities found in Trivy scan (SARIF)"
+            exit 1
+          fi
+        fi
+
+        # Fail if any CodeQL SARIF report in /results/ contains high/critical vulnerabilities
+        for sarif_file in ./results/*.sarif; do
+          if [ -f "$sarif_file" ]; then
+            if jq '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" | grep -q .; then
+              echo "❌ High/Critical vulnerabilities found in CodeQL scan ($sarif_file)"
+              exit 1
+            fi
+          fi
+        done
 
         # Fail if .NET vulnerability scan found vulnerable packages
         if grep -q 'vulnerable' vulnerability-scan.log; then
@@ -538,7 +558,7 @@ jobs:
           exit 1
         fi
 
-        # Add more checks as needed for other tools (Trivy, CodeQL, etc.)
+        # Add more checks as needed for other tools
         echo "✅ All security thresholds passed"
 
   # JOB 3: Docker Image Build and Container Testing
