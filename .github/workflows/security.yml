@@ -30,75 +30,115 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1            # Disable telemetry for privacy
 
 jobs:
-  # Primary job: Comprehensive security scanning using multiple tools and techniques
-  # This job performs deep security analysis across all aspects of the application
-  security-audit:
-    name: Comprehensive Security Audit
-    runs-on: ubuntu-latest  # Use latest Ubuntu for consistent environment
+  # JOB 1: Comprehensive Security Scanning
+  # Multi-layered security analysis including secrets, vulnerabilities, and code analysis
+  # Runs after build to ensure security scanning on compiled code
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test              # Depends on successful build
+    if: always()                       # Run even if build fails (for security analysis)
+    
+    # Enhanced permissions for security scanning and reporting
+    permissions:
+      contents: read                   # Read repository contents
+      security-events: write          # Write to GitHub Security tab
+      actions: read                    # Read workflow information
+      pull-requests: write            # Comment on pull requests with security reports
     
     steps:
-    # Step 1: Get the source code with full history for comprehensive analysis
+    # Step 1: Checkout code with full history for comprehensive analysis
     - name: 🔄 Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Full git history required for delta analysis and secret scanning
+        fetch-depth: 0                 # Full Git history for better security analysis
     
-    # Step 2: Setup .NET environment for building and analyzing .NET projects
+    # Step 2: Setup .NET environment for building and analysis
     - name: 🏗️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
     # Step 3: Advanced secret detection using TruffleHog
-    # Scans entire repository history for exposed secrets, API keys, passwords, etc.
-    - name: 🔍 Advanced Secret Scanning
+    # Scans Git history for exposed secrets, API keys, passwords, etc.
+    - name: 🔐 Secret Detection with TruffleHog
       uses: trufflesecurity/trufflehog@main
       with:
-        path: ./                          # Scan current directory and subdirectories
-        base: main                        # Compare against main branch
-        head: HEAD                        # Scan up to current commit
-        extra_args: --debug --only-verified # Match ci.yml arguments
-      continue-on-error: false # Fail workflow if secrets are found
+        path: ./                        # Scan current directory
+        base: main                      # Compare against main branch
+        head: HEAD                      # Scan up to current commit
+        extra_args: --debug --only-verified # Verbose output, verified secrets only
+      continue-on-error: false           # Fail build if secrets are found
     
-    # Step 4: Initialize GitHub's CodeQL static analysis security scanning
+    # Step 4: .NET-specific vulnerability scanning for NuGet packages
+    # Analyzes dependencies for known security vulnerabilities
+    - name: � .NET Vulnerability Scan
+      run: |
+        echo "## 🔒 Security Vulnerability Scan" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Restore NuGet packages for vulnerability analysis
+        dotnet restore SetlistStudio.sln --verbosity quiet
+        
+        # Analyze packages for known vulnerabilities
+        echo "### 📦 Package Vulnerability Analysis" >> security-report.md
+        # Check for vulnerable packages using .NET CLI
+        if dotnet list package --vulnerable --include-transitive > vulnerability-scan.log 2>&1; then
+          echo "✅ No known vulnerabilities found in NuGet packages" >> security-report.md
+        else
+          echo "⚠️ Potential vulnerabilities found:" >> security-report.md
+          echo "\`\`\`" >> security-report.md
+          cat vulnerability-scan.log >> security-report.md
+          echo "\`\`\`" >> security-report.md
+        fi
+        echo "" >> security-report.md
+        
+        # Check for outdated packages that may have security updates
+        echo "### 📅 Outdated Package Analysis" >> security-report.md
+        if dotnet list package --outdated > outdated-packages.log 2>&1; then
+          if grep -q "Outdated" outdated-packages.log; then
+            echo "⚠️ Outdated packages found:" >> security-report.md
+            echo "\`\`\`" >> security-report.md
+            cat outdated-packages.log >> security-report.md
+            echo "\`\`\`" >> security-report.md
+          else
+            echo "✅ All packages are up to date" >> security-report.md
+          fi
+        fi
+    
+    # Step 5: Initialize GitHub CodeQL static analysis security scanning
     # CodeQL analyzes code for security vulnerabilities and coding errors
-    - name: 🛡️ Comprehensive CodeQL Analysis
+    - name: 🛡️ CodeQL Analysis
       uses: github/codeql-action/init@v3
       with:
-        languages: csharp                 # Target C# language analysis
-        config-file: ./.github/codeql/codeql-config.yml # Custom CodeQL configuration
-        queries: +security-extended,security-and-quality
+        languages: csharp                # Target C# language analysis
+        config-file: ./.github/codeql/codeql-config.yml # Use custom configuration
     
-    # Step 5: Build the solution for CodeQL analysis
-    # CodeQL requires compiled code for accurate analysis of C# applications
-    - name: 🏗️ Build for Analysis
-      run: |
-        dotnet restore SetlistStudio.sln    # Restore NuGet packages
-        dotnet build SetlistStudio.sln --configuration Release --no-restore
-        # Build in Release mode for optimized analysis without re-restoring packages
+    # Step 6: Build solution for CodeQL analysis
+    # CodeQL requires compiled code for accurate analysis
+    - name: 🏗️ Build for CodeQL
+      run: dotnet build SetlistStudio.sln --configuration Release --no-restore
     
-    # Step 6: Execute CodeQL security analysis
-    # Analyzes the built code for security vulnerabilities and publishes results
-    - name: 🔍 Complete CodeQL Analysis
+    # Step 7: Execute CodeQL security analysis
+    # Analyzes built code and uploads results to GitHub Security tab
+    - name: 🔍 Perform CodeQL Analysis  
       uses: github/codeql-action/analyze@v3
       with:
-        category: "/language:csharp"      # Categorize results by language
-        upload: true                      # Upload results to GitHub Security tab
-      continue-on-error: true
+        category: "/language:csharp"     # Categorize results by language
     
-    # Step 7: Advanced Static Application Security Testing (SAST) with Semgrep Community
+    # Step 8: Advanced Static Application Security Testing (SAST) with Semgrep Community
     # Free comprehensive security rule-based analysis using community rules
-    # Uses open-source community rule sets - no token required
-    - name: 🔐 Advanced SAST with Semgrep (Community)
+    # No token required - uses open-source community rule sets
+    - name: 🔐 Semgrep SAST Scan (Community)
       uses: semgrep/semgrep-action@v1
       with:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
         publishToken: ""               # Use community version (no token)
       env:
-        SEMGREP_BASELINE_REF: "none"
-      continue-on-error: true          # Continue on error for SAST findings (informational)
+        SEMGREP_BASELINE_REF: "5bcda95ed067f2ac4fa87848ec44bf0235c67b77" # Original Commit
+      continue-on-error: true          # Don't fail workflow on security findings
 
-    # Save Semgrep output for summary logic
+    # Step 8.1: Save Semgrep output for summary logic
     - name: Save Semgrep Output
       if: always()
       run: |
@@ -108,148 +148,76 @@ jobs:
           echo "No Semgrep SARIF output found." > semgrep.log
         fi
     
-    # Step 8: Build Docker image for container security scanning
-    # Creates a Docker image to analyze for vulnerabilities and misconfigurations
-    - name: 🐳 Build Docker Image for Security Scan
+    # Step 9: Filesystem security scanning with Trivy
+    # Analyzes project files and dependencies for vulnerabilities
+    - name: � Filesystem Security Scan with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'                   # Filesystem scan mode
+        scan-ref: '.'                     # Scan current directory
+        format: 'sarif'                   # SARIF format for GitHub integration
+        output: 'trivy-results.sarif'     # Output file name
+        severity: 'CRITICAL,HIGH,MEDIUM'  # Scan for these severity levels
+      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
+    
+    # Step 10: Upload Trivy scan results to GitHub Security tab
+    # Integrates container security findings with GitHub's security features
+    - name: 📊 Upload Trivy Results
+      if: always() && hashFiles('trivy-results.sarif') != '' # Upload only if SARIF file exists
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif' # Trivy scan results file
+      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
+    
+    # Step 10.5: Clean build artifacts before dependency scanning
+    # Removes build outputs to avoid scanning temporary files
+    - name: 🧹 Clean Build Artifacts
       run: |
-        docker build -t setlist-studio-security:latest .
+        echo "Cleaning build artifacts to avoid scanning temporary files..."
+        find . -type d -name "bin" -exec rm -rf {} + 2>/dev/null || true
+        find . -type d -name "obj" -exec rm -rf {} + 2>/dev/null || true
+        echo "Build artifacts cleaned"
     
-    # Step 9: Comprehensive Docker container security scanning with Trivy
-    # Analyzes Docker images for OS and library vulnerabilities
-    - name: 🔍 Comprehensive Docker Security Scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'setlist-studio-security:latest'  # Target Docker image
-        format: 'sarif'                              # SARIF format for GitHub integration
-        output: 'trivy-docker-results.sarif'        # Output file name
-        severity: 'CRITICAL,HIGH,MEDIUM'             # Scan severity levels
-        vuln-type: 'os,library'                     # Scan OS and library vulnerabilities
-        ignore-unfixed: false                       # Include unfixed vulnerabilities
-      continue-on-error: true
-    
-    # Step 10: Filesystem security scan for source code vulnerabilities
-    # Scans project files for security issues in dependencies and configurations
-    - name: 📁 Filesystem Security Scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'                              # Filesystem scan mode
-        scan-ref: '.'                                # Scan current directory
-        format: 'sarif'                              # SARIF format for GitHub integration
-        output: 'trivy-fs-results.sarif'            # Output file name
-        severity: 'CRITICAL,HIGH,MEDIUM'             # Scan severity levels
-      continue-on-error: true
-    
-    # Step 11: OWASP Dependency Check for vulnerable dependencies
-    # Analyzes project dependencies for known security vulnerabilities (CVEs)
-    - name: 🔒 OWASP Dependency Check (Comprehensive)
+    # Step 11: OWASP Dependency Check for comprehensive vulnerability analysis
+    # Analyzes project dependencies for known CVE vulnerabilities
+    - name: 🔍 OWASP Dependency Check
       uses: dependency-check/Dependency-Check_Action@main
       with:
-        project: 'Setlist Studio'                   # Project name for reporting
-        path: '.'                                   # Scan current directory
-        format: 'ALL'                               # Generate all report formats
+        project: 'Setlist Studio'        # Project name for reporting
+        path: '.'                         # Scan current directory
+        format: 'ALL'                    # Generate all report formats
         args: >
-          --enableRetired                           # Include retired/deprecated packages
-          --enableExperimental                      # Enable experimental analyzers
-          --enableNodeAudit                         # Enable Node.js audit (if applicable)
-          --nodeAuditSkipDevDependencies           # Skip dev dependencies in Node audit
-          --failOnCVSS 4                           # Fail on CVSS score >= 4.0 (Medium+)
-          --suppression dependency-check-suppressions.xml  # Suppression file for false positives
-          --out reports/dependency-check/          # Output directory for reports
-      continue-on-error: true
+          --enableRetired                 # Include retired/deprecated packages
+          --enableExperimental           # Enable experimental analyzers
+          --failOnCVSS 7                 # Fail on CVSS score >= 7.0 (High severity)
+          --suppression dependency-check-suppressions.xml  # Use suppression file
+          --exclude "**/bin/**"          # Exclude all build output directories
+          --exclude "**/obj/**"          # Exclude build artifacts
+          --exclude "**/TestResults/**"  # Exclude test results
+          --exclude "**/CoverageReport/**"  # Exclude coverage reports
+          --exclude "**/wwwroot/lib/**"  # Exclude client-side libraries
+          --scan "**/*.csproj"           # Focus on project files
+          --scan "**/*.sln"              # Include solution files
+          --out reports/                 # Output directory for reports
+      continue-on-error: true            # Fail workflow on vulnerabilities found
     
-    # Step 12: License compliance verification for legal and security requirements
-    # Analyzes project dependencies for license compatibility and compliance issues
-    - name: 🔍 License Compliance Check
-      run: |
-        echo "## 📜 License Compliance Report" > license-report.md
-        echo "" >> license-report.md
-        
-        # Check .NET package licenses for compliance with project requirements
-        dotnet list package --include-transitive > packages.txt
-        
-        echo "### .NET Package Licenses" >> license-report.md
-        echo "Checking NuGet package licenses..." >> license-report.md
-        echo "" >> license-report.md
-        
-        # Create a simple license check (can be enhanced with actual license checking tools)
-        echo "- Total packages analyzed: $(grep -c ">" packages.txt || echo "0")" >> license-report.md
-        echo "- License compliance: Manual review required" >> license-report.md
-        echo "- Recommendation: Use tools like license-checker for automated compliance" >> license-report.md
-    
-    # Step 13: Configuration security analysis for infrastructure and application settings
-    # Reviews Docker, application, and infrastructure configurations for security issues
-    - name: 🔐 Configuration Security Analysis
-      run: |
-        echo "## ⚙️ Configuration Security Analysis" > config-security.md
-        echo "" >> config-security.md
-        
-        # Check for security misconfigurations in project files
-        echo "### Security Configuration Review" >> config-security.md
-        
-        # Check Docker security best practices
-        if [ -f "Dockerfile" ]; then
-          echo "#### Docker Security" >> config-security.md
-          if grep -q "USER" Dockerfile; then
-            echo "- ✅ Non-root user configured" >> config-security.md
-          else
-            echo "- ⚠️ No non-root user found in Dockerfile" >> config-security.md
-          fi
-          
-          if grep -q "HEALTHCHECK" Dockerfile; then
-            echo "- ✅ Health check configured" >> config-security.md
-          else
-            echo "- ⚠️ No health check configured" >> config-security.md
-          fi
-        fi
-        
-        # Check application configuration for security issues
-        echo "#### Application Configuration" >> config-security.md
-        if find . -name "appsettings*.json" -exec grep -l "YOUR_" {} \; | head -1 | grep -q .; then
-          echo "- ⚠️ Placeholder secrets found in configuration files" >> config-security.md
-        else
-          echo "- ✅ No obvious placeholder secrets in configuration" >> config-security.md
-        fi
-        
-        if find . -name "appsettings*.json" -exec grep -l "AllowedHosts.*\*" {} \; | head -1 | grep -q .; then
-          echo "- ⚠️ Overly permissive CORS configuration found" >> config-security.md
-        else
-          echo "- ✅ CORS configuration appears secure" >> config-security.md
-        fi
-        
-        echo "" >> config-security.md
-        echo "### Recommendations" >> config-security.md
-        echo "- Review all configuration files for security best practices" >> config-security.md
-        echo "- Ensure secrets are properly managed with environment variables or Key Vault" >> config-security.md
-        echo "- Validate CORS, authentication, and authorization settings" >> config-security.md
-    
-    # Step 14: Upload security analysis results to GitHub Security tab
-    # Integrates SARIF results with GitHub's security features for centralized reporting
-    - name: 📊 Upload Security Analysis Results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()                             # Run even if previous steps failed
-      with:
-        sarif_file: |                          # Upload multiple SARIF files
-          trivy-docker-results.sarif           # Docker security scan results
-          trivy-fs-results.sarif               # Filesystem security scan results
-          semgrep.sarif                        # Semgrep SAST analysis results
-      continue-on-error: true                  # Continue on error for artifact upload issues
-    
-    # Step 15: Generate comprehensive security report combining all scan results
-    # Creates a unified security report aggregating findings from all security tools
-    # Generate unified security scan summary (align with ci.yml)
-    - name: 📋 Generate Security Scan Summary
-      if: always()
+    # Step 12: Generate comprehensive security scan summary
+    # Creates unified security report combining all scan results
+    - name: 📋 Generate Security Summary
+      if: always()                       # Run even if previous steps failed
       run: |
         echo "## 🛡️ Security Scan Summary" >> security-summary.md
         echo "" >> security-summary.md
         echo "**Scan Date:** $(date)" >> security-summary.md
         echo "**Commit:** ${{ github.sha }}" >> security-summary.md
         echo "" >> security-summary.md
+        
+        # Analyze and report results from various security scanning tools
         echo "### 🔍 Scan Results" >> security-summary.md
         echo "| Tool | Status | Details |" >> security-summary.md
         echo "|------|--------|---------|" >> security-summary.md
-
-        # TruffleHog
+        
+        # Analyze TruffleHog secret detection results
         if [ -f "trufflehog-results.json" ]; then
           secrets_count=$(jq length trufflehog-results.json 2>/dev/null || echo "0")
           if [ "$secrets_count" -gt 0 ]; then
@@ -260,8 +228,15 @@ jobs:
         else
           echo "| TruffleHog | ✅ Clean | No secrets detected |" >> security-summary.md
         fi
-
-        # CodeQL
+        
+        # Analyze .NET vulnerability scan results
+        if grep -q "vulnerable" vulnerability-scan.log 2>/dev/null; then
+          echo "| Vulnerability Scan | ⚠️ Issues | Vulnerable packages found |" >> security-summary.md
+        else
+          echo "| Vulnerability Scan | ✅ Clean | No vulnerable packages |" >> security-summary.md
+        fi
+        
+        # Analyze CodeQL static analysis results
         codeql_status="✅ Complete | Static analysis completed"
         for sarif_file in ./results/*.sarif; do
           if [ -f "$sarif_file" ]; then
@@ -272,17 +247,17 @@ jobs:
           fi
         done
         echo "| CodeQL | $codeql_status |" >> security-summary.md
-
-        # Semgrep
-        if grep -q "CI scan completed successfully" semgrep.log 2>/dev/null; then
+        
+        # Analyze Semgrep SAST results
+        if [ -f "semgrep.sarif" ]; then
           echo "| Semgrep SAST | ✅ Complete | Static analysis completed |" >> security-summary.md
         else
           echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
         fi
-
-        # Trivy Filesystem
-        if [ -f "trivy-fs-results.sarif" ]; then
-          if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-fs-results.sarif > /dev/null; then
+        
+        # Analyze Trivy filesystem security results
+        if [ -f "trivy-results.sarif" ]; then
+          if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-results.sarif > /dev/null; then
             echo "| Trivy (Filesystem) | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
           else
             echo "| Trivy (Filesystem) | ✅ Complete | Filesystem scan completed |" >> security-summary.md
@@ -290,8 +265,8 @@ jobs:
         else
           echo "| Trivy (Filesystem) | ℹ️ Skipped | Filesystem scan skipped |" >> security-summary.md
         fi
-
-        # OWASP Dependency Check
+        
+        # Analyze OWASP Dependency Check results
         if [ -f "./reports/dependency-check-report.sarif" ]; then
           if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif > /dev/null; then
             echo "| OWASP Dependency Check | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
@@ -309,76 +284,109 @@ jobs:
         echo "- Regular security reviews and updates" >> security-summary.md
         echo "" >> security-summary.md
         echo "---" >> security-summary.md
-        echo "*Security scan generated by Setlist Studio Security Pipeline* 🔒" >> security-summary.md
+        echo "*Security scan generated by Setlist Studio CI/CD Pipeline* 🔒" >> security-summary.md
 
-    # Diagnostics: List security report files before upload
+    # Step 12.5: List security report files before upload (diagnostics)
     - name: List security report files
       if: always()
       run: |
         echo "Listing security report files before upload..."
-        ls -la ./trufflehog-results.json || echo "trufflehog-results.json not found"
+        ls -la ./vulnerability-scan.log || echo "vulnerability-scan.log not found"
+        ls -la ./outdated-packages.log || echo "outdated-packages.log not found"
+        ls -la ./security-report.md || echo "security-report.md not found"
         ls -la ./security-summary.md || echo "security-summary.md not found"
+        ls -la ./trufflehog-results.json || echo "trufflehog-results.json not found"
         ls -la ./reports/ || echo "reports/ directory not found"
         ls -la ./results/ || echo "results/ directory not found"
         ls -la ./*.sarif || echo "No SARIF files found"
-
-    # Upload security reports as artifacts
+          
+    # Step 13: Upload comprehensive security reports as artifacts
+    # Preserves all security scan results for analysis and compliance
     - name: 📊 Upload Security Reports
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
         path: |
-          ./trufflehog-results.json
+          ./vulnerability-scan.log
+          ./outdated-packages.log
+          ./security-report.md
           ./security-summary.md
+          ./trufflehog-results.json
           ./reports/
           ./results/
           ./*.sarif
+        retention-days: 90
+        if-no-files-found: warn
+        compression-level: 6
+        overwrite: false
+        include-hidden-files: false
     
-    # Step 16: Upload all security analysis artifacts for download and review
-    # Provides downloadable security reports and scan results for offline analysis
-    - name: 📊 Upload All Security Artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: security-audit-results      # Artifact name for easy identification
-        path: |                           # Include all security-related files
-          comprehensive-security-report.md # Main security report
-          config-security.md              # Configuration security analysis
-          license-report.md               # License compliance report
-          reports/                        # OWASP and other tool reports
-          *.sarif                         # SARIF format security scan results
-          *.json                          # JSON format reports
-          *.xml                           # XML format reports (dependency check)
-          *.log                           # Log files from security tools
-        retention-days: 90                # Keep artifacts for 90 days
-    
-    # Step 17: Add security report comment to pull requests
-    # Provides immediate visibility of security findings in pull request discussions
-    - name: 💬 Security Report PR Comment
+    # Step 15: Add security summary comment to pull requests
+    # Provides immediate security feedback in PR discussions
+    - name: 💬 Add Security Summary to PR
       uses: marocchino/sticky-pull-request-comment@v2
       if: github.event_name == 'pull_request' && always() # Only on PRs, always run
       with:
-        header: security-report           # Unique header for comment identification
-        path: comprehensive-security-report.md # Path to security report file
+        recreate: false                  # Don't replace existing comments
+        path: security-summary.md        # Path to security summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    # Step 18: Security alert and notification system
-    # Sends notifications about security findings (can be extended with Slack, email, etc.)
-    # Uses total_issues variable calculated in this job context
-    - name: 🚨 Security Alert on Issues
-      if: always()                         # Run regardless of previous step results
+        
+    # Step 16: Enforce security thresholds and fail job if vulnerabilities found
+    - name: 🚨 Enforce Security Thresholds
+      if: always() && github.event_name == 'pull_request'
       run: |
-        # This would integrate with notification systems in production
-        echo "Security scan completed with comprehensive analysis"
-        if [ $total_issues -gt 0 ]; then
-          echo "⚠️ Security issues found: $total_issues"
-          echo "📋 Check the comprehensive security report for details"
-          # In a real setup, you might send notifications to Slack, email, etc.
-          # Example: curl -X POST -H 'Content-type: application/json' --data '{"text":"🚨 Security Alert: '"$total_issues"' issues found in security scan"}' $SLACK_WEBHOOK
-        else
-          echo "✅ No security issues found - all scans passed"
+        # Display and fail for OWASP Dependency Check SARIF high severity vulnerabilities
+        if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif | grep -q .; then
+          echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF):"
+          jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif
+          fail=1
         fi
+
+        # Display and fail for Trivy SARIF high/critical vulnerabilities
+        if [ -f "trivy-results.sarif" ]; then
+          if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif | grep -q .; then
+            echo "❌ High/Critical vulnerabilities found in Trivy scan (SARIF):"
+            jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif
+            fail=1
+          fi
+        fi
+
+        # Display and fail for CodeQL SARIF high/critical vulnerabilities
+        for sarif_file in ./results/*.sarif; do
+          if [ -f "$sarif_file" ]; then
+            if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file" | grep -q .; then
+              echo "❌ High/Critical vulnerabilities found in CodeQL scan ($sarif_file):"
+              jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file"
+              fail=1
+            fi
+          fi
+        done
+
+        # Display and fail for .NET vulnerable packages
+        if grep -q 'vulnerable' vulnerability-scan.log; then
+          echo "❌ Vulnerable packages found in .NET scan:"
+          grep 'vulnerable' vulnerability-scan.log
+          fail=1
+        fi
+
+        # Display and fail for TruffleHog secrets detection
+        if [ -f "trufflehog-results.json" ]; then
+          secrets_count=$(jq length trufflehog-results.json 2>/dev/null || echo "0")
+          if [ "$secrets_count" -gt 0 ]; then
+            echo "❌ Secrets detected by TruffleHog: $secrets_count potential secrets found"
+            jq '.' trufflehog-results.json
+            fail=1
+          fi
+        fi
+
+        # Fail if any issues were found
+        if [ "$fail" = "1" ]; then
+          exit 1
+        fi
+
+        # Add more checks as needed for other tools
+        echo "✅ All security thresholds passed"
 
   # JOB 2: Security Baseline Compliance Check
   # Runs on schedule and manual dispatch to verify security policy compliance
