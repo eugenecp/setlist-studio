@@ -360,8 +360,8 @@ jobs:
       uses: semgrep/semgrep-action@v1
       with:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
+        output: semgrep.sarif
         publishToken: ""               # Use community version (no token)
-        args: --baseline-ref=none
       continue-on-error: true          # Don't fail workflow on security findings
     
     # Step 9: Filesystem security scanning with Trivy
