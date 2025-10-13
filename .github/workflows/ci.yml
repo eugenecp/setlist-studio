@@ -364,8 +364,16 @@ jobs:
       env:
         SEMGREP_BASELINE_REF: "5bcda95ed067f2ac4fa87848ec44bf0235c67b77" # Original Commit
       continue-on-error: true          # Don't fail workflow on security findings
-      # Save Semgrep output for summary logic
-      run: semgrep ci > semgrep.log || true
+
+    # Step 8.1: Save Semgrep output for summary logic
+    - name: Save Semgrep Output
+      if: always()
+      run: |
+        if [ -f semgrep.sarif ]; then
+          jq '.' semgrep.sarif > semgrep.log || true
+        else
+          echo "No Semgrep SARIF output found." > semgrep.log
+        fi
     
     # Step 9: Filesystem security scanning with Trivy
     # Analyzes project files and dependencies for vulnerabilities
