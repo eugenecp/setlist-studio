@@ -91,9 +91,10 @@ jobs:
         category: "/language:csharp"      # Categorize results by language
         upload: true                      # Upload results to GitHub Security tab
     
-    # Step 7: Advanced Static Application Security Testing (SAST) with Semgrep
-    # Semgrep provides comprehensive security rule-based analysis
-    - name: 🔐 Advanced SAST with Semgrep
+    # Step 7: Advanced Static Application Security Testing (SAST) with Semgrep Community
+    # Free comprehensive security rule-based analysis using community rules
+    # Uses open-source community rule sets - no token required
+    - name: 🔐 Advanced SAST with Semgrep (Community)
       uses: semgrep/semgrep-action@v1
       with:
         config: >-
@@ -104,10 +105,13 @@ jobs:
           p/owasp-top-ten              # OWASP Top 10 vulnerability patterns
           p/kubernetes                  # Kubernetes configuration security
           p/github-actions             # GitHub Actions workflow security
+          p/command-injection           # Command injection vulnerabilities
+          p/sql-injection               # SQL injection patterns
+          p/xss                         # Cross-site scripting detection
+          p/insecure-transport          # Insecure transport detection
         generateSarif: "1"             # Generate SARIF format for GitHub integration
         auditOn: push                  # Trigger audit on code push
-      env:
-        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} # Authentication token
+        publishToken: ""               # Use community version (no token)
       continue-on-error: true          # Don't fail workflow on security findings
     
     # Step 8: Build Docker image for container security scanning

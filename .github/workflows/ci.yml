@@ -219,7 +219,7 @@ jobs:
         echo "- 🔍 Vulnerability scanning (NuGet packages)" >> pr-summary.md
         echo "- 🛡️ CodeQL static analysis" >> pr-summary.md
         echo "- 🔐 Secret detection with TruffleHog" >> pr-summary.md
-        echo "- 🐳 Docker security scanning" >> pr-summary.md
+        echo "- � Filesystem security scanning with Trivy" >> pr-summary.md
         echo "- 📋 OWASP dependency check" >> pr-summary.md
         echo "- 🎯 SAST analysis with Semgrep" >> pr-summary.md
         echo "- 📊 Security reports available in artifacts" >> pr-summary.md
@@ -353,9 +353,10 @@ jobs:
       with:
         category: "/language:csharp"     # Categorize results by language
     
-    # Step 8: Advanced Static Application Security Testing (SAST) with Semgrep
-    # Comprehensive security rule-based analysis for multiple vulnerability types
-    - name: 🔐 Semgrep SAST Scan
+    # Step 8: Advanced Static Application Security Testing (SAST) with Semgrep Community
+    # Free comprehensive security rule-based analysis using community rules
+    # No token required - uses open-source community rule sets
+    - name: 🔐 Semgrep SAST Scan (Community)
       uses: semgrep/semgrep-action@v1
       with:
         config: >-
@@ -364,30 +365,42 @@ jobs:
           p/csharp                      # C#-specific security patterns
           p/dockerfile                  # Docker security best practices
           p/owasp-top-ten              # OWASP Top 10 vulnerability patterns
+          p/command-injection           # Command injection vulnerabilities
+          p/sql-injection               # SQL injection patterns
+          p/xss                         # Cross-site scripting detection
         generateSarif: "1"             # Generate SARIF format for GitHub integration
-      env:
-        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} # Authentication token
+        publishToken: ""               # Use community version (no token)
       continue-on-error: true          # Don't fail workflow on security findings
     
-    # Step 9: Docker container security scanning with Trivy
-    # Analyzes container images for OS and library vulnerabilities
-    - name: 🐳 Docker Security Scan with Trivy
-      if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' # Run on PRs and main branch
+    # Step 9: Filesystem security scanning with Trivy
+    # Analyzes project files and dependencies for vulnerabilities
+    - name: � Filesystem Security Scan with Trivy
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: 'setlist-studio:latest' # Target Docker image
+        scan-type: 'fs'                   # Filesystem scan mode
+        scan-ref: '.'                     # Scan current directory
         format: 'sarif'                   # SARIF format for GitHub integration
         output: 'trivy-results.sarif'     # Output file name
+        severity: 'CRITICAL,HIGH,MEDIUM'  # Scan for these severity levels
       continue-on-error: true             # Don't fail workflow on vulnerabilities
     
     # Step 10: Upload Trivy scan results to GitHub Security tab
     # Integrates container security findings with GitHub's security features
     - name: 📊 Upload Trivy Results
-      if: always()                        # Upload even if scan failed
+      if: always() && hashFiles('trivy-results.sarif') != '' # Upload only if SARIF file exists
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-results.sarif' # Trivy scan results file
-      continue-on-error: true             # Don't fail on upload issues
+      continue-on-error: true             # Don't fail workflow on vulnerabilities
+    
+    # Step 10.5: Clean build artifacts before dependency scanning
+    # Removes build outputs to avoid scanning temporary files
+    - name: 🧹 Clean Build Artifacts
+      run: |
+        echo "Cleaning build artifacts to avoid scanning temporary files..."
+        find . -type d -name "bin" -exec rm -rf {} + 2>/dev/null || true
+        find . -type d -name "obj" -exec rm -rf {} + 2>/dev/null || true
+        echo "Build artifacts cleaned"
     
     # Step 11: OWASP Dependency Check for comprehensive vulnerability analysis
     # Analyzes project dependencies for known CVE vulnerabilities
@@ -401,6 +414,14 @@ jobs:
           --enableRetired                 # Include retired/deprecated packages
           --enableExperimental           # Enable experimental analyzers
           --failOnCVSS 7                 # Fail on CVSS score >= 7.0 (High severity)
+          --suppression dependency-check-suppressions.xml  # Use suppression file
+          --exclude "**/bin/**"          # Exclude all build output directories
+          --exclude "**/obj/**"          # Exclude build artifacts
+          --exclude "**/TestResults/**"  # Exclude test results
+          --exclude "**/CoverageReport/**"  # Exclude coverage reports
+          --exclude "**/wwwroot/lib/**"  # Exclude client-side libraries
+          --scan "**/*.csproj"           # Focus on project files
+          --scan "**/*.sln"              # Include solution files
           --out reports/                 # Output directory for reports
       continue-on-error: true            # Don't fail workflow on vulnerabilities found
     
@@ -449,11 +470,11 @@ jobs:
           echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
         fi
         
-        # Analyze Trivy container security results
+        # Analyze Trivy filesystem security results
         if [ -f "trivy-results.sarif" ]; then
-          echo "| Trivy (Docker) | ✅ Complete | Container scan completed |" >> security-summary.md
+          echo "| Trivy (Filesystem) | ✅ Complete | Filesystem scan completed |" >> security-summary.md
         else
-          echo "| Trivy (Docker) | ℹ️ Skipped | Container scan skipped |" >> security-summary.md
+          echo "| Trivy (Filesystem) | ℹ️ Skipped | Filesystem scan skipped |" >> security-summary.md
         fi
         
         echo "" >> security-summary.md
@@ -482,7 +503,7 @@ jobs:
           *.sarif                        # SARIF format scan results
         retention-days: 90               # Keep security reports for 90 days (compliance)
     
-    # Step 14: Add security summary comment to pull requests
+    # Step 15: Add security summary comment to pull requests
     # Provides immediate security feedback in PR discussions
     - name: 💬 Add Security Summary to PR
       uses: marocchino/sticky-pull-request-comment@v2
