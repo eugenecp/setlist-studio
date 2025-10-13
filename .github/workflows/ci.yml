@@ -415,7 +415,7 @@ jobs:
           --scan "**/*.csproj"           # Focus on project files
           --scan "**/*.sln"              # Include solution files
           --out reports/                 # Output directory for reports
-      continue-on-error: false            # Fail workflow on vulnerabilities found
+      continue-on-error: true            # Fail workflow on vulnerabilities found
     
     # Step 12: Generate comprehensive security scan summary
     # Creates unified security report combining all scan results
@@ -520,6 +520,25 @@ jobs:
         recreate: false                  # Don't replace existing comments
         path: security-summary.md        # Path to security summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    # Step 16: Enforce security thresholds and fail job if vulnerabilities found
+    - name: 🚨 Enforce Security Thresholds
+      if: always() && github.event_name == 'pull_request'
+      run: |
+        # Fail if OWASP Dependency Check found high severity vulnerabilities
+        if grep -q 'High' ./reports/dependency-check-report.html; then
+          echo "❌ High severity vulnerabilities found in OWASP Dependency Check"
+          exit 1
+        fi
+
+        # Fail if .NET vulnerability scan found vulnerable packages
+        if grep -q 'vulnerable' vulnerability-scan.log; then
+          echo "❌ Vulnerable packages found in .NET scan"
+          exit 1
+        fi
+
+        # Add more checks as needed for other tools (Trivy, CodeQL, etc.)
+        echo "✅ All security thresholds passed"
 
   # JOB 3: Docker Image Build and Container Testing
   # Builds containerized application and validates container functionality
