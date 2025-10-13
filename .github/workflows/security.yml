@@ -99,7 +99,7 @@ jobs:
       with:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/kubernetes p/github-actions p/command-injection p/sql-injection p/xss p/insecure-transport
         publishToken: ""               # Use community version (no token)
-        args: scan --config p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/kubernetes p/github-actions p/command-injection p/sql-injection p/xss p/insecure-transport --baseline-ref=none
+        args: --baseline-ref=none
       continue-on-error: true          # Continue on error for SAST findings (informational)
     
     # Step 8: Build Docker image for container security scanning
