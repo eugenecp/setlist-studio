@@ -23,6 +23,7 @@
             EOFException errors during PE analysis. They don't contain executable code or vulnerabilities.
         ]]></notes>
         <filePath regex="true">.*Microsoft\.TestPlatform\..*\.resources\.dll</filePath>
+        <cve>.*</cve>
     </suppress>
     
     <suppress>
@@ -34,6 +35,7 @@
             analysis errors. They are test-only dependencies and don't affect production security.
         ]]></notes>
         <filePath regex="true">.*Microsoft\.VisualStudio\.TestPlatform\..*\.resources\.dll</filePath>
+        <cve>.*</cve>
     </suppress>
     
     <!-- Suppress analysis of all .resources.dll files in test directories -->
@@ -46,6 +48,7 @@
             They don't contain executable code that could have security vulnerabilities.
         ]]></notes>
         <filePath regex="true">.*/bin/.*/.*\.resources\.dll</filePath>
+        <cve>.*</cve>
     </suppress>
     
     <!-- 
