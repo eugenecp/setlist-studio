@@ -748,12 +748,15 @@ jobs:
     if: github.event_name == 'pull_request' && success()
     environment: preview
     
+    env:
+      PR_NUMBER: ${{ github.event.number }}
+      BRANCH: ${{ github.head_ref }}
     steps:
     - name: 🚀 Deploy to Preview Environment
       run: |
         echo "🎯 This would deploy to a preview environment"
-        echo "PR Number: ${{ github.event.number }}"
-        echo "Branch: ${{ github.head_ref }}"
+        echo "PR Number: \"$PR_NUMBER\""
+        echo "Branch: \"$BRANCH\""
         # Add your actual deployment commands here
     
     - name: 💬 Add deployment comment to PR
