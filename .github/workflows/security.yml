@@ -36,7 +36,6 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: build-and-test              # Depends on successful build
     if: always()                       # Run even if build fails (for security analysis)
     
     # Enhanced permissions for security scanning and reporting
