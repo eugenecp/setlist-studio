@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<suppressions xmlns="http://jeremylong.github.io/DependencyCheck/dependency-suppression.1.2.xsd">
+<suppressions xmlns="https://jeremylong.com/DependencyCheck/dependency-suppression.1.3.xsd">
     <!-- 
         Dependency Check Suppressions for Setlist Studio
         
@@ -20,7 +20,7 @@
             Reviewed: 2025-10-13
             Reviewer: Security Team
             Reason: The flagged dependency is Microsoft.AspNetCore.Authentication.Facebook, an official Microsoft OAuth library. It does not use or include any ActiveX controls or vulnerable code described in CVE-2008-0660. This is a false positive due to the package name.
-        ]]>        </notes>
+        ]]></notes>
         <packageUrl regex="true">^pkg:nuget/Microsoft\.AspNetCore\.Authentication\.Facebook@.*$</packageUrl>
         <cve>CVE-2008-0660</cve>
     </suppress>
@@ -33,7 +33,7 @@
             Reviewer: Security Team
             Reason: These are localization resource files for the test platform that cause
             EOFException errors during PE analysis. They don't contain executable code or vulnerabilities.
-        ]]>        </notes>
+        ]]></notes>
         <filePath regex="true">.*Microsoft\.TestPlatform\..*\.resources\.dll</filePath>
         <cpe>.*</cpe>
     </suppress>
@@ -45,7 +45,7 @@
             Reviewer: Security Team
             Reason: These are localization resource files for Visual Studio test platform that cause
             analysis errors. They are test-only dependencies and don't affect production security.
-        ]]>        </notes>
+        ]]></notes>
         <filePath regex="true">.*Microsoft\.VisualStudio\.TestPlatform\..*\.resources\.dll</filePath>
         <cpe>.*</cpe>
     </suppress>
@@ -58,7 +58,7 @@
             Reviewer: Security Team
             Reason: Resource files contain only localization data and cause PE analyzer errors.
             They don't contain executable code that could have security vulnerabilities.
-        ]]>        </notes>
+        ]]></notes>
         <filePath regex="true">.*/bin/.*/.*\.resources\.dll</filePath>
         <cpe>.*</cpe>
     </suppress>

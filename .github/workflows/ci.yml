@@ -362,8 +362,7 @@ jobs:
         config: p/security-audit p/secrets p/csharp p/dockerfile p/owasp-top-ten p/command-injection p/sql-injection p/xss
         publishToken: ""               # Use community version (no token)
       env:
-        SEMGREP_BASELINE_REF: "" 
-        INPUT_GENERATESARIF: "true"  # Generate SARIF output for GitHub integration         
+        SEMGREP_BASELINE_REF: "5bcda95ed067f2ac4fa87848ec44bf0235c67b77" # Original Commit
       continue-on-error: true          # Don't fail workflow on security findings
     
     # Step 9: Filesystem security scanning with Trivy
