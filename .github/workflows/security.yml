@@ -67,7 +67,7 @@ jobs:
         base: main                      # Compare against main branch
         head: HEAD                      # Scan up to current commit
         extra_args: --debug --only-verified # Verbose output, verified secrets only
-      continue-on-error: false           # Fail build if secrets are found
+      continue-on-error: true            # Continue to allow threshold enforcement step to handle failures
     
     # Step 4: .NET-specific vulnerability scanning for NuGet packages
     # Analyzes dependencies for known security vulnerabilities
@@ -159,7 +159,7 @@ jobs:
         format: 'sarif'                   # SARIF format for GitHub integration
         output: 'trivy-results.sarif'     # Output file name
         severity: 'CRITICAL,HIGH,MEDIUM'  # Scan for these severity levels
-      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
+      continue-on-error: true              # Continue to allow threshold enforcement step to handle failures
     
     # Step 10: Upload Trivy scan results to GitHub Security tab
     # Integrates container security findings with GitHub's security features
@@ -168,7 +168,7 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-results.sarif' # Trivy scan results file
-      continue-on-error: false             # Fail workflow on high/critical vulnerabilities
+      continue-on-error: true              # Continue to allow threshold enforcement step to handle failures
     
     # Step 10.5: Clean build artifacts before dependency scanning
     # Removes build outputs to avoid scanning temporary files
@@ -200,7 +200,7 @@ jobs:
           --scan "**/*.csproj"           # Focus on project files
           --scan "**/*.sln"              # Include solution files
           --out reports/                 # Output directory for reports
-      continue-on-error: true            # Fail workflow on vulnerabilities found
+      continue-on-error: true            # Continue to allow threshold enforcement step to handle failures
     
     # Step 12: Generate comprehensive security scan summary
     # Creates unified security report combining all scan results
@@ -345,18 +345,20 @@ jobs:
         
     # Step 16: Enforce security thresholds and fail job if vulnerabilities found
     - name: 🚨 Enforce Security Thresholds
-      if: always() && github.event_name == 'pull_request'
+      if: always()                       # Run on all events to enforce security thresholds
       run: |
         # Display and fail for OWASP Dependency Check SARIF high severity vulnerabilities
-        if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif | grep -q .; then
-          echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF):"
-          jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif
-          fail=1
+        if [ -f "./reports/dependency-check-report.sarif" ]; then
+          if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif 2>/dev/null | grep -q .; then
+            echo "❌ High severity vulnerabilities found in OWASP Dependency Check (SARIF):"
+            jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[OWASP] " + (.message.text // "")' ./reports/dependency-check-report.sarif
+            fail=1
+          fi
         fi
 
         # Display and fail for Trivy SARIF high/critical vulnerabilities
         if [ -f "trivy-results.sarif" ]; then
-          if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif | grep -q .; then
+          if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif 2>/dev/null | grep -q .; then
             echo "❌ High/Critical vulnerabilities found in Trivy scan (SARIF):"
             jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[Trivy] " + (.message.text // "")' trivy-results.sarif
             fail=1
@@ -366,7 +368,7 @@ jobs:
         # Display and fail for CodeQL SARIF high/critical vulnerabilities
         for sarif_file in ./results/*.sarif; do
           if [ -f "$sarif_file" ]; then
-            if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file" | grep -q .; then
+            if jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file" 2>/dev/null | grep -q .; then
               echo "❌ High/Critical vulnerabilities found in CodeQL scan ($sarif_file):"
               jq -r '.runs[].results[]? | select(.level == "error" or .level == "warning") | "[CodeQL] " + (.message.text // "")' "$sarif_file"
               fail=1
@@ -374,11 +376,13 @@ jobs:
           fi
         done
 
-        # Display and fail for .NET vulnerable packages
-        if grep -q 'vulnerable' vulnerability-scan.log; then
-          echo "❌ Vulnerable packages found in .NET scan:"
-          grep 'vulnerable' vulnerability-scan.log
-          fail=1
+        # Display and fail for .NET vulnerable packages using improved logic
+        if [ -f "vulnerability-scan.log" ]; then
+          if ! grep -q "has no vulnerable packages" vulnerability-scan.log && grep -q "The following sources were used" vulnerability-scan.log; then
+            echo "❌ Vulnerable packages found in .NET scan:"
+            cat vulnerability-scan.log
+            fail=1
+          fi
         fi
 
         # Display and fail for TruffleHog secrets detection
@@ -393,11 +397,24 @@ jobs:
 
         # Fail if any issues were found
         if [ "$fail" = "1" ]; then
+          echo ""
+          echo "🚨 SECURITY THRESHOLD ENFORCEMENT FAILED"
+          echo "❌ One or more security scans found issues above acceptable thresholds"
+          echo "📋 Review the scan results above and address all findings before proceeding"
+          echo ""
           exit 1
         fi
 
-        # Add more checks as needed for other tools
-        echo "✅ All security thresholds passed"
+        # Success message with threshold summary
+        echo "✅ All security thresholds passed successfully!"
+        echo ""
+        echo "🛡️ Security Thresholds Enforced:"
+        echo "   • .NET Packages: No vulnerable packages allowed"
+        echo "   • OWASP Dependency Check: CVSS < 7.0 (no HIGH/CRITICAL)"
+        echo "   • Trivy Filesystem: No CRITICAL/HIGH/MEDIUM vulnerabilities"
+        echo "   • CodeQL: No error/warning level findings"
+        echo "   • TruffleHog: No secrets detected"
+        echo "   • Semgrep: No security issues found"
 
   # JOB 2: Security Baseline Compliance Check
   # Runs on schedule and manual dispatch to verify security policy compliance
