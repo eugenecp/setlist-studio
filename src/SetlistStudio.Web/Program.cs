@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
@@ -9,6 +10,7 @@ using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Web.Services;
+using System.Threading.RateLimiting;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -86,6 +88,68 @@ try
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
 
+    // Configure Rate Limiting - CRITICAL SECURITY ENHANCEMENT
+    builder.Services.AddRateLimiter(options =>
+    {
+        // Global rate limiter - applies to all endpoints unless overridden
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                factory: partition => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 1000, // 1000 requests per window
+                    Window = TimeSpan.FromMinutes(1)
+                }));
+
+        // API endpoints - 100 requests per minute
+        options.AddFixedWindowLimiter("ApiPolicy", options =>
+        {
+            options.PermitLimit = 100;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 10; // Allow 10 requests to queue
+        });
+
+        // Authentication endpoints - 5 attempts per minute (prevent brute force)
+        options.AddFixedWindowLimiter("AuthPolicy", options =>
+        {
+            options.PermitLimit = 5;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 2; // Very limited queue for auth attempts
+        });
+
+        // Strict policy for sensitive operations - 10 requests per minute
+        options.AddFixedWindowLimiter("StrictPolicy", options =>
+        {
+            options.PermitLimit = 10;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 3;
+        });
+
+        // Configure rejection response
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            
+            // Log rate limit violation for security monitoring
+            var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+            var userIdentifier = context.HttpContext.User.Identity?.Name ?? 
+                               context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+            
+            logger?.LogWarning("Rate limit exceeded for user/IP: {UserIdentifier} on endpoint: {Endpoint}", 
+                userIdentifier, context.HttpContext.Request.Path);
+
+            await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+        };
+    });
+
     // Configure localization
     builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
     builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -148,6 +212,9 @@ try
         
         await next();
     });
+    
+    // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
+    app.UseRateLimiter();
     
     app.UseStaticFiles();
 

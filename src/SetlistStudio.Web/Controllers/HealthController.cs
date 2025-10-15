@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Infrastructure.Data;
 
 namespace SetlistStudio.Web.Controllers;
@@ -7,6 +8,7 @@ namespace SetlistStudio.Web.Controllers;
 [ApiController]
 [Route("[controller]")]
 [AllowAnonymous]
+[EnableRateLimiting("ApiPolicy")]
 public class HealthController : ControllerBase
 {
     private readonly ILogger<HealthController> _logger;

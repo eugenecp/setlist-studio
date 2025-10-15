@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace SetlistStudio.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [AllowAnonymous]
+[EnableRateLimiting("ApiPolicy")]
 public class StatusController : ControllerBase
 {
     [HttpGet]
