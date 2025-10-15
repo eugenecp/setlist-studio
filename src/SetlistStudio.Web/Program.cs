@@ -106,6 +106,49 @@ try
     }
 
     app.UseHttpsRedirection();
+    
+    // Security Headers Middleware - CRITICAL SECURITY ENHANCEMENT
+    app.Use(async (context, next) =>
+    {
+        // Prevent MIME type sniffing attacks
+        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        
+        // Prevent clickjacking attacks
+        context.Response.Headers.Append("X-Frame-Options", "DENY");
+        
+        // Enable XSS protection (legacy browsers)
+        context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+        
+        // Referrer policy for privacy protection
+        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+        
+        // Content Security Policy - restrictive default
+        var cspPolicy = "default-src 'self'; " +
+                       "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +  // Blazor requires unsafe-inline/eval
+                       "style-src 'self' 'unsafe-inline'; " +                  // MudBlazor requires unsafe-inline
+                       "img-src 'self' data: https:; " +
+                       "font-src 'self'; " +
+                       "connect-src 'self'; " +
+                       "frame-ancestors 'none'; " +
+                       "base-uri 'self'; " +
+                       "form-action 'self'";
+        context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
+        
+        // Permissions Policy - disable unnecessary browser features
+        context.Response.Headers.Append("Permissions-Policy", 
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+        
+        // HSTS - only in production and when using HTTPS
+        if (!context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() && 
+            context.Request.IsHttps)
+        {
+            context.Response.Headers.Append("Strict-Transport-Security", 
+                "max-age=31536000; includeSubDomains; preload");
+        }
+        
+        await next();
+    });
+    
     app.UseStaticFiles();
 
     app.UseRouting();
