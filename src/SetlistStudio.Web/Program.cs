@@ -88,6 +88,22 @@ try
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
 
+    // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
+    builder.Services.AddAntiforgery(options =>
+    {
+        // Use secure cookie names with __Host- prefix for enhanced security
+        options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
+        
+        // Custom header name for AJAX requests
+        options.HeaderName = "X-CSRF-TOKEN";
+        
+        // Suppress xframe options (already handled by security headers middleware)
+        options.SuppressXFrameOptionsHeader = true;
+    });
+
     // Configure Rate Limiting - CRITICAL SECURITY ENHANCEMENT
     builder.Services.AddRateLimiter(options =>
     {
