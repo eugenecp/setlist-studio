@@ -88,6 +88,9 @@ try
     // Register application services
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
+    
+    // Register enhanced authorization services for comprehensive resource-based security
+    builder.Services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
 
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
