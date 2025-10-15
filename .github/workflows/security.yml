@@ -83,14 +83,16 @@ jobs:
         echo "### 📦 Package Vulnerability Analysis" >> security-report.md
         # Check for vulnerable packages using .NET CLI
         dotnet list package --vulnerable --include-transitive > vulnerability-scan.log 2>&1
-        if grep -q "vulnerable packages" vulnerability-scan.log; then
-          echo "⚠️ Potential vulnerabilities found:" >> security-report.md
-          echo "\`\`\`" >> security-report.md
-          cat vulnerability-scan.log >> security-report.md
-          echo "\`\`\`" >> security-report.md
-        else
+        
+        # More precise vulnerability detection - check for absence of "no vulnerable packages"
+        if grep -q "has no vulnerable packages" vulnerability-scan.log; then
           echo "✅ No known vulnerabilities found in NuGet packages" >> security-report.md
+        else
+          echo "⚠️ Potential vulnerabilities found:" >> security-report.md
         fi
+        echo "\`\`\`" >> security-report.md
+        cat vulnerability-scan.log >> security-report.md
+        echo "\`\`\`" >> security-report.md
         echo "" >> security-report.md
         
         # Check for outdated packages that may have security updates
@@ -229,10 +231,14 @@ jobs:
         fi
         
         # Analyze .NET vulnerability scan results
-        if grep -q "vulnerable" vulnerability-scan.log 2>/dev/null; then
+        # Check for actual vulnerabilities by looking for the absence of "no vulnerable packages"
+        if grep -q "has no vulnerable packages" vulnerability-scan.log 2>/dev/null; then
+          echo "| .NET Vulnerability Scan | ✅ Clean | No vulnerable packages |" >> security-summary.md
+        elif grep -q "The following sources were used" vulnerability-scan.log 2>/dev/null; then
+          # Sources were scanned but no "no vulnerable packages" message = vulnerabilities found
           echo "| .NET Vulnerability Scan | ⚠️ Issues | Vulnerable packages found |" >> security-summary.md
         else
-          echo "| .NET Vulnerability Scan | ✅ Clean | No vulnerable packages |" >> security-summary.md
+          echo "| .NET Vulnerability Scan | ❓ Unknown | Scan results unclear |" >> security-summary.md
         fi
         
         # Analyze CodeQL static analysis results
