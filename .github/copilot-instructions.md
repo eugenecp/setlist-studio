@@ -342,6 +342,36 @@ Use realistic musical data in all examples, tests, and documentation:
 "Create validation rules for musical keys to only accept valid key signatures (C, C#, Db, etc.)"
 
 "Add data sanitization for artist names and song titles to prevent XSS attacks"
+
+"Implement comprehensive input validation with regex patterns for musical keys and numeric ranges"
+
+"Add anti-forgery token validation to all state-changing API endpoints"
+
+"Configure secure session cookies with HttpOnly, Secure, and SameSite attributes"
+
+"Implement rate limiting on API endpoints to prevent DoS attacks (100 requests per minute per user)"
+
+"Add security headers: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP"
+
+"Validate and sanitize all user inputs to prevent SQL injection and XSS attacks"
+
+"Implement resource-based authorization to ensure users can only access their own data"
+
+"Use parameterized queries exclusively - never concatenate user input into SQL strings"
+
+"Add logging for security events: failed logins, suspicious activities, authorization failures"
+
+"Implement secure password policy: 12+ characters, mixed case, numbers, special characters"
+
+"Configure HTTPS redirection and HSTS headers for all production environments"
+
+"Use environment variables or Azure Key Vault for all secrets - never hardcode credentials"
+
+"Implement proper error handling that doesn't leak sensitive information to end users"
+
+"Add audit trails for all data modifications with user tracking and timestamps"
+
+"Configure CORS policy to only allow specific trusted domains, never use wildcards"
 ```
 
 ### User Experience & Content
@@ -370,31 +400,186 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
+## Security Standards & Guidelines
+
+### MANDATORY Security Requirements
+
+Setlist Studio maintains **strict security standards** that must be followed for all code contributions. Security is not optional - it's a fundamental requirement.
+
+#### Authentication & Authorization
+
+**Password Security Requirements:**
+- **Minimum 12 characters** with mixed case, numbers, and special characters
+- **Account lockout** after 5 failed attempts for 5 minutes
+- **No password hints** or recovery questions
+- **Secure password reset** with time-limited tokens
+
+**Session Management:**
+- Configure secure cookies with HttpOnly, Secure, and SameSite attributes
+- Use secure cookie names with __Host- prefix
+- Set appropriate session timeouts (2 hours max)
+- Enable sliding expiration for better UX
+
+**Authorization Checks:**
+- **ALWAYS verify user ownership** of resources (songs, setlists)
+- **Use resource-based authorization** for entity access
+- **Never trust client-side authorization** - validate server-side
+
+#### Input Validation & Sanitization
+
+**CRITICAL: All user inputs must be validated and sanitized**
+
+- Validate all string inputs for length, format, and malicious content
+- Use regex patterns for structured data (musical keys, BPM ranges)
+- Sanitize inputs to prevent XSS and injection attacks
+- Check for malicious patterns (script tags, javascript:, etc.)
+- Return meaningful validation error messages
+- Never trust client-side validation alone
+
+#### Security Headers (MANDATORY)
+
+**ALL responses must include security headers:**
+
+- X-Content-Type-Options: nosniff (prevent MIME type sniffing)
+- X-Frame-Options: DENY (prevent clickjacking)
+- X-XSS-Protection: 1; mode=block (XSS protection)
+- Referrer-Policy: strict-origin-when-cross-origin
+- Content-Security-Policy with restrictive defaults
+- Permissions-Policy to disable unnecessary browser features
+- Strict-Transport-Security for HTTPS enforcement (production only)
+
+#### Secrets Management (CRITICAL)
+
+**NEVER commit secrets to version control:**
+
+- Never hardcode connection strings, API keys, or passwords in code
+- Use Configuration providers (appsettings.json, environment variables)
+- Implement Azure Key Vault for production secret management
+- Use placeholder values in configuration files (YOUR_CLIENT_ID format)
+- Validate that secrets are not placeholder values before using them
+
+#### Rate Limiting & DoS Protection
+
+**REQUIRED: All API endpoints must have rate limiting:**
+
+- Configure rate limiting using Microsoft.AspNetCore.RateLimiting
+- Implement different limits for different endpoint types (API: 100/min, Auth: 5/min)
+- Use appropriate rate limiting algorithms (FixedWindow, SlidingWindow, etc.)
+- Apply rate limiting attributes to controllers and actions
+- Configure queue processing and overflow handling
+
+#### Secure Logging Practices
+
+**NEVER log sensitive information:**
+
+- Never log passwords, tokens, API keys, or personal data
+- Use user IDs instead of email addresses or names in logs
+- Sanitize all logged data to remove sensitive fields
+- Implement secure logging utilities that automatically filter sensitive data
+- Log security events (failed logins, suspicious activities) appropriately
+
+#### Database Security
+
+**ALWAYS use parameterized queries:**
+
+- Never concatenate user input directly into SQL strings
+- Use Entity Framework LINQ queries exclusively for data access
+- Always include user ownership validation in data queries
+- Implement resource-based authorization for entity access
+- Use strongly-typed query parameters to prevent injection attacks
+
+#### CSRF Protection
+
+**ALL state-changing operations must include CSRF protection:**
+
+- Configure anti-forgery tokens with secure settings
+- Use secure cookie names with __Host- prefix
+- Apply ValidateAntiForgeryToken attribute to state-changing endpoints
+- Configure CSRF tokens for AJAX requests
+- Use SameSite=Strict and Secure cookie policies
+
+### Security Validation Checklist
+
+**Before submitting any code, verify:**
+
+- [ ] **Input validation** implemented for all user inputs
+- [ ] **Authorization checks** verify user ownership of resources  
+- [ ] **Parameterized queries** used exclusively (no string concatenation)
+- [ ] **Security headers** configured in middleware
+- [ ] **Rate limiting** applied to all API endpoints
+- [ ] **Secrets** stored in environment variables or Key Vault
+- [ ] **Error messages** don't leak sensitive information
+- [ ] **Logging** doesn't expose sensitive data
+- [ ] **CSRF protection** enabled for state-changing operations
+- [ ] **HTTPS** enforced in production configurations
+
+### Security Code Review Guidelines
+
+**All pull requests must pass security review:**
+
+1. **Automated Security Scans**: All PRs trigger security vulnerability scans
+2. **Manual Security Review**: Security-sensitive changes require manual review
+3. **Threat Modeling**: New features require security impact assessment
+4. **Penetration Testing**: Regular security testing of the application
+
+### Security Incident Response
+
+**If a security vulnerability is discovered:**
+
+1. **Immediate Action**: Create private security issue (not public)
+2. **Assessment**: Evaluate impact and severity
+3. **Remediation**: Develop and test fix
+4. **Deployment**: Emergency deployment if critical
+5. **Communication**: Notify stakeholders appropriately
+6. **Post-Mortem**: Review and improve security processes
+
+---
+
 ## Quick Start Guide
 
 When contributing to Setlist Studio:
 
 1. **Read the codebase**: Familiarize yourself with existing patterns and conventions
-2. **Follow the principles**: Keep reliability, scalability, security, maintainability, and delight in mind
-3. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
-4. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-5. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
-6. **Organize tests strategically**: 
+2. **Follow the principles**: Keep reliability, scalability, **security**, maintainability, and delight in mind
+3. **Security first**: Always implement security requirements (validation, authorization, secure headers, rate limiting) before adding functionality
+4. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
+5. **Use realistic examples**: When creating tests or documentation, use authentic musical data
+6. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
+7. **Organize tests strategically**: 
    - Add core functionality tests to base test files (e.g., `SetlistServiceTests.cs`)
    - Create advanced test files for edge cases, error handling, and coverage gaps when base files exceed ~1,400 lines
    - Use the `{SourceClass}AdvancedTests.cs` naming pattern for specialized testing scenarios
-7. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
-8. **Document your work**: Add clear comments and update documentation as needed
+8. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
+9. **Security validation**: Complete the security checklist before submitting any pull request
+10. **Document your work**: Add clear comments and update documentation as needed
 
 ### Quick Start Checklist
 
+**Development Setup:**
 - [ ] Clone repository and set up development environment
 - [ ] Run `dotnet test` to ensure all tests pass
 - [ ] Generate coverage report to understand current coverage status
 - [ ] Review existing code patterns and test organization
 - [ ] Create feature branch following naming conventions
+
+**Security First Development:**
+- [ ] Review security requirements in this document
+- [ ] Implement input validation for all user inputs
+- [ ] Add authorization checks for data access
+- [ ] Configure security headers and rate limiting
+- [ ] Use parameterized queries exclusively
+- [ ] Store secrets in environment variables or Key Vault
+
+**Testing & Quality:**
 - [ ] Write tests first (TDD approach recommended)
 - [ ] Ensure 90%+ line and branch coverage for new code
+- [ ] Include security test cases (authentication, authorization, validation)
+- [ ] Test with malicious inputs and edge cases
+
+**Code Review Preparation:**
+- [ ] Complete security validation checklist
+- [ ] Run security scans and address any issues
+- [ ] Document security considerations in PR description
 - [ ] Submit pull request with clear description and test evidence
 
 ---
@@ -413,4 +598,20 @@ When contributing to Setlist Studio:
 
 ---
 
-**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, secure, and delightful experience for artists sharing their music with the world.
+## SECURITY ENFORCEMENT REMINDER
+
+**Security is MANDATORY - not optional. Every contribution must:**
+
+1. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
+2. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
+3. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
+4. **PROTECT SECRETS**: Never hardcode credentials - use secure storage
+5. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
+6. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
+7. **FAIL SECURELY**: Error messages must not leak sensitive information
+
+**Security violations will result in immediate pull request rejection.**
+
+---
+
+**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, **secure**, and delightful experience for artists sharing their music with the world.
