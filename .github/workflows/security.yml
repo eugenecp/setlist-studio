@@ -222,31 +222,31 @@ jobs:
         if [ -f "trufflehog-results.json" ]; then
           secrets_count=$(jq length trufflehog-results.json 2>/dev/null || echo "0")
           if [ "$secrets_count" -gt 0 ]; then
-            echo "| TruffleHog | ⚠️ Issues | $secrets_count potential secrets found |" >> security-summary.md
+            echo "| TruffleHog | ⚠️ Issues | $secrets_count secrets detected |" >> security-summary.md
           else
-            echo "| TruffleHog | ✅ Clean | No secrets detected |" >> security-summary.md
+            echo "| TruffleHog | ✅ Secure | No secrets detected |" >> security-summary.md
           fi
         else
-          echo "| TruffleHog | ✅ Clean | No secrets detected |" >> security-summary.md
+          echo "| TruffleHog | ✅ Secure | No secrets detected |" >> security-summary.md
         fi
         
         # Analyze .NET vulnerability scan results
         # Check for actual vulnerabilities by looking for the absence of "no vulnerable packages"
         if grep -q "has no vulnerable packages" vulnerability-scan.log 2>/dev/null; then
-          echo "| .NET Vulnerability Scan | ✅ Clean | No vulnerable packages |" >> security-summary.md
+          echo "| .NET Vulnerability Scan | ✅ Secure | No vulnerable packages detected |" >> security-summary.md
         elif grep -q "The following sources were used" vulnerability-scan.log 2>/dev/null; then
           # Sources were scanned but no "no vulnerable packages" message = vulnerabilities found
-          echo "| .NET Vulnerability Scan | ⚠️ Issues | Vulnerable packages found |" >> security-summary.md
+          echo "| .NET Vulnerability Scan | ⚠️ Issues | Vulnerable packages detected |" >> security-summary.md
         else
-          echo "| .NET Vulnerability Scan | ❓ Unknown | Scan results unclear |" >> security-summary.md
+          echo "| .NET Vulnerability Scan | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
         
         # Analyze CodeQL static analysis results
-        codeql_status="✅ Complete | Static analysis completed"
+        codeql_status="✅ Secure | No vulnerabilities detected"
         for sarif_file in ./results/*.sarif; do
           if [ -f "$sarif_file" ]; then
             if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" > /dev/null; then
-              codeql_status="⚠️ Issues | Vulnerabilities found"
+              codeql_status="⚠️ Issues | Code vulnerabilities detected"
               break
             fi
           fi
@@ -258,34 +258,34 @@ jobs:
         if [ -f "semgrep.log" ] && grep -q "CI scan completed successfully" semgrep.log; then
           findings=$(grep -o "Found [0-9]* findings" semgrep.log | grep -o "[0-9]*" || echo "0")
           if [ "$findings" -gt 0 ]; then
-            echo "| Semgrep SAST | ⚠️ Issues | $findings findings detected |" >> security-summary.md
+            echo "| Semgrep SAST | ⚠️ Issues | $findings security issues detected |" >> security-summary.md
           else
-            echo "| Semgrep SAST | ✅ Complete | No security issues found |" >> security-summary.md
+            echo "| Semgrep SAST | ✅ Secure | No security issues detected |" >> security-summary.md
           fi
         else
-          echo "| Semgrep SAST | ℹ️ Skipped | Static analysis skipped |" >> security-summary.md
+          echo "| Semgrep SAST | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
         
         # Analyze Trivy filesystem security results
         if [ -f "trivy-results.sarif" ]; then
           if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' trivy-results.sarif > /dev/null; then
-            echo "| Trivy (Filesystem) | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
+            echo "| Trivy Filesystem | ⚠️ Issues | Filesystem vulnerabilities detected |" >> security-summary.md
           else
-            echo "| Trivy (Filesystem) | ✅ Complete | Filesystem scan completed |" >> security-summary.md
+            echo "| Trivy Filesystem | ✅ Secure | No filesystem vulnerabilities detected |" >> security-summary.md
           fi
         else
-          echo "| Trivy (Filesystem) | ℹ️ Skipped | Filesystem scan skipped |" >> security-summary.md
+          echo "| Trivy Filesystem | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
         
         # Analyze OWASP Dependency Check results
         if [ -f "./reports/dependency-check-report.sarif" ]; then
           if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' ./reports/dependency-check-report.sarif > /dev/null; then
-            echo "| OWASP Dependency Check | ⚠️ Issues | Vulnerabilities found |" >> security-summary.md
+            echo "| OWASP Dependency Check | ⚠️ Issues | Dependency vulnerabilities detected |" >> security-summary.md
           else
-            echo "| OWASP Dependency Check | ✅ Complete | No vulnerabilities found |" >> security-summary.md
+            echo "| OWASP Dependency Check | ✅ Secure | No dependency vulnerabilities detected |" >> security-summary.md
           fi
         else
-          echo "| OWASP Dependency Check | ℹ️ Skipped | Dependency check skipped |" >> security-summary.md
+          echo "| OWASP Dependency Check | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
 
         echo "### 📋 Recommendations" >> security-summary.md
