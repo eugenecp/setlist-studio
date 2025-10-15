@@ -56,18 +56,18 @@ try
     // Configure Identity
     builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
     {
-        // Password settings (relaxed for demo purposes)
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequiredLength = 6;
-        options.Password.RequiredUniqueChars = 1;
+        // SECURITY: Strong password requirements for production security
+        options.Password.RequireDigit = true;              // Require at least one digit (0-9)
+        options.Password.RequireLowercase = true;          // Require at least one lowercase letter (a-z)
+        options.Password.RequireNonAlphanumeric = true;    // Require at least one special character (!@#$%^&* etc.)
+        options.Password.RequireUppercase = true;          // Require at least one uppercase letter (A-Z)
+        options.Password.RequiredLength = 12;              // Minimum 12 characters for strong security
+        options.Password.RequiredUniqueChars = 4;          // Require at least 4 unique characters
 
-        // Lockout settings
-        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-        options.Lockout.MaxFailedAccessAttempts = 5;
-        options.Lockout.AllowedForNewUsers = true;
+        // SECURITY: Account lockout protection against brute force attacks
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);  // Lock for 5 minutes
+        options.Lockout.MaxFailedAccessAttempts = 5;                       // Lock after 5 failed attempts
+        options.Lockout.AllowedForNewUsers = true;                         // Apply lockout to new users
 
         // User settings
         options.User.AllowedUserNameCharacters = 

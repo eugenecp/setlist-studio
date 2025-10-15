@@ -2352,6 +2352,235 @@ public class ProgramTests : IDisposable
 
     #endregion
 
+    #region Password Policy Security Tests
+
+    [Fact]
+    public void PasswordPolicy_ShouldRequireMinimum12Characters_WhenEnforced()
+    {
+        // Arrange & Act
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        
+        // Verify the service is configured with strong password requirements
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var options = userManager.Options.Password;
+        
+        // Assert
+        options.RequiredLength.Should().Be(12, 
+            "Minimum password length must be 12 characters for security compliance");
+    }
+
+    [Fact]
+    public void PasswordPolicy_ShouldRequireAllCharacterTypes_WhenEnforced()
+    {
+        // Arrange & Act
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var options = userManager.Options.Password;
+        
+        // Assert - All character types must be required
+        options.RequireDigit.Should().BeTrue(
+            "Passwords must require at least one digit (0-9) for security");
+        options.RequireLowercase.Should().BeTrue(
+            "Passwords must require at least one lowercase letter (a-z) for security");
+        options.RequireUppercase.Should().BeTrue(
+            "Passwords must require at least one uppercase letter (A-Z) for security");
+        options.RequireNonAlphanumeric.Should().BeTrue(
+            "Passwords must require at least one special character (!@#$%^&* etc.) for security");
+    }
+
+    [Fact]
+    public void PasswordPolicy_ShouldRequireUniqueCharacters_WhenEnforced()
+    {
+        // Arrange & Act
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var options = userManager.Options.Password;
+        
+        // Assert - Require sufficient unique characters
+        options.RequiredUniqueChars.Should().Be(4, 
+            "Passwords must require at least 4 unique characters to prevent simple patterns");
+    }
+
+    [Fact]
+    public void AccountLockout_ShouldBeConfigured_ForBruteForceProtection()
+    {
+        // Arrange & Act
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var lockoutOptions = userManager.Options.Lockout;
+        
+        // Assert - Lockout settings should protect against brute force attacks
+        lockoutOptions.MaxFailedAccessAttempts.Should().Be(5,
+            "Account should lock after 5 failed attempts to prevent brute force attacks");
+        lockoutOptions.DefaultLockoutTimeSpan.Should().Be(TimeSpan.FromMinutes(5),
+            "Account should be locked for 5 minutes after failed attempts");
+        lockoutOptions.AllowedForNewUsers.Should().BeTrue(
+            "Lockout protection should apply to all users including new accounts");
+    }
+
+    [Fact]
+    public async Task PasswordPolicy_ShouldRejectWeakPasswords_InProduction()
+    {
+        // Arrange
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var weakPasswords = new[]
+        {
+            "password",           // No uppercase, digits, or special characters
+            "Password",           // No digits or special characters
+            "Password1",          // No special characters
+            "Pass1!",            // Too short (< 12 characters)
+            "PASSWORD123!",       // No lowercase
+            "password123!",       // No uppercase
+            "Password!!!"         // No digits
+        };
+
+        // Act & Assert - All weak passwords should be rejected
+        foreach (var weakPassword in weakPasswords)
+        {
+            var user = new ApplicationUser 
+            { 
+                UserName = $"testuser_{Guid.NewGuid()}", 
+                Email = $"test_{Guid.NewGuid()}@example.com" 
+            };
+            
+            var result = await userManager.CreateAsync(user, weakPassword);
+            
+            result.Succeeded.Should().BeFalse(
+                $"Weak password '{weakPassword}' should be rejected by password policy");
+        }
+    }
+
+    [Fact]
+    public async Task PasswordPolicy_ShouldAcceptStrongPasswords_InProduction()
+    {
+        // Arrange
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var strongPasswords = new[]
+        {
+            "MySecureP@ssw0rd2024!",      // 20 chars, all requirements met
+            "Setlist$tudio123Music",      // 18 chars, all requirements met  
+            "R0ck&R0ll!Festival2025",     // 19 chars, all requirements met
+            "Mu5ic@App!Security99"        // 17 chars, all requirements met
+        };
+
+        // Act & Assert - All strong passwords should be accepted
+        foreach (var strongPassword in strongPasswords)
+        {
+            var user = new ApplicationUser 
+            { 
+                UserName = $"testuser_{Guid.NewGuid()}", 
+                Email = $"test_{Guid.NewGuid()}@example.com" 
+            };
+            
+            var result = await userManager.CreateAsync(user, strongPassword);
+            
+            result.Succeeded.Should().BeTrue(
+                $"Strong password '{strongPassword}' should be accepted by password policy. Errors: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            
+            // Cleanup - remove created user
+            if (result.Succeeded)
+            {
+                await userManager.DeleteAsync(user);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PasswordPolicy_ShouldProvideDescriptiveErrors_ForInvalidPasswords()
+    {
+        // Arrange
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var user = new ApplicationUser 
+        { 
+            UserName = $"testuser_{Guid.NewGuid()}", 
+            Email = $"test_{Guid.NewGuid()}@example.com" 
+        };
+        
+        // Act - Try to create user with weak password
+        var result = await userManager.CreateAsync(user, "weak");
+        
+        // Assert - Should provide helpful error messages
+        result.Succeeded.Should().BeFalse("Weak password should be rejected");
+        result.Errors.Should().NotBeEmpty("Should provide error descriptions");
+        
+        var errorMessages = result.Errors.Select(e => e.Description).ToList();
+        errorMessages.Should().Contain(e => e.Contains("at least") || e.Contains("must"), 
+            "Error messages should be descriptive and helpful");
+    }
+
+    [Fact]
+    public void PasswordPolicy_ShouldBeConsistent_WithSecurityRequirements()
+    {
+        // Arrange & Act
+        using var factory = CreateTestFactory(new Dictionary<string, string?>
+        {
+            {"ConnectionStrings:DefaultConnection", "Data Source=:memory:"}
+        });
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var options = userManager.Options.Password;
+        
+        // Assert - Verify all security requirements are met
+        var securityRequirements = new
+        {
+            MinLength = 12,
+            RequiresUppercase = true,
+            RequiresLowercase = true,  
+            RequiresDigit = true,
+            RequiresSpecialChar = true,
+            MinUniqueChars = 4
+        };
+        
+        options.RequiredLength.Should().BeGreaterOrEqualTo(securityRequirements.MinLength,
+            "Password length must meet security requirements");
+        options.RequireUppercase.Should().Be(securityRequirements.RequiresUppercase,
+            "Uppercase requirement must match security standards");
+        options.RequireLowercase.Should().Be(securityRequirements.RequiresLowercase,
+            "Lowercase requirement must match security standards");
+        options.RequireDigit.Should().Be(securityRequirements.RequiresDigit,
+            "Digit requirement must match security standards");
+        options.RequireNonAlphanumeric.Should().Be(securityRequirements.RequiresSpecialChar,
+            "Special character requirement must match security standards");
+        options.RequiredUniqueChars.Should().BeGreaterOrEqualTo(securityRequirements.MinUniqueChars,
+            "Unique character requirement must meet security standards");
+    }
+
+    #endregion
+
     public void Dispose()
     {
         _context?.Dispose();

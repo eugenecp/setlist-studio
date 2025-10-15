@@ -1221,42 +1221,43 @@ public class ProgramAdvancedTests : IDisposable
     }
 
     [Fact]
-    public void Program_ShouldConfigureIdentity_WithCorrectPasswordSettings()
+    public void Program_ShouldConfigureIdentity_WithSecurePasswordSettings()
     {
         // This targets Identity configuration paths (lines 52-77)
         
-        // Arrange: Test Identity password configuration
+        // Arrange: Test Identity password configuration for PRODUCTION SECURITY
         var passwordConfig = new
         {
-            RequireDigit = false,
-            RequireLowercase = false,
-            RequireNonAlphanumeric = false,
-            RequireUppercase = false,
-            RequiredLength = 6,
-            RequiredUniqueChars = 1
+            RequireDigit = true,           // SECURITY: Require digits
+            RequireLowercase = true,       // SECURITY: Require lowercase
+            RequireNonAlphanumeric = true, // SECURITY: Require special characters
+            RequireUppercase = true,       // SECURITY: Require uppercase
+            RequiredLength = 12,           // SECURITY: Minimum 12 characters
+            RequiredUniqueChars = 4        // SECURITY: At least 4 unique chars
         };
         
         var lockoutConfig = new
         {
-            DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5),
-            MaxFailedAccessAttempts = 5,
-            AllowedForNewUsers = true
+            DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5),  // 5 minute lockout
+            MaxFailedAccessAttempts = 5,                       // Lock after 5 attempts
+            AllowedForNewUsers = true                          // Apply to all users
         };
         
-        // Act: Test configuration validation
-        var passwordSettingsValid = passwordConfig.RequiredLength >= 6;
-        var lockoutSettingsValid = lockoutConfig.MaxFailedAccessAttempts > 0;
-        var uniqueCharsValid = passwordConfig.RequiredUniqueChars >= 1;
+        // Act: Test configuration validation for SECURITY COMPLIANCE
+        var passwordSettingsValid = passwordConfig.RequiredLength >= 12;
+        var lockoutSettingsValid = lockoutConfig.MaxFailedAccessAttempts <= 5;
+        var uniqueCharsValid = passwordConfig.RequiredUniqueChars >= 4;
         
-        // Assert: Identity should be configured for development ease
-        passwordSettingsValid.Should().BeTrue("Should have minimum password length");
-        lockoutSettingsValid.Should().BeTrue("Should have lockout protection");
-        uniqueCharsValid.Should().BeTrue("Should require unique characters");
+        // Assert: Identity should be configured for PRODUCTION SECURITY
+        passwordSettingsValid.Should().BeTrue("Should enforce minimum 12 character length for security");
+        lockoutSettingsValid.Should().BeTrue("Should limit failed attempts to prevent brute force attacks");
+        uniqueCharsValid.Should().BeTrue("Should require 4+ unique characters to prevent patterns");
         
-        passwordConfig.RequireDigit.Should().BeFalse("Should not require digits for demo");
-        passwordConfig.RequireLowercase.Should().BeFalse("Should not require lowercase for demo");
-        passwordConfig.RequireUppercase.Should().BeFalse("Should not require uppercase for demo");
-        passwordConfig.RequireNonAlphanumeric.Should().BeFalse("Should not require special chars for demo");
+        // SECURITY: All character types must be required
+        passwordConfig.RequireDigit.Should().BeTrue("Must require digits for strong passwords");
+        passwordConfig.RequireLowercase.Should().BeTrue("Must require lowercase for strong passwords");
+        passwordConfig.RequireUppercase.Should().BeTrue("Must require uppercase for strong passwords");
+        passwordConfig.RequireNonAlphanumeric.Should().BeTrue("Must require special characters for strong passwords");
     }
 
     #endregion
