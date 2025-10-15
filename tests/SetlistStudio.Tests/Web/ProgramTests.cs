@@ -1226,7 +1226,7 @@ public class ProgramTests : IDisposable
     }
 
     [Fact]
-    public async Task RateLimiting_Configuration_ShouldBeProperlyConfigured()
+    public void RateLimiting_Configuration_ShouldBeProperlyConfigured()
     {
         // Arrange & Act - Test that rate limiting services are properly configured
         var factory = CreateTestFactory(new Dictionary<string, string?>
