@@ -8,15 +8,38 @@ using MudBlazor.Services;
 using Serilog;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Web.Services;
 using System.Threading.RateLimiting;
 
-// Configure Serilog
+// Configure Serilog with secure logging and data filtering
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("logs/setlist-studio-.txt", rollingInterval: RollingInterval.Day)
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", Serilog.Events.LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "SetlistStudio")
+    .Enrich.WithProperty("Environment", Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development")
+    .Filter.ByExcluding(logEvent =>
+    {
+        // Filter out potentially sensitive log messages
+        var message = logEvent.RenderMessage();
+        return SecureLoggingHelper.SensitivePatterns.Any(pattern => pattern.IsMatch(message));
+    })
+    .WriteTo.Console(outputTemplate: 
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File("logs/setlist-studio-.txt", 
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}",
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information)
+    .WriteTo.File("logs/security/security-.txt",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 90,
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Warning)
     .CreateLogger();
 
 try
@@ -91,6 +114,10 @@ try
     
     // Register enhanced authorization services for comprehensive resource-based security
     builder.Services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
+    
+    // Register security logging services for centralized security event management
+    builder.Services.AddScoped<SecurityEventLogger>();
+    builder.Services.AddScoped<SetlistStudio.Web.Security.SecurityEventHandler>();
 
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
@@ -268,6 +295,12 @@ try
     
     // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
     app.UseRateLimiter();
+    
+    // Security Event Logging Middleware - Monitor and log security events (disabled in test environment)
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseMiddleware<SetlistStudio.Web.Middleware.SecurityEventMiddleware>();
+    }
     
     app.UseStaticFiles();
 
