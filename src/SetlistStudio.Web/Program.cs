@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -166,6 +167,33 @@ try
         };
     });
 
+    // SECURITY: Configure production security settings
+    if (!builder.Environment.IsDevelopment())
+    {
+        // Configure forwarded headers for reverse proxy scenarios
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor 
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+            
+            // Clear default known networks and proxies for security
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
+
+        // Configure data protection for production
+        builder.Services.AddDataProtection();
+
+        // Configure HSTS for production
+        builder.Services.AddHsts(options =>
+        {
+            options.Preload = true;
+            options.IncludeSubDomains = true;
+            options.MaxAge = TimeSpan.FromDays(365);
+        });
+    }
+
     // Configure localization
     builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
     builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -177,6 +205,12 @@ try
     });
 
     var app = builder.Build();
+
+    // SECURITY: Configure forwarded headers for production reverse proxy scenarios
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseForwardedHeaders();
+    }
 
     // Configure the HTTP request pipeline
     if (!app.Environment.IsDevelopment())
