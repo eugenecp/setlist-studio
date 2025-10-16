@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using FluentAssertions;
@@ -18,6 +19,7 @@ public class SongServiceAdvancedTests : IDisposable
 {
     private readonly SetlistStudioDbContext _context;
     private readonly Mock<ILogger<SongService>> _mockLogger;
+    private readonly Mock<IAuditLogService> _mockAuditLogService;
     private readonly SongService _songService;
     private readonly string _testUserId = "test-user-123";
 
@@ -29,7 +31,8 @@ public class SongServiceAdvancedTests : IDisposable
 
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SongService>>();
-        _songService = new SongService(_context, _mockLogger.Object);
+        _mockAuditLogService = new Mock<IAuditLogService>();
+        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object);
     }
 
     #region Edge Case and Error Handling Tests

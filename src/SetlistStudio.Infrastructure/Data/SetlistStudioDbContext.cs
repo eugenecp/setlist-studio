@@ -30,6 +30,11 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     /// </summary>
     public DbSet<SetlistSong> SetlistSongs { get; set; } = null!;
 
+    /// <summary>
+    /// Audit logs for tracking data changes
+    /// </summary>
+    public DbSet<AuditLog> AuditLogs { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -110,6 +115,28 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             
             // Index for ordering
             entity.HasIndex(ss => new { ss.SetlistId, ss.Position });
+        });
+
+        // Configure AuditLog entity
+        builder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.UserId).IsRequired().HasMaxLength(450);
+            entity.Property(a => a.UserName).HasMaxLength(256);
+            entity.Property(a => a.EntityType).IsRequired().HasMaxLength(100);
+            entity.Property(a => a.EntityId).IsRequired().HasMaxLength(50);
+            entity.Property(a => a.Action).IsRequired().HasMaxLength(20);
+            entity.Property(a => a.Timestamp).IsRequired();
+            entity.Property(a => a.IpAddress).HasMaxLength(45);
+            entity.Property(a => a.UserAgent).HasMaxLength(500);
+            entity.Property(a => a.AdditionalContext).HasMaxLength(1000);
+            entity.Property(a => a.SessionId).HasMaxLength(100);
+            entity.Property(a => a.CorrelationId).HasMaxLength(100);
+            
+            // Indexes for common queries
+            entity.HasIndex(a => new { a.EntityType, a.EntityId });
+            entity.HasIndex(a => a.UserId);
+            entity.HasIndex(a => a.Timestamp);
         });
 
         // Configure ApplicationUser extensions

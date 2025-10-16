@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Development Docker Compose override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  setliststudio-web:
+    # Development environment configuration
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Enable diagnostics for development
+      - DOTNET_EnableDiagnostics=1
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Debug
+      - ASPNETCORE_LOGGING__LOGLEVEL__Microsoft=Information
+      - ASPNETCORE_LOGGING__LOGLEVEL__SetlistStudio=Debug
+    
+    # Relaxed resource limits for development
+    mem_limit: 1G
+    cpus: '2.0'
+    
+    # Volume mounts for hot reload (adjust paths as needed)
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    
+    # Development port mapping
+    ports:
+      - "5000:8080"  # Map host port 5000 to container port 8080
+    
+    # Development networks
+    networks:
+      - setlist-dev
+    
+    # Relaxed security for development (still secure but developer-friendly)
+    security_opt:
+      - no-new-privileges:true
+    
+    # Development labels
+    labels:
+      - "com.setliststudio.environment=development"
+      - "com.setliststudio.hotreload=enabled"
+
+networks:
+  setlist-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16

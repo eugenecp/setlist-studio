@@ -56,6 +56,7 @@ try
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
     builder.Services.AddControllers(); // Add API controllers support
+    builder.Services.AddHttpContextAccessor(); // Required for audit logging
 
     // Add MudBlazor services for Material Design components
     builder.Services.AddMudServices(config =>
@@ -68,6 +69,85 @@ try
         config.SnackbarConfiguration.HideTransitionDuration = 500;
         config.SnackbarConfiguration.ShowTransitionDuration = 500;
         config.SnackbarConfiguration.SnackbarVariant = MudBlazor.Variant.Filled;
+    });
+
+    // SECURITY: Configure CORS with restrictive policy for production security
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("RestrictivePolicy", policy =>
+        {
+            var environment = builder.Environment.EnvironmentName;
+            
+            if (environment == "Production")
+            {
+                // Production: Only allow specific trusted domains
+                policy.WithOrigins(
+                    "https://setliststudio.com",
+                    "https://www.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+            else if (environment == "Development")
+            {
+                // Development: Allow localhost with specific ports
+                policy.WithOrigins(
+                    "https://localhost:5001",
+                    "http://localhost:5000",
+                    "https://localhost:7000",
+                    "http://localhost:8000"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
+            else
+            {
+                // Test/Staging: More restrictive than development but not production
+                policy.WithOrigins(
+                    "https://staging.setliststudio.com",
+                    "https://test.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+        });
+
+        // Add a more restrictive policy for API endpoints
+        options.AddPolicy("ApiPolicy", policy =>
+        {
+            var environment = builder.Environment.EnvironmentName;
+            
+            if (environment == "Production")
+            {
+                policy.WithOrigins(
+                    "https://setliststudio.com",
+                    "https://www.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                .WithHeaders("Content-Type", "Authorization")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+            else
+            {
+                policy.WithOrigins(
+                    "https://localhost:5001",
+                    "http://localhost:5000",
+                    "https://localhost:7000",
+                    "http://localhost:8000"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                .WithHeaders("Content-Type", "Authorization")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
+        });
     });
 
     // Configure database
@@ -111,6 +191,7 @@ try
     // Register application services
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
+    builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     
     // Register enhanced authorization services for comprehensive resource-based security
     builder.Services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
@@ -118,6 +199,7 @@ try
     // Register security logging services for centralized security event management
     builder.Services.AddScoped<SecurityEventLogger>();
     builder.Services.AddScoped<SetlistStudio.Web.Security.SecurityEventHandler>();
+    builder.Services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
 
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
@@ -134,6 +216,56 @@ try
         // Suppress xframe options (already handled by security headers middleware)
         options.SuppressXFrameOptionsHeader = true;
     });
+
+    // SECURITY: Configure secure session and cookie settings
+    builder.Services.ConfigureApplicationCookie(options =>
+    {
+        // Session timeout and expiration settings
+        options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
+        options.SlidingExpiration = true; // Reset timeout on user activity
+        options.Cookie.Name = "__Host-SetlistStudio-Identity";
+        
+        // Secure cookie configuration
+        options.Cookie.HttpOnly = true; // Prevent JavaScript access
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
+        options.Cookie.IsEssential = true; // Required for GDPR compliance
+        
+        // Session invalidation settings
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            // Validate security stamp to invalidate sessions on password change
+            var securityStampValidator = context.HttpContext.RequestServices
+                .GetRequiredService<ISecurityStampValidator>();
+            await securityStampValidator.ValidateAsync(context);
+        };
+        
+        // Login/logout paths
+        options.LoginPath = "/Identity/Account/Login";
+        options.LogoutPath = "/Identity/Account/Logout";
+        options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+    });
+
+    // Configure session state with secure settings
+    builder.Services.AddSession(options =>
+    {
+        options.Cookie.Name = "__Host-SetlistStudio-Session";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.IsEssential = true;
+        options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
+    });
+
+    // Configure data protection with secure settings
+    builder.Services.AddDataProtection(options =>
+    {
+        options.ApplicationDiscriminator = "SetlistStudio";
+    })
+    .SetApplicationName("SetlistStudio")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(
+        builder.Environment.ContentRootPath, "DataProtection-Keys")))
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
 
     // Configure Rate Limiting - CRITICAL SECURITY ENHANCEMENT
     builder.Services.AddRateLimiter(options =>
@@ -305,6 +437,12 @@ try
     app.UseStaticFiles();
 
     app.UseRouting();
+
+    // SECURITY: Enable CORS with restrictive policy
+    app.UseCors("RestrictivePolicy");
+
+    // SECURITY: Enable secure session management
+    app.UseSession();
 
     // Add localization
     app.UseRequestLocalization();
