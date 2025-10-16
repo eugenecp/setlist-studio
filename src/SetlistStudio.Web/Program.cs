@@ -1,3 +1,6 @@
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -45,6 +48,30 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // SECURITY: Configure Azure Key Vault for production secrets management
+    if (!builder.Environment.IsDevelopment())
+    {
+        var keyVaultName = builder.Configuration["KeyVault:VaultName"];
+        if (!string.IsNullOrEmpty(keyVaultName))
+        {
+            try
+            {
+                var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+                var secretClient = new SecretClient(keyVaultUri, new DefaultAzureCredential());
+                builder.Configuration.AddAzureKeyVault(secretClient, new KeyVaultSecretManager());
+                Log.Information("Azure Key Vault configured: {KeyVaultUri}", keyVaultUri);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
+            }
+        }
+        else
+        {
+            Log.Warning("Azure Key Vault name not configured for non-development environment");
+        }
+    }
 
     // Add Serilog
     builder.Host.UseSerilog();
@@ -191,6 +218,9 @@ try
     // Register application services
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
+    
+    // Register security services
+    builder.Services.AddScoped<SecretValidationService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     
     // Register enhanced authorization services for comprehensive resource-based security
@@ -204,10 +234,19 @@ try
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
     {
-        // Use secure cookie names with __Host- prefix for enhanced security
-        options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+        // Use secure cookie names with __Host- prefix for enhanced security in production
+        if (builder.Environment.IsDevelopment())
+        {
+            options.Cookie.Name = "SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development
+        }
+        else
+        {
+            options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
+        }
+        
         options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS
         options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
         
         // Custom header name for AJAX requests
@@ -456,6 +495,9 @@ try
     app.MapRazorPages();
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");
+
+    // SECURITY: Validate production secrets before starting application
+    await ValidateSecretsAsync(app);
 
     // Initialize database
     await InitializeDatabaseAsync(app);
@@ -851,6 +893,29 @@ static int GetSongId(Dictionary<string, Song> songByTitle, string title)
     return songByTitle.TryGetValue(title, out var song) 
         ? song.Id 
         : throw new InvalidOperationException($"Song '{title}' not found in sample data");
+}
+
+/// <summary>
+/// Validates that all required secrets are properly configured for the current environment
+/// </summary>
+static async Task ValidateSecretsAsync(WebApplication app)
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var secretValidationService = scope.ServiceProvider.GetRequiredService<SecretValidationService>();
+        
+        // Validate secrets and throw exception if critical secrets are missing
+        secretValidationService.ValidateSecretsOrThrow();
+        
+        Log.Information("Secret validation completed successfully for environment: {Environment}", 
+            app.Environment.EnvironmentName);
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Secret validation failed for environment: {Environment}", app.Environment.EnvironmentName);
+        throw;
+    }
 }
 
 // Make Program class accessible for testing
