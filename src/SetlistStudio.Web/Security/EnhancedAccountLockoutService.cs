@@ -161,17 +161,17 @@ public class EnhancedAccountLockoutService
     }
 
     /// <summary>
-    /// Check if an IP address should be temporarily blocked due to excessive failed attempts
+    /// Checks if an IP address should be blocked due to suspicious activity
     /// </summary>
     /// <param name="ipAddress">IP address to check</param>
     /// <returns>True if IP should be blocked</returns>
-    public async Task<bool> IsIpAddressBlockedAsync(string ipAddress)
+    public Task<bool> IsIpAddressBlockedAsync(string ipAddress)
     {
         // This could be implemented with Redis or in-memory cache for production
         // For now, we'll use basic in-memory tracking
         // In production, consider implementing distributed caching for load balancing scenarios
         
-        return false; // Placeholder - implement IP-based rate limiting if needed
+        return Task.FromResult(false); // Placeholder - implement IP-based rate limiting if needed
     }
 }
 

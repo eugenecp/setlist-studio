@@ -44,7 +44,7 @@ public class EnhancedAccountLockoutServiceTests
         string userAgent = "Mozilla/5.0 Test Browser";
 
         // Act
-        var result = await _service.HandleFailedLoginAttemptAsync(null, ipAddress, userAgent);
+        var result = await _service.HandleFailedLoginAttemptAsync(null!, ipAddress, userAgent);
 
         // Assert
         result.Should().NotBeNull();
@@ -137,7 +137,7 @@ public class EnhancedAccountLockoutServiceTests
         string userAgent = "Mozilla/5.0 Test Browser";
 
         // Act
-        await _service.HandleSuccessfulLoginAsync(null, ipAddress, userAgent);
+        await _service.HandleSuccessfulLoginAsync(null!, ipAddress, userAgent);
 
         // Assert
         _mockUserManager.Verify(x => x.GetAccessFailedCountAsync(It.IsAny<ApplicationUser>()), Times.Never);

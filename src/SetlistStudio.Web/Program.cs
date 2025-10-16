@@ -230,15 +230,18 @@ try
     builder.Services.AddScoped<SecurityEventLogger>();
     builder.Services.AddScoped<SetlistStudio.Web.Security.SecurityEventHandler>();
     builder.Services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
+    
+    // Register security metrics service as singleton for centralized metrics collection
+    builder.Services.AddSingleton<ISecurityMetricsService, SecurityMetricsService>();
 
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
     {
         // Use secure cookie names with __Host- prefix for enhanced security in production
-        if (builder.Environment.IsDevelopment())
+        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "Testing")
         {
             options.Cookie.Name = "SetlistStudio-CSRF";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
         }
         else
         {
@@ -437,7 +440,8 @@ try
         // Referrer policy for privacy protection
         context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
         
-        // Content Security Policy - restrictive default
+        // Content Security Policy - restrictive default with violation reporting
+        var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
         var cspPolicy = "default-src 'self'; " +
                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +  // Blazor requires unsafe-inline/eval
                        "style-src 'self' 'unsafe-inline'; " +                  // MudBlazor requires unsafe-inline
@@ -447,6 +451,13 @@ try
                        "frame-ancestors 'none'; " +
                        "base-uri 'self'; " +
                        "form-action 'self'";
+        
+        // Add CSP violation reporting if enabled
+        if (cspReportingEnabled)
+        {
+            cspPolicy += "; report-uri /api/cspreport/report";
+        }
+        
         context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
         
         // Permissions Policy - disable unnecessary browser features
@@ -898,7 +909,7 @@ static int GetSongId(Dictionary<string, Song> songByTitle, string title)
 /// <summary>
 /// Validates that all required secrets are properly configured for the current environment
 /// </summary>
-static async Task ValidateSecretsAsync(WebApplication app)
+static Task ValidateSecretsAsync(WebApplication app)
 {
     try
     {
@@ -910,6 +921,8 @@ static async Task ValidateSecretsAsync(WebApplication app)
         
         Log.Information("Secret validation completed successfully for environment: {Environment}", 
             app.Environment.EnvironmentName);
+            
+        return Task.CompletedTask;
     }
     catch (Exception ex)
     {

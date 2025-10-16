@@ -42,10 +42,27 @@ services:
       - setlist-frontend
     
     # Additional security options for production
+    read_only: true  # Enforce read-only filesystem in production
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
       - apparmor:docker-default
-      - seccomp:unconfined  # Consider creating a custom seccomp profile
+      - seccomp=./docker/seccomp/setlist-studio-profile.json
+    user: "1001:1001"
+    
+    # Production volume mounts with security
+    volumes:
+      - setliststudio-prod-data:/app/data
+      - setliststudio-prod-logs:/app/logs
+      # Secure temporary filesystems
+      - /tmp:/tmp:rw,nosuid,nodev,noexec
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=50m
     
     # Production labels for monitoring and management
     labels:
@@ -100,4 +117,8 @@ networks:
 
 volumes:
   letsencrypt-data:
+    driver: local
+  setliststudio-prod-data:
+    driver: local
+  setliststudio-prod-logs:
     driver: local

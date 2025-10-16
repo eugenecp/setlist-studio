@@ -383,7 +383,7 @@ public class AuditLogEntityTests
         };
 
         // Act - Deserialize the changes back
-        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues);
+        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues!);
 
         // Assert
         deserializedNewValues.GetProperty("title").GetString().Should().Be("Bohemian Rhapsody");
@@ -549,7 +549,7 @@ public class AuditLogEntityTests
         };
 
         // Act
-        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues);
+        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues!);
 
         // Assert - Should not contain sensitive data
         auditLog.OldValues.Should().NotContain("password");

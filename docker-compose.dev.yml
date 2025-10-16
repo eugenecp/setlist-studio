@@ -19,10 +19,16 @@ services:
     mem_limit: 1G
     cpus: '2.0'
     
-    # Volume mounts for hot reload (adjust paths as needed)
+    # Volume mounts for development with security considerations
     volumes:
       - ./src:/app/src:ro
       - ./tests:/app/tests:ro
+      - setliststudio-dev-data:/app/data
+      - setliststudio-dev-logs:/app/logs
+      # Temporary filesystem for development
+      - /tmp:/tmp:rw,nosuid,nodev,noexec
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=200m
     
     # Development port mapping
     ports:
@@ -32,9 +38,20 @@ services:
     networks:
       - setlist-dev
     
-    # Relaxed security for development (still secure but developer-friendly)
+    # Development security - secure but developer-friendly
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE  # Allow file permission overrides for development
     security_opt:
       - no-new-privileges:true
+      - apparmor:docker-default
+    # Read-only filesystem disabled in development for easier debugging
+    # Uncomment for production-like testing: read_only: true
+    user: "1001:1001"
     
     # Development labels
     labels:
@@ -47,3 +64,7 @@ networks:
     ipam:
       config:
         - subnet: 172.22.0.0/16
+
+volumes:
+  setliststudio-dev-data:
+  setliststudio-dev-logs:

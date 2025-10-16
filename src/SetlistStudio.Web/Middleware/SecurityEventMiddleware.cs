@@ -151,13 +151,13 @@ public class SecurityEventMiddleware
     /// </summary>
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
-    private async Task CheckRapidRequests(HttpContext context, SecurityEventHandler securityEventHandler)
+    private Task CheckRapidRequests(HttpContext context, SecurityEventHandler securityEventHandler)
     {
         // This is a simplified implementation. In production, you'd want to use a more sophisticated
         // tracking mechanism with distributed cache or database.
         var ipAddress = GetClientIpAddress(context);
         if (string.IsNullOrEmpty(ipAddress))
-            return;
+            return Task.CompletedTask;
 
         // For demonstration, we'll just check if there are multiple requests in a short timeframe
         // In production, implement proper request tracking
@@ -171,6 +171,8 @@ public class SecurityEventMiddleware
                 context.User.Identity?.Name,
                 SecurityEventSeverity.High);
         }
+        
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -264,7 +266,7 @@ public class SecurityEventMiddleware
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
     /// <param name="securityEventLogger">The security event logger</param>
-    private async Task LogAuthenticationEvents(HttpContext context, SecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
+    private Task LogAuthenticationEvents(HttpContext context, SecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
     {
         var path = context.Request.Path.Value ?? string.Empty;
         var user = context.User;
@@ -291,6 +293,8 @@ public class SecurityEventMiddleware
             // Login success is handled by Identity events, but we can log page access
             _logger.LogInformation("Login page accessed successfully");
         }
+        
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -315,7 +319,7 @@ public class SecurityEventMiddleware
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
     /// <param name="exception">The exception that occurred</param>
-    private async Task LogSecurityException(HttpContext context, SecurityEventHandler securityEventHandler, Exception exception)
+    private Task LogSecurityException(HttpContext context, SecurityEventHandler securityEventHandler, Exception exception)
     {
         securityEventHandler.OnSuspiciousActivity(
             context,
@@ -323,6 +327,8 @@ public class SecurityEventMiddleware
             $"Security-related exception occurred: {exception.GetType().Name}",
             context.User.Identity?.Name,
             SecurityEventSeverity.High);
+            
+        return Task.CompletedTask;
     }
 
     /// <summary>

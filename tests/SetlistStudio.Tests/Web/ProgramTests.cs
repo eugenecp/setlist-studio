@@ -2174,7 +2174,11 @@ public class ProgramTests : IDisposable
     public void Program_ShouldConfigureAntiforgery_WithSecureCookieSettings()
     {
         // Arrange & Act
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Production");
+            });
         var services = factory.Services;
         var antiforgeryOptions = services.GetRequiredService<IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>>().Value;
 
@@ -2303,7 +2307,11 @@ public class ProgramTests : IDisposable
     public void Program_ShouldConfigureAntiforgery_WithProductionReadySettings()
     {
         // Arrange & Act
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Production");
+            });
         var services = factory.Services;
         var antiforgeryOptions = services.GetRequiredService<IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>>().Value;
 

@@ -33,7 +33,7 @@ public class SecretValidationServiceTests
     private IConfiguration CreateConfiguration(Dictionary<string, string> values)
     {
         return new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
+            .AddInMemoryCollection(values!)
             .Build();
     }
 

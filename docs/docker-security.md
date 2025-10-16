@@ -48,6 +48,41 @@ ENV ASPNETCORE_URLS=http://+:8080
 ```
 
 - **Non-Privileged Port**: Uses port 8080 instead of privileged port 80
+
+### 5. Read-Only Filesystem Security
+
+```yaml
+# Production configuration with read-only filesystem
+read_only: true
+volumes:
+  - setliststudio-prod-data:/app/data
+  - setliststudio-prod-logs:/app/logs
+tmpfs:
+  - /app/temp:rw,nosuid,nodev,noexec,size=50m
+```
+
+- **Immutable Container**: Read-only root filesystem prevents runtime modifications
+- **Writable Volumes**: Only essential directories are writable (/app/data, /app/logs)
+- **Secure tmpfs**: Temporary filesystem with security restrictions (nosuid, nodev, noexec)
+- **Size Limits**: tmpfs limited to 50MB in production to prevent resource exhaustion
+
+### 6. Linux Capabilities and Security Options
+
+```yaml
+cap_drop: [ALL]
+cap_add: [CHOWN, SETGID, SETUID]
+security_opt:
+  - no-new-privileges:true
+  - apparmor:docker-default
+  - seccomp=./docker/seccomp/setlist-studio-profile.json
+user: "1001:1001"
+```
+
+- **Capability Dropping**: Removes all Linux capabilities, adds back only essential ones
+- **No New Privileges**: Prevents privilege escalation during runtime
+- **AppArmor Profile**: Applies mandatory access controls
+- **Custom Seccomp**: Restricts system calls to whitelist of essential operations
+- **User Namespace**: Enforces non-root user execution
 - **Explicit Port Binding**: No automatic port exposure
 - **Network Isolation**: Separate networks for frontend/backend communication
 
