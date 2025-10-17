@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using System.Security.Claims;
@@ -13,18 +14,31 @@ using SetlistStudio.Web.Controllers;
 namespace SetlistStudio.Tests.Web.Controllers;
 
 /// <summary>
+/// Test implementation of IWebHostEnvironment for controller testing
+/// </summary>
+public class TestWebHostEnvironment : IWebHostEnvironment
+{
+    public string EnvironmentName { get; set; } = "Test";
+    public string ApplicationName { get; set; } = "SetlistStudio.Tests";
+    public string ContentRootPath { get; set; } = "/test/content";
+    public IFileProvider ContentRootFileProvider { get; set; } = new Mock<IFileProvider>().Object;
+    public string WebRootPath { get; set; } = "/test/wwwroot";
+    public IFileProvider WebRootFileProvider { get; set; } = new Mock<IFileProvider>().Object;
+}
+
+/// <summary>
 /// Tests for TestController endpoints
 /// Focuses on environment-specific behavior and security test functionality
 /// </summary>
 public class TestControllerTests
 {
-    private readonly Mock<IWebHostEnvironment> _mockEnvironment;
+    private readonly TestWebHostEnvironment _testEnvironment;
     private readonly TestController _controller;
 
     public TestControllerTests()
     {
-        _mockEnvironment = new Mock<IWebHostEnvironment>();
-        _controller = new TestController(_mockEnvironment.Object);
+        _testEnvironment = new TestWebHostEnvironment();
+        _controller = new TestController(_testEnvironment);
     }
 
     [Theory]
@@ -35,8 +49,7 @@ public class TestControllerTests
     public async Task CreateTestSession_InAllowedEnvironments_CreatesSession(string environmentName)
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns(environmentName);
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(environmentName == "Development");
+        _testEnvironment.EnvironmentName = environmentName;
         
         var session = new Mock<ISession>();
         var httpContext = new Mock<HttpContext>();
@@ -65,8 +78,7 @@ public class TestControllerTests
     public async Task CreateTestSession_InProductionWithoutTestFactory_ReturnsNotFound()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("SomeOtherEnvironment");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(false);
+        _testEnvironment.EnvironmentName = "Production";
 
         // Act
         var result = await _controller.CreateTestSession("test");
@@ -79,8 +91,7 @@ public class TestControllerTests
     public async Task CreateTestSession_WithNullContent_UsesDefaultValue()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("Test");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(false);
+        _testEnvironment.EnvironmentName = "Development";
         
         var session = new Mock<ISession>();
         var httpContext = new Mock<HttpContext>();
@@ -103,8 +114,7 @@ public class TestControllerTests
     public async Task CreateTestSession_ReturnsSessionId()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("Development");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(true);
+        _testEnvironment.EnvironmentName = "Development";
         
         var sessionId = "test-session-id-123";
         var session = new Mock<ISession>();
@@ -139,8 +149,7 @@ public class TestControllerTests
     public void TestAuthEndpoint_InAllowedEnvironments_ReturnsOk(string environmentName)
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns(environmentName);
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(environmentName == "Development");
+        _testEnvironment.EnvironmentName = environmentName;
         
         var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "testuser") }, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -173,8 +182,7 @@ public class TestControllerTests
     public void TestAuthEndpoint_InDisallowedEnvironment_ReturnsNotFound()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("SomeOtherEnvironment");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(false);
+        _testEnvironment.EnvironmentName = "SomeOtherEnvironment";
 
         // Act
         var result = _controller.TestAuthEndpoint();
@@ -187,8 +195,7 @@ public class TestControllerTests
     public void TestAuthEndpoint_WithUnauthenticatedUser_ReturnsOkWithNullUser()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("Test");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(false);
+        _testEnvironment.EnvironmentName = "Test";
         
         var identity = new ClaimsIdentity(); // Not authenticated
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -222,8 +229,7 @@ public class TestControllerTests
     public void TestAntiforgery_InAllowedEnvironments_ReturnsToken(string environmentName)
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns(environmentName);
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(environmentName == "Development");
+        _testEnvironment.EnvironmentName = environmentName;
         
         var antiforgeryTokens = new AntiforgeryTokenSet("test-request-token", "test-cookie-token", "test-form-field", "test-header");
         var mockAntiforgery = new Mock<IAntiforgery>();
@@ -261,8 +267,7 @@ public class TestControllerTests
     public void TestAntiforgery_InDisallowedEnvironment_ReturnsNotFound()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.EnvironmentName).Returns("SomeOtherEnvironment");
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(false);
+        _testEnvironment.EnvironmentName = "SomeOtherEnvironment";
 
         // Act
         var result = _controller.TestAntiforgery();
@@ -275,7 +280,7 @@ public class TestControllerTests
     public void TestAuthEndpoint_InDevelopmentEnvironment_ReturnsOk()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(true);
+        _testEnvironment.EnvironmentName = "Development";
         
         var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "devuser") }, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -305,7 +310,7 @@ public class TestControllerTests
     public void TestAntiforgery_InDevelopmentEnvironment_ReturnsToken()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(true);
+        _testEnvironment.EnvironmentName = "Development";
         
         var antiforgeryTokens = new AntiforgeryTokenSet("dev-request-token", "dev-cookie-token", "dev-form-field", "dev-header");
         var mockAntiforgery = new Mock<IAntiforgery>();
@@ -341,7 +346,7 @@ public class TestControllerTests
     public async Task CreateTestSession_InDevelopmentEnvironment_CreatesSession()
     {
         // Arrange
-        _mockEnvironment.Setup(x => x.IsDevelopment()).Returns(true);
+        _testEnvironment.EnvironmentName = "Development";
         
         var session = new Mock<ISession>();
         var httpContext = new Mock<HttpContext>();
