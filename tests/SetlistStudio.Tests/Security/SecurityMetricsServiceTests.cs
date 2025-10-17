@@ -16,7 +16,7 @@ namespace SetlistStudio.Tests.Security;
 public class SecurityMetricsServiceTests
 {
     private readonly Mock<ILogger<SecurityMetricsService>> _mockLogger;
-    private readonly Mock<IConfiguration> _mockConfiguration;
+    private readonly IConfiguration _configuration;
     private readonly SecurityMetricsService _service;
     private readonly ITestOutputHelper _output;
 
@@ -24,13 +24,19 @@ public class SecurityMetricsServiceTests
     {
         _output = output;
         _mockLogger = new Mock<ILogger<SecurityMetricsService>>();
-        _mockConfiguration = new Mock<IConfiguration>();
         
-        // Setup default configuration values
-        _mockConfiguration.Setup(c => c.GetValue<int>("Security:BruteForceThreshold", 5)).Returns(5);
-        _mockConfiguration.Setup(c => c.GetValue<int>("Security:DosThreshold", 10)).Returns(10);
+        // Create a real configuration using in-memory provider
+        var configData = new Dictionary<string, string?>
+        {
+            ["Security:BruteForceThreshold"] = "5",
+            ["Security:DosThreshold"] = "10"
+        };
+
+        _configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData)
+            .Build();
         
-        _service = new SecurityMetricsService(_mockLogger.Object, _mockConfiguration.Object);
+        _service = new SecurityMetricsService(_mockLogger.Object, _configuration);
     }
 
     #region Constructor Tests
@@ -40,7 +46,7 @@ public class SecurityMetricsServiceTests
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() => 
-            new SecurityMetricsService(null!, _mockConfiguration.Object));
+            new SecurityMetricsService(null!, _configuration));
         
         exception.ParamName.Should().Be("logger");
     }

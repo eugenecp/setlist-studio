@@ -198,13 +198,23 @@ public class SecretValidationService
     /// </summary>
     private bool IsOptionalOAuthSecret(string secretKey)
     {
-        // In production environment, no secrets are optional
+        // In production, OAuth secrets are only optional if:
+        // 1. This specific provider is not configured, AND
+        // 2. At least one other OAuth provider is configured (showing OAuth is intentionally used)
         if (_environment.IsProduction())
         {
-            return false;
+            var isAnyOAuthConfigured = IsProviderConfigured("Google") || 
+                                     IsProviderConfigured("Microsoft") || 
+                                     IsProviderConfigured("Facebook");
+            
+            if (!isAnyOAuthConfigured)
+            {
+                // No OAuth configured at all in production - all OAuth secrets are required
+                return false;
+            }
         }
         
-        // In other environments, OAuth secrets are optional if provider is not configured
+        // In non-production or when some OAuth is configured, individual providers can be optional
         if (secretKey.Contains("Google"))
         {
             return !IsProviderConfigured("Google");

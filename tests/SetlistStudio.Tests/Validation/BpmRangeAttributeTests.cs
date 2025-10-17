@@ -380,6 +380,275 @@ public class BpmRangeAttributeTests
 
     #endregion
 
+    #region TryConvertToInt Coverage Tests
+
+    [Theory]
+    [InlineData(42)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    [InlineData(int.MinValue)]
+    public void BpmRange_ShouldHandleIntegerValues(int bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        var expected = bpm >= 40 && bpm <= 250;
+        result.Should().Be(expected, $"Integer {bpm} should be {(expected ? "valid" : "invalid")}");
+    }
+
+    [Theory]
+    [InlineData(42L)]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData((long)int.MaxValue)]
+    [InlineData((long)int.MinValue)]
+    [InlineData((long)int.MaxValue + 1L)]
+    [InlineData((long)int.MinValue - 1L)]
+    public void BpmRange_ShouldHandleLongValues(long bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        if (bpm >= int.MinValue && bpm <= int.MaxValue)
+        {
+            var expected = bpm >= 40 && bpm <= 250;
+            result.Should().Be(expected, $"Long {bpm} should be {(expected ? "valid" : "invalid")}");
+        }
+        else
+        {
+            result.Should().BeFalse($"Long {bpm} outside int range should be invalid");
+        }
+    }
+
+    [Theory]
+    [InlineData(42.0f)]
+    [InlineData(42.7f)]
+    [InlineData(42.3f)]
+    [InlineData(0.0f)]
+    [InlineData(-1.0f)]
+    [InlineData(float.MaxValue)]
+    [InlineData(float.MinValue)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    [InlineData(float.NaN)]
+    public void BpmRange_ShouldHandleFloatValues(float bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        if (float.IsFinite(bpm) && bpm >= int.MinValue && bpm <= int.MaxValue)
+        {
+            var roundedBpm = (int)Math.Round(bpm);
+            var expected = roundedBpm >= 40 && roundedBpm <= 250;
+            result.Should().Be(expected, $"Float {bpm} (rounded to {roundedBpm}) should be {(expected ? "valid" : "invalid")}");
+        }
+        else
+        {
+            result.Should().BeFalse($"Float {bpm} should be invalid");
+        }
+    }
+
+    [Theory]
+    [InlineData(42.0)]
+    [InlineData(42.7)]
+    [InlineData(42.3)]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    [InlineData(double.MaxValue)]
+    [InlineData(double.MinValue)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    [InlineData(double.NaN)]
+    public void BpmRange_ShouldHandleDoubleValues(double bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        if (double.IsFinite(bpm) && bpm >= int.MinValue && bpm <= int.MaxValue)
+        {
+            var roundedBpm = (int)Math.Round(bpm);
+            var expected = roundedBpm >= 40 && roundedBpm <= 250;
+            result.Should().Be(expected, $"Double {bpm} (rounded to {roundedBpm}) should be {(expected ? "valid" : "invalid")}");
+        }
+        else
+        {
+            result.Should().BeFalse($"Double {bpm} should be invalid");
+        }
+    }
+
+    [Theory]
+    [InlineData("42")]
+    [InlineData("42.7")]
+    [InlineData("42.3")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData(" 42 ")]
+    [InlineData("\t120\n")]
+    [InlineData("invalid")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("42.5.6")]
+    [InlineData("abc123")]
+    public void BpmRange_ShouldHandleStringValues(string bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        if (int.TryParse(bpm.Trim(), out int parsedBpm))
+        {
+            var expected = parsedBpm >= 40 && parsedBpm <= 250;
+            result.Should().Be(expected, $"String '{bpm}' (parsed to {parsedBpm}) should be {(expected ? "valid" : "invalid")}");
+        }
+        else
+        {
+            result.Should().BeFalse($"String '{bpm}' that cannot be parsed should be invalid");
+        }
+    }
+
+    [Theory]
+    [InlineData(42.0)]
+    [InlineData(42.7)]
+    [InlineData(42.3)]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void BpmRange_ShouldHandleDecimalValues(decimal bpm)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(bpm);
+
+        // Assert
+        if (bpm >= int.MinValue && bpm <= int.MaxValue)
+        {
+            var roundedBpm = (int)Math.Round(bpm);
+            var expected = roundedBpm >= 40 && roundedBpm <= 250;
+            result.Should().Be(expected, $"Decimal {bpm} (rounded to {roundedBpm}) should be {(expected ? "valid" : "invalid")}");
+        }
+        else
+        {
+            result.Should().BeFalse($"Decimal {bpm} outside int range should be invalid");
+        }
+    }
+
+    [Theory]
+    [InlineData(typeof(object))]
+    [InlineData(typeof(DateTime))]
+    [InlineData(typeof(Guid))]
+    public void BpmRange_ShouldRejectUnsupportedTypes(Type type)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+        var testValue = type == typeof(object) ? new object() :
+                       type == typeof(DateTime) ? DateTime.Now :
+                       type == typeof(Guid) ? Guid.NewGuid() : null;
+
+        // Act
+        var result = attribute.IsValid(testValue);
+
+        // Assert
+        result.Should().BeFalse($"Type {type.Name} should be rejected");
+    }
+
+    #endregion
+
+    #region Custom Range Constructor Coverage
+
+    [Theory]
+    [InlineData(60, 180)]
+    [InlineData(80, 140)]
+    [InlineData(100, 200)]
+    [InlineData(1, 2)]
+    [InlineData(1, 1000)]
+    public void BpmRange_ShouldAcceptValidCustomRanges(int min, int max)
+    {
+        // Act & Assert
+        var attribute = new BpmRangeAttribute(min, max);
+        attribute.MinimumBpm.Should().Be(min);
+        attribute.MaximumBpm.Should().Be(max);
+        attribute.ErrorMessage.Should().Contain($"{min}").And.Contain($"{max}");
+    }
+
+    [Theory]
+    [InlineData(100, 100)]
+    [InlineData(100, 99)]
+    [InlineData(250, 40)]
+    [InlineData(0, -1)]
+    public void BpmRange_ShouldThrowArgumentException_ForInvalidRanges(int min, int max)
+    {
+        // Act & Assert
+        var exception = Assert.Throws<ArgumentException>(() => new BpmRangeAttribute(min, max));
+        exception.Message.Should().Contain("Minimum BPM must be less than maximum BPM");
+        exception.ParamName.Should().Be("minimumBpm");
+    }
+
+    #endregion
+
+    #region FormatErrorMessage Coverage
+
+    [Theory]
+    [InlineData("BPM")]
+    [InlineData("Tempo")]
+    [InlineData("BeatsPerMinute")]
+    [InlineData("Song.Bpm")]
+    public void FormatErrorMessage_ShouldIncludeFieldName(string fieldName)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var message = attribute.FormatErrorMessage(fieldName);
+
+        // Assert
+        message.Should().Contain(fieldName);
+        message.Should().Contain("40");
+        message.Should().Contain("250");
+        message.Should().Contain("Very slow ballads");
+    }
+
+    [Theory]
+    [InlineData(60, 180, "Ballads")]
+    [InlineData(80, 140, "medium")]
+    [InlineData(100, 200, "Valid range")]
+    public void FormatErrorMessage_ShouldIncludeGuidanceForCustomRanges(int min, int max, string expectedGuidance)
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute(min, max);
+
+        // Act
+        var message = attribute.FormatErrorMessage("TestField");
+
+        // Assert
+        message.Should().Contain("TestField");
+        message.Should().Contain($"{min}");
+        message.Should().Contain($"{max}");
+        message.Should().Contain(expectedGuidance);
+    }
+
+    #endregion
+
     #region Edge Cases and Extreme Values
 
     [Theory]
@@ -411,6 +680,19 @@ public class BpmRangeAttributeTests
 
         // Assert
         result.Should().BeFalse($"Special floating point value {bpm} should be rejected");
+    }
+
+    [Fact]
+    public void BpmRange_ShouldHandleNullValue()
+    {
+        // Arrange
+        var attribute = new BpmRangeAttribute();
+
+        // Act
+        var result = attribute.IsValid(null);
+
+        // Assert
+        result.Should().BeTrue("Null values should be considered valid (use [Required] for mandatory validation)");
     }
 
     #endregion

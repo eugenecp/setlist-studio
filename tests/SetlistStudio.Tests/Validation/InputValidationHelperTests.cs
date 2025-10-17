@@ -352,4 +352,191 @@ public class InputValidationHelperTests
     }
 
     #endregion
+
+    #region Edge Cases and Performance Tests
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n\r")]
+    public void IsValidEmail_ShouldHandleWhitespaceStrings(string email)
+    {
+        // Act
+        var result = InputValidationHelper.IsValidEmail(email);
+
+        // Assert
+        result.Should().BeFalse($"Whitespace-only email '{email}' should be invalid");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n\r")]
+    public void IsAlphanumericSafe_ShouldAllowWhitespaceStrings(string input)
+    {
+        // Act
+        var result = InputValidationHelper.IsAlphanumericSafe(input);
+
+        // Assert
+        result.Should().BeTrue($"Whitespace-only input '{input}' should be considered safe");
+    }
+
+    [Fact]
+    public void IsValidEmail_ShouldHandleVeryLongEmail()
+    {
+        // Arrange
+        var longEmail = new string('a', 250) + "@" + new string('b', 250) + ".com";
+
+        // Act
+        var result = InputValidationHelper.IsValidEmail(longEmail);
+
+        // Assert
+        result.Should().BeTrue("Very long but valid email should be accepted");
+    }
+
+    [Fact]
+    public void IsValidEmail_ShouldHandleEmailWithSpaces()
+    {
+        // Arrange
+        var emailWithSpaces = "  valid@example.com  ";
+
+        // Act
+        var result = InputValidationHelper.IsValidEmail(emailWithSpaces);
+
+        // Assert
+        result.Should().BeTrue("Email with leading/trailing spaces should be valid after trimming");
+    }
+
+    [Theory]
+    [InlineData("test@")]
+    [InlineData("@example.com")]
+    [InlineData("test@.com")]
+    [InlineData("test@com")]
+    [InlineData("test.example.com")]
+    [InlineData("test@example.")]
+    [InlineData("test@example")]
+    public void IsValidEmail_ShouldRejectMalformedEmails(string email)
+    {
+        // Act
+        var result = InputValidationHelper.IsValidEmail(email);
+
+        // Assert
+        result.Should().BeFalse($"Malformed email '{email}' should be invalid");
+    }
+
+    [Theory]
+    [InlineData("hello world 123")]
+    [InlineData("Test-Song_Name.mp3")]
+    [InlineData("UPPERCASE lowercase 123")]
+    [InlineData("123456")]
+    [InlineData("a")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("multi word test")]
+    public void IsAlphanumericSafe_ShouldAcceptSafeInput(string input)
+    {
+        // Act
+        var result = InputValidationHelper.IsAlphanumericSafe(input);
+
+        // Assert
+        result.Should().BeTrue($"Safe input '{input}' should be accepted");
+    }
+
+    [Theory]
+    [InlineData("test<script>")]
+    [InlineData("test&amp;")]
+    [InlineData("test%20")]
+    [InlineData("test@#$")]
+    [InlineData("test(brackets)")]
+    [InlineData("test[brackets]")]
+    [InlineData("test{brackets}")]
+    [InlineData("test|pipe")]
+    [InlineData("test\\backslash")]
+    [InlineData("test/slash")]
+    [InlineData("test+plus")]
+    [InlineData("test=equals")]
+    [InlineData("test?question")]
+    [InlineData("test:colon")]
+    [InlineData("test;semicolon")]
+    [InlineData("test\"quote")]
+    [InlineData("test'apostrophe")]
+    [InlineData("test`backtick")]
+    [InlineData("test~tilde")]
+    [InlineData("test!exclamation")]
+    [InlineData("test*asterisk")]
+    [InlineData("test^caret")]
+    public void IsAlphanumericSafe_ShouldRejectUnsafeInput(string input)
+    {
+        // Act
+        var result = InputValidationHelper.IsAlphanumericSafe(input);
+
+        // Assert
+        result.Should().BeFalse($"Unsafe input '{input}' should be rejected");
+    }
+
+    [Theory]
+    [InlineData("Simple Song Title")]
+    [InlineData("Song with (Parentheses)")]
+    public void ValidateSongTitle_ShouldAcceptValidTitles(string title)
+    {
+        // Act
+        var result = InputValidationHelper.ValidateSongTitle(title);
+
+        // Assert
+        result.Should().Be(ValidationResult.Success, $"Valid song title '{title}' should be accepted");
+    }
+
+    [Theory]
+    [InlineData("C")]
+    [InlineData("C#")]
+    [InlineData("Am")]
+    [InlineData("F#m")]
+    public void ValidateMusicalKey_ShouldAcceptValidKeys(string key)
+    {
+        // Act
+        var result = InputValidationHelper.ValidateMusicalKey(key);
+
+        // Assert
+        result.Should().Be(ValidationResult.Success, $"Valid musical key '{key}' should be accepted");
+    }
+
+    [Theory]
+    [InlineData("H")]
+    [InlineData("123")]
+    public void ValidateMusicalKey_ShouldRejectInvalidKeys(string key)
+    {
+        // Act
+        var result = InputValidationHelper.ValidateMusicalKey(key);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success, $"Invalid key '{key}' should be rejected");
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(11)]
+    [InlineData(100)]
+    public void ValidateDifficultyRating_ShouldRejectInvalidRatings(int rating)
+    {
+        // Act
+        var result = InputValidationHelper.ValidateDifficultyRating(rating);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success, $"Invalid difficulty rating {rating} should be rejected");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void ValidateDifficultyRating_ShouldAcceptValidRatings(int rating)
+    {
+        // Act
+        var result = InputValidationHelper.ValidateDifficultyRating(rating);
+
+        // Assert
+        result.Should().Be(ValidationResult.Success, $"Valid difficulty rating {rating} should be accepted");
+    }
+
+    #endregion
 }

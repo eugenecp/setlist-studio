@@ -6,7 +6,7 @@ using SetlistStudio.Infrastructure.Data;
 namespace SetlistStudio.Web.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("api/[controller]")]
 [AllowAnonymous]
 [EnableRateLimiting("ApiPolicy")]
 public class HealthController : ControllerBase

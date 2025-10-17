@@ -74,7 +74,7 @@ public class CspReportControllerTests : IClassFixture<WebApplicationFactory<Prog
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var responseBody = await response.Content.ReadAsStringAsync();
-        responseBody.Should().Contain("Invalid CSP report format");
+        responseBody.Should().Contain("validation error");
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class CspReportControllerTests : IClassFixture<WebApplicationFactory<Prog
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var responseBody = await response.Content.ReadAsStringAsync();
-        responseBody.Should().Contain("Invalid JSON format");
+        responseBody.Should().Contain("validation error");
     }
 
     [Fact]

@@ -383,7 +383,7 @@ public class AuditLogEntityTests
         };
 
         // Act - Deserialize the changes back
-        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues!);
+        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.NewValues!);
 
         // Assert
         deserializedNewValues.GetProperty("title").GetString().Should().Be("Bohemian Rhapsody");
@@ -431,6 +431,7 @@ public class AuditLogEntityTests
             EntityType = "Songs",
             EntityId = "song-123",
             UserId = "user-456",
+            OldValues = "{}", // Empty JSON object
             NewValues = "{}", // Empty JSON object
             Timestamp = DateTime.UtcNow
         };
@@ -457,7 +458,7 @@ public class AuditLogEntityTests
     [InlineData("UPDATE_SETLIST")]
     [InlineData("DELETE_SETLIST")]
     [InlineData("ADD_SONG_TO_SETLIST")]
-    [InlineData("REMOVE_SONG_FROM_SETLIST")]
+    [InlineData("REMOVE_SONG_SETLIST")]
     [InlineData("REORDER_SETLIST")]
     public void AuditLog_WithCommonActions_ShouldBeValid(string action)
     {
@@ -511,7 +512,7 @@ public class AuditLogEntityTests
 
         var auditLog3 = new AuditLog
         {
-            Id = 1,
+            Id = 2, // Different ID for comparison
             Action = "CREATE_SONG",
             EntityType = "Songs",
             EntityId = "song-123",
@@ -549,12 +550,12 @@ public class AuditLogEntityTests
         };
 
         // Act
-        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues!);
+        var deserializedNewValues = JsonSerializer.Deserialize<JsonElement>(auditLog.NewValues!);
 
         // Assert - Should not contain sensitive data
-        auditLog.OldValues.Should().NotContain("password");
-        auditLog.OldValues.Should().NotContain("token");
-        auditLog.OldValues.Should().NotContain("secret");
+        auditLog.NewValues.Should().NotContain("password");
+        auditLog.NewValues.Should().NotContain("token");
+        auditLog.NewValues.Should().NotContain("secret");
         deserializedNewValues.GetProperty("Action").GetString().Should().Be("PASSWORD_CHANGED");
         deserializedNewValues.GetProperty("HashedPasswordChanged").GetBoolean().Should().BeTrue();
     }
@@ -566,9 +567,9 @@ public class AuditLogEntityTests
         var auditLog = new AuditLog
         {
             Id = 1,
-            Action = new string('A', 100), // Max length
+            Action = new string('A', 20), // Max length
             EntityType = new string('T', 100), // Max length
-            EntityId = new string('R', 255), // Max length
+            EntityId = new string('R', 50), // Max length
             UserId = new string('U', 450), // Max length for AspNetUser ID
             IpAddress = "2001:0db8:85a3:0000:0000:8a2e:0370:7334", // Max IPv6 length
             UserAgent = new string('B', 500), // Max length

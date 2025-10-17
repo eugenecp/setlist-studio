@@ -79,9 +79,9 @@ public class AuditLogServiceTests : IDisposable
         auditLog.CorrelationId.Should().Be(correlationId);
         auditLog.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         
-        var deserializedChanges = JsonSerializer.Deserialize<JsonElement>(auditLog.OldValues!);
-        deserializedChanges.GetProperty("Title").GetString().Should().Be("Sweet Child O' Mine");
-        deserializedChanges.GetProperty("Artist").GetString().Should().Be("Guns N' Roses");
+        var deserializedChanges = JsonSerializer.Deserialize<JsonElement>(auditLog.NewValues!);
+        deserializedChanges.GetProperty("title").GetString().Should().Be("Sweet Child O' Mine");
+        deserializedChanges.GetProperty("artist").GetString().Should().Be("Guns N' Roses");
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 2,
                 Action = "UPDATE_SONG",
                 EntityType = "Songs",
                 EntityId = "song-1",
@@ -202,7 +202,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 3,
                 Action = "CREATE_SONG",
                 EntityType = "Songs",
                 EntityId = "song-2",
@@ -243,7 +243,7 @@ public class AuditLogServiceTests : IDisposable
         {
             new AuditLog
             {
-                Id = 1,
+                Id = 4,
                 Action = "CREATE_SONG",
                 EntityType = EntityType,
                 EntityId = EntityId,
@@ -253,7 +253,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 5,
                 Action = "UPDATE_SONG",
                 EntityType = EntityType,
                 EntityId = EntityId,
@@ -286,7 +286,7 @@ public class AuditLogServiceTests : IDisposable
         {
             new AuditLog
             {
-                Id = 1,
+                Id = 6,
                 Action = "CREATE_SETLIST",
                 EntityType = "Setlists",
                 EntityId = "setlist-1",
@@ -296,7 +296,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 7,
                 Action = "ADD_SONG_TO_SETLIST",
                 EntityType = "SetlistSongs",
                 EntityId = "setlist-song-1",
@@ -306,7 +306,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 8,
                 Action = "ADD_SONG_TO_SETLIST",
                 EntityType = "SetlistSongs",
                 EntityId = "setlist-song-2",
@@ -359,11 +359,11 @@ public class AuditLogServiceTests : IDisposable
         var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
         auditLog.Should().NotBeNull();
         
-        var deserializedChanges = JsonSerializer.Deserialize<JsonElement>(auditLog!.OldValues!);
-        deserializedChanges.GetProperty("Title").GetString().Should().Be("Bohemian Rhapsody");
-        deserializedChanges.GetProperty("BPM").GetInt32().Should().Be(72);
-        deserializedChanges.GetProperty("Metadata").GetProperty("Genre").GetString().Should().Be("Rock");
-        deserializedChanges.GetProperty("Metadata").GetProperty("Tags")[0].GetString().Should().Be("classic");
+        var deserializedChanges = JsonSerializer.Deserialize<JsonElement>(auditLog!.NewValues!);
+        deserializedChanges.GetProperty("title").GetString().Should().Be("Bohemian Rhapsody");
+        deserializedChanges.GetProperty("bpm").GetInt32().Should().Be(72);
+        deserializedChanges.GetProperty("metadata").GetProperty("genre").GetString().Should().Be("Rock");
+        deserializedChanges.GetProperty("metadata").GetProperty("tags")[0].GetString().Should().Be("classic");
     }
 
     [Theory]
@@ -407,7 +407,7 @@ public class AuditLogServiceTests : IDisposable
         var userId = "user-456";
         var auditLogs = Enumerable.Range(1, 25).Select(i => new AuditLog
         {
-            Id = 1,
+            Id = i + 10, // Start from 11 to avoid conflicts with other tests
             Action = $"ACTION_{i}",
             EntityType = "Songs",
             EntityId = $"song-{i}",
@@ -439,7 +439,7 @@ public class AuditLogServiceTests : IDisposable
         {
             new AuditLog
             {
-                Id = 1,
+                Id = 36,
                 Action = "OLD_ACTION",
                 EntityType = "Songs",
                 EntityId = "song-1",
@@ -448,7 +448,7 @@ public class AuditLogServiceTests : IDisposable
             },
             new AuditLog
             {
-                Id = 1,
+                Id = 37,
                 Action = "RECENT_ACTION",
                 EntityType = "Songs",
                 EntityId = "song-2",

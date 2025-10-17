@@ -320,7 +320,7 @@ public class HealthControllerTests : IDisposable
 
         // Assert
         routeAttribute.Should().NotBeNull("HealthController should have Route attribute");
-        routeAttribute!.Template.Should().Be("[controller]", "HealthController should use the correct route template");
+        routeAttribute!.Template.Should().Be("api/[controller]", "HealthController should use the correct route template");
     }
 
     public void Dispose()

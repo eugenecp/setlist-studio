@@ -15,7 +15,10 @@ using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Web.Services;
+using SetlistStudio.Web.Middleware;
 using System.Threading.RateLimiting;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 // Configure Serilog with secure logging and data filtering
 Log.Logger = new LoggerConfiguration()
@@ -82,7 +85,26 @@ try
     // Add services to the container
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
-    builder.Services.AddControllers(); // Add API controllers support
+    builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Configure JSON serialization for API controllers
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.WriteIndented = false;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    }); // Add API controllers support
+    
+    // Configure custom input formatters for CSP reports
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
+    {
+        // Add support for application/csp-report content type
+        var jsonInputFormatter = options.InputFormatters
+            .OfType<Microsoft.AspNetCore.Mvc.Formatters.SystemTextJsonInputFormatter>()
+            .First();
+        jsonInputFormatter.SupportedMediaTypes.Add("application/csp-report");
+    });
+    
     builder.Services.AddHttpContextAccessor(); // Required for audit logging
 
     // Add MudBlazor services for Material Design components
@@ -110,7 +132,8 @@ try
                 // Production: Only allow specific trusted domains
                 policy.WithOrigins(
                     "https://setliststudio.com",
-                    "https://www.setliststudio.com"
+                    "https://www.setliststudio.com",
+                    "https://api.setliststudio.com"
                 )
                 .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
@@ -119,16 +142,10 @@ try
             }
             else if (environment == "Development")
             {
-                // Development: Allow localhost with specific ports
-                policy.WithOrigins(
-                    "https://localhost:5001",
-                    "http://localhost:5000",
-                    "https://localhost:7000",
-                    "http://localhost:8000"
-                )
-                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-                .AllowCredentials()
+                // Development: Allow any origin for testing purposes
+                policy.AllowAnyOrigin()
+                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
             }
             else
@@ -136,7 +153,8 @@ try
                 // Test/Staging: More restrictive than development but not production
                 policy.WithOrigins(
                     "https://staging.setliststudio.com",
-                    "https://test.setliststudio.com"
+                    "https://test.setliststudio.com",
+                    "https://preview.setliststudio.com"
                 )
                 .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
@@ -154,15 +172,25 @@ try
             {
                 policy.WithOrigins(
                     "https://setliststudio.com",
-                    "https://www.setliststudio.com"
+                    "https://www.setliststudio.com",
+                    "https://api.setliststudio.com"
                 )
                 .WithMethods("GET", "POST", "PUT", "DELETE")
                 .WithHeaders("Content-Type", "Authorization")
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
             }
+            else if (environment == "Development")
+            {
+                // Development: Allow any origin for testing purposes
+                policy.AllowAnyOrigin()
+                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
             else
             {
+                // Test/Staging: Allow specific localhost origins
                 policy.WithOrigins(
                     "https://localhost:5001",
                     "http://localhost:5000",
@@ -280,6 +308,35 @@ try
             var securityStampValidator = context.HttpContext.RequestServices
                 .GetRequiredService<ISecurityStampValidator>();
             await securityStampValidator.ValidateAsync(context);
+        };
+        
+        // SECURITY: Configure proper API authentication behavior
+        options.Events.OnRedirectToLogin = context =>
+        {
+            // For API requests, return 401 instead of redirecting to login page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to login page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            // For API requests, return 403 instead of redirecting to access denied page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to access denied page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
         };
         
         // Login/logout paths
@@ -474,6 +531,9 @@ try
         
         await next();
     });
+    
+    // Rate Limiting Headers Middleware - Add rate limit headers to responses
+    app.UseRateLimitHeaders();
     
     // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
     app.UseRateLimiter();

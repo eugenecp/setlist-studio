@@ -62,6 +62,7 @@ public class SecurityMetricsService : ISecurityMetricsService
     private readonly ConcurrentDictionary<string, int> _rateLimitViolations = new();
     private readonly ConcurrentDictionary<string, int> _suspiciousActivities = new();
     private readonly ConcurrentDictionary<string, int> _securityEventCounts = new();
+    private volatile int _directSecurityEvents = 0; // Direct calls to RecordSecurityEvent
     
     // Performance tracking
     private volatile int _totalEvents = 0;
@@ -181,9 +182,7 @@ public class SecurityMetricsService : ISecurityMetricsService
         };
 
         RecordEvent(securityEvent);
-        
-        // Track by event type
-        _securityEventCounts.AddOrUpdate(eventType, 1, (k, v) => v + 1);
+        Interlocked.Increment(ref _directSecurityEvents);
 
         var logLevel = severity.ToUpperInvariant() switch
         {
@@ -212,7 +211,7 @@ public class SecurityMetricsService : ISecurityMetricsService
                 AuthenticationFailures = _authenticationFailures.Count,
                 RateLimitViolations = _rateLimitViolations.Count,
                 SuspiciousActivities = _suspiciousActivities.Count,
-                SecurityEvents = _securityEventCounts.Count,
+                SecurityEvents = _directSecurityEvents,
                 RecentEvents = recentEvents,
                 TopFailingIps = GetTopFailingIPs(10),
                 TopViolatedEndpoints = GetTopViolatedEndpoints(10),
@@ -295,6 +294,9 @@ public class SecurityMetricsService : ISecurityMetricsService
         _recentEvents.Enqueue(securityEvent);
         Interlocked.Increment(ref _totalEvents);
         _lastEventTime = securityEvent.Timestamp;
+
+        // Update event type counts for SecurityEventsByType
+        _securityEventCounts.AddOrUpdate(securityEvent.EventType, 1, (key, value) => value + 1);
 
         // Keep only recent events (last 1000)
         while (_recentEvents.Count > 1000)

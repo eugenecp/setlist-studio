@@ -24,65 +24,74 @@ public class CorsSecurityTests : IClassFixture<CorsSecurityTests.TestWebApplicat
     public CorsSecurityTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateClient("Development");
     }
 
-    public class TestWebApplicationFactory : IDisposable
+    public class TestWebApplicationFactory : WebApplicationFactory<Program>
     {
-        private TestServer? _developmentServer;
-        private TestServer? _stagingServer;
-        private TestServer? _productionServer;
+        private readonly Dictionary<string, WebApplicationFactory<Program>> _factories = new();
 
         public HttpClient CreateClient(string environment = "Development")
         {
-            var server = environment switch
+            if (!_factories.TryGetValue(environment, out var factory))
             {
-                "Development" => _developmentServer ??= CreateTestServer("Development"),
-                "Staging" => _stagingServer ??= CreateTestServer("Staging"),
-                "Production" => _productionServer ??= CreateTestServer("Production"),
-                _ => throw new ArgumentException($"Unknown environment: {environment}")
-            };
+                factory = CreateFactory(environment);
+                _factories[environment] = factory;
+            }
 
-            return server.CreateClient();
+            var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "SetlistStudio-Test-Client/1.0");
+            return client;
         }
 
-        private TestServer CreateTestServer(string environment)
+        private WebApplicationFactory<Program> CreateFactory(string environment)
         {
-            var hostBuilder = new HostBuilder()
-                .ConfigureWebHost(webHost =>
+            return new WebApplicationFactory<Program>()
+                .WithWebHostBuilder(builder =>
                 {
-                    webHost.UseTestServer();
-                    webHost.UseEnvironment(environment);
-                    webHost.ConfigureAppConfiguration((context, config) =>
+                    // CRITICAL: Set environment FIRST, before service configuration
+                    builder.UseEnvironment(environment);
+                    
+                    // Override configuration to provide proper test values
+                    builder.ConfigureAppConfiguration((context, config) =>
                     {
+                        // Clear all existing configuration to ensure our test config takes precedence
+                        config.Sources.Clear();
+                        
                         config.AddInMemoryCollection(new Dictionary<string, string?>
                         {
-                            ["ConnectionStrings:DefaultConnection"] = "DataSource=:memory:",
-                            ["Authentication:Google:ClientId"] = "test-client-id",
-                            ["Authentication:Google:ClientSecret"] = "test-client-secret",
-                            ["Authentication:Microsoft:ClientId"] = "test-ms-client-id",
-                            ["Authentication:Microsoft:ClientSecret"] = "test-ms-client-secret",
-                            ["Authentication:Facebook:AppId"] = "test-fb-app-id",
-                            ["Authentication:Facebook:AppSecret"] = "test-fb-app-secret",
-                            ["AllowedHosts"] = environment == "Production" ? 
-                                "setliststudio.com" : 
-                                environment == "Staging" ? 
-                                    "staging.setliststudio.com" : 
-                                    "*"
+                            ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:",
+                            ["Authentication:Google:ClientId"] = "test-client-id-123456",
+                            ["Authentication:Google:ClientSecret"] = "test-client-secret-abcdef",
+                            ["Authentication:Microsoft:ClientId"] = "test-ms-client-id-789012",
+                            ["Authentication:Microsoft:ClientSecret"] = "test-ms-client-secret-ghijkl",
+                            ["Authentication:Facebook:AppId"] = "test-fb-app-id-345678",
+                            ["Authentication:Facebook:AppSecret"] = "test-fb-app-secret-mnopqr",
+                            ["AllowedHosts"] = "*", // Allow all hosts for testing
+                            ["Logging:LogLevel:Default"] = "Warning",
+                            ["Logging:LogLevel:Microsoft.AspNetCore"] = "Warning",
+                            ["Security:CspReporting:Enabled"] = "false"
                         });
+                    })
+                    .ConfigureServices((context, services) =>
+                    {
+                        // Ensure the environment is correctly set for service configuration
+                        // This is critical for CORS policy configuration which depends on environment
                     });
-                    // Note: .NET 6+ uses top-level programs, no explicit Startup class needed
                 });
-
-            var host = hostBuilder.Build();
-            return host.GetTestServer();
         }
 
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
-            _developmentServer?.Dispose();
-            _stagingServer?.Dispose();
-            _productionServer?.Dispose();
+            if (disposing)
+            {
+                foreach (var factory in _factories.Values)
+                {
+                    factory.Dispose();
+                }
+                _factories.Clear();
+            }
+            base.Dispose(disposing);
         }
     }
 
@@ -91,7 +100,7 @@ public class CorsSecurityTests : IClassFixture<CorsSecurityTests.TestWebApplicat
     {
         // Arrange
         var client = _factory.CreateClient("Development");
-        var request = new HttpRequestMessage(HttpMethod.Options, "/api/health");
+        var request = new HttpRequestMessage(HttpMethod.Options, "/api/songs");
         request.Headers.Add("Origin", "http://localhost:3000");
         request.Headers.Add("Access-Control-Request-Method", "GET");
         request.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
@@ -105,7 +114,8 @@ public class CorsSecurityTests : IClassFixture<CorsSecurityTests.TestWebApplicat
         response.Headers.GetValues("Access-Control-Allow-Methods").Should().Contain(m => 
             m.Contains("GET") && m.Contains("POST") && m.Contains("PUT") && m.Contains("DELETE"));
         response.Headers.GetValues("Access-Control-Allow-Headers").Should().Contain(h => 
-            h.Contains("authorization") && h.Contains("content-type"));
+            h.Contains("authorization", StringComparison.OrdinalIgnoreCase) && 
+            h.Contains("content-type", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -253,7 +263,7 @@ public class CorsSecurityTests : IClassFixture<CorsSecurityTests.TestWebApplicat
         // Assert
         response.IsSuccessStatusCode.Should().BeTrue();
         var allowedHeaders = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Headers"));
-        allowedHeaders.Should().Contain(header);
+        allowedHeaders.ToLower().Should().Contain(header.ToLower());
     }
 
     [Theory]

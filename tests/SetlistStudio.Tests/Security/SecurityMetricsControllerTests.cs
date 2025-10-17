@@ -1,11 +1,17 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 using Moq;
 using SetlistStudio.Web.Controllers;
 using SetlistStudio.Web.Services;
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Xunit;
@@ -29,6 +35,49 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         _factory = factory;
         _output = output;
         _client = _factory.CreateClient();
+    }
+
+    private SecurityMetricsController CreateControllerWithContext(
+        ISecurityMetricsService securityMetricsService,
+        ILogger<SecurityMetricsController> logger,
+        IConfiguration configuration)
+    {
+        var controller = new SecurityMetricsController(securityMetricsService, logger, configuration);
+        
+        // Mock HttpContext and Request to avoid issues with HTTP context access
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        var mockConnection = new Mock<ConnectionInfo>();
+        
+        // Setup User and Identity
+        var mockUser = new Mock<ClaimsPrincipal>();
+        var mockIdentity = new Mock<ClaimsIdentity>();
+        mockIdentity.Setup(i => i.Name).Returns("TestUser");
+        mockUser.Setup(u => u.Identity).Returns(mockIdentity.Object);
+        mockHttpContext.Setup(c => c.User).Returns(mockUser.Object);
+        
+        // Setup Request and Headers using real HeaderDictionary
+        var headerDictionary = new HeaderDictionary
+        {
+            ["User-Agent"] = "Test-Browser/1.0",
+            ["X-Forwarded-For"] = "192.168.1.100",
+            ["X-Real-IP"] = "192.168.1.100"
+        };
+        mockRequest.Setup(r => r.Headers).Returns(headerDictionary);
+        mockRequest.Setup(r => r.HttpContext).Returns(mockHttpContext.Object);
+        mockHttpContext.Setup(c => c.Request).Returns(mockRequest.Object);
+        
+        // Setup Connection for IP address
+        mockConnection.Setup(c => c.RemoteIpAddress).Returns(System.Net.IPAddress.Parse("127.0.0.1"));
+        mockHttpContext.Setup(c => c.Connection).Returns(mockConnection.Object);
+        
+        var controllerContext = new ControllerContext
+        {
+            HttpContext = mockHttpContext.Object
+        };
+        
+        controller.ControllerContext = controllerContext;
+        return controller;
     }
 
     #region Authorization Tests
@@ -194,17 +243,17 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
 
         mockService.Setup(s => s.GetMetricsSnapshot()).Returns(expectedSnapshot);
 
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
         var result = controller.GetSnapshot();
 
         // Assert
         result.Should().NotBeNull();
-        var okResult = result.Result as Microsoft.AspNetCore.Mvc.OkObjectResult;
+        var okResult = result.Result as OkObjectResult;
         okResult.Should().NotBeNull();
         okResult!.Value.Should().BeEquivalentTo(expectedSnapshot);
 
@@ -252,13 +301,13 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
             .Setup(s => s.GetDetailedMetrics(It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
             .Returns(expectedMetrics);
 
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
         var mockConfigSection = new Mock<IConfigurationSection>();
         mockConfigSection.Setup(x => x.Value).Returns("30");
         mockConfig.Setup(x => x.GetSection("Security:MaxHistoryDays")).Returns(mockConfigSection.Object);
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
         var result = controller.GetDetailedMetrics(startTime, endTime);
@@ -277,10 +326,10 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
     {
         // Arrange
         var mockService = new Mock<ISecurityMetricsService>();
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         var startTime = DateTime.UtcNow;
         var endTime = DateTime.UtcNow.AddHours(-1); // End before start
@@ -325,10 +374,10 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
             .Setup(s => s.GetMetricsForPeriod(It.IsAny<TimeSpan>()))
             .Returns(expectedMetrics);
 
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
         var result = controller.GetMetricsForPeriod(periodHours);
@@ -350,10 +399,10 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
     {
         // Arrange
         var mockService = new Mock<ISecurityMetricsService>();
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
         var result = controller.GetMetricsForPeriod(invalidPeriod);
@@ -414,13 +463,19 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         mockService.Setup(s => s.GetMetricsForPeriod(TimeSpan.FromHours(24))).Returns(mock24HourMetrics);
         mockService.Setup(s => s.GetMetricsForPeriod(TimeSpan.FromHours(1))).Returns(mock1HourMetrics);
 
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
-        var mockConfigSection = new Mock<IConfigurationSection>();
-        mockConfigSection.Setup(x => x.Value).Returns("true");
-        mockConfig.Setup(x => x.GetSection("Security:AlertsEnabled")).Returns(mockConfigSection.Object);
+        
+        // Setup configuration sections that GetValue<T> extension method uses internally
+        var mockAlertsSection = new Mock<IConfigurationSection>();
+        mockAlertsSection.Setup(s => s.Value).Returns("true");
+        mockConfig.Setup(c => c.GetSection("Security:AlertsEnabled")).Returns(mockAlertsSection.Object);
+        
+        var mockRetentionSection = new Mock<IConfigurationSection>();
+        mockRetentionSection.Setup(s => s.Value).Returns("7");
+        mockConfig.Setup(c => c.GetSection("Security:MetricsRetentionDays")).Returns(mockRetentionSection.Object);
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
         var result = controller.GetSecurityDashboard();
@@ -447,10 +502,15 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
     {
         // Arrange
         var mockService = new Mock<ISecurityMetricsService>();
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        mockService.Setup(s => s.RecordSecurityEvent(
+            It.IsAny<string>(), 
+            It.IsAny<string>(), 
+            It.IsAny<string>())).Verifiable();
+            
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         var request = new RecordSecurityEventRequest
         {
@@ -464,6 +524,15 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
 
         // Assert
         result.Should().NotBeNull();
+        
+        // Debug: Check what we got
+        _output.WriteLine($"Result type: {result.GetType().Name}");
+        if (result is ObjectResult objResult)
+        {
+            _output.WriteLine($"StatusCode: {objResult.StatusCode}");
+            _output.WriteLine($"Value: {objResult.Value}");
+        }
+        
         var createdResult = result as Microsoft.AspNetCore.Mvc.CreatedResult;
         createdResult.Should().NotBeNull();
         createdResult!.StatusCode.Should().Be(201);
@@ -482,10 +551,10 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
     {
         // Arrange
         var mockService = new Mock<ISecurityMetricsService>();
-        var mockLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SecurityMetricsController>>();
+        var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
 
-        var controller = new SecurityMetricsController(mockService.Object, mockLogger.Object, mockConfig.Object);
+        var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         var request = new RecordSecurityEventRequest
         {
