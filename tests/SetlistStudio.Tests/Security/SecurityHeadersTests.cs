@@ -365,7 +365,8 @@ public class SecurityHeadersTests : IClassFixture<WebApplicationFactory<Program>
         {
             var responseHeaders = response.Headers.ToDictionary(h => h.Key, h => h.Value.First());
             
-            foreach (var (header, value) in firstResponseHeaders.Where(h => h.Key.StartsWith("X-") || h.Key == "Content-Security-Policy"))
+            foreach (var (header, value) in firstResponseHeaders.Where(h => 
+                (h.Key.StartsWith("X-") && !h.Key.StartsWith("X-RateLimit-")) || h.Key == "Content-Security-Policy"))
             {
                 responseHeaders.Should().ContainKey(header);
                 responseHeaders[header].Should().Be(value,

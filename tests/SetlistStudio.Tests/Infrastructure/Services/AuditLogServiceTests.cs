@@ -492,6 +492,366 @@ public class AuditLogServiceTests : IDisposable
         Guid.TryParse(auditLog.CorrelationId, out _).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task LogAuditAsync_WhenDatabaseThrowsException_ShouldLogErrorAndNotThrow()
+    {
+        // Arrange
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+        var changes = new { Name = "New Song" };
+
+        // Force database error by disposing context
+        _context.Dispose();
+
+        // Act & Assert - should not throw
+        await FluentActions.Invoking(() => 
+                _service.LogAuditAsync(action, tableName, recordId, userId, changes))
+            .Should().NotThrowAsync();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to create audit log")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetAuditLogsAsync_WhenDatabaseThrowsException_ShouldLogErrorAndReturnEmpty()
+    {
+        // Arrange
+        _context.Dispose(); // Force database error
+
+        // Act
+        var result = await _service.GetAuditLogsAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to retrieve audit logs")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByRecordAsync_WithNullTableName_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByRecordAsync(null!, "123"))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "tableName");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByRecordAsync_WithEmptyTableName_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByRecordAsync(string.Empty, "123"))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "tableName");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByRecordAsync_WithNullRecordId_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByRecordAsync("Songs", null!))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "recordId");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByRecordAsync_WithEmptyRecordId_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByRecordAsync("Songs", string.Empty))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "recordId");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByRecordAsync_WhenDatabaseThrowsException_ShouldLogErrorAndReturnEmpty()
+    {
+        // Arrange
+        const string tableName = "Songs";
+        const string recordId = "123";
+        _context.Dispose(); // Force database error
+
+        // Act
+        var result = await _service.GetAuditLogsByRecordAsync(tableName, recordId);
+
+        // Assert
+        result.Should().BeEmpty();
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Failed to retrieve audit logs for {tableName} {recordId}")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByCorrelationIdAsync_WithNullCorrelationId_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByCorrelationIdAsync(null!))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "correlationId");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByCorrelationIdAsync_WithEmptyCorrelationId_ShouldThrowArgumentException()
+    {
+        // Act & Assert
+        await FluentActions.Invoking(() => 
+                _service.GetAuditLogsByCorrelationIdAsync(string.Empty))
+            .Should().ThrowAsync<ArgumentException>()
+            .Where(e => e.ParamName == "correlationId");
+    }
+
+    [Fact]
+    public async Task GetAuditLogsByCorrelationIdAsync_WhenDatabaseThrowsException_ShouldLogErrorAndReturnEmpty()
+    {
+        // Arrange
+        const string correlationId = "test-correlation-123";
+        _context.Dispose(); // Force database error
+
+        // Act
+        var result = await _service.GetAuditLogsByCorrelationIdAsync(correlationId);
+
+        // Assert
+        result.Should().BeEmpty();
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Failed to retrieve audit logs for correlation ID {correlationId}")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAuditLogsOlderThanAsync_WhenDatabaseThrowsException_ShouldLogErrorAndReturnZero()
+    {
+        // Arrange
+        var cutoffDate = DateTime.UtcNow.AddDays(-30);
+        _context.Dispose(); // Force database error
+
+        // Act
+        var result = await _service.DeleteAuditLogsOlderThanAsync(cutoffDate);
+
+        // Assert
+        result.Should().Be(0);
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to delete old audit logs older than")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAuditLogsOlderThanAsync_WithNoOldLogs_ShouldReturnZero()
+    {
+        // Arrange - no old logs exist, all logs are recent
+        var recentLog = new AuditLog
+        {
+            Action = "CREATE",
+            EntityType = "Songs",
+            EntityId = "123",
+            UserId = "user-123",
+            Timestamp = DateTime.UtcNow.AddMinutes(-5),
+            CorrelationId = Guid.NewGuid().ToString()
+        };
+        _context.AuditLogs.Add(recentLog);
+        await _context.SaveChangesAsync();
+
+        var cutoffDate = DateTime.UtcNow.AddDays(-30);
+
+        // Act
+        var result = await _service.DeleteAuditLogsOlderThanAsync(cutoffDate);
+
+        // Assert
+        result.Should().Be(0);
+        var remainingLogs = await _context.AuditLogs.CountAsync();
+        remainingLogs.Should().Be(1, "Recent logs should not be deleted");
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithHttpContextWithXForwardedForHeader_ShouldExtractFirstIpFromList()
+    {
+        // Arrange
+        const string ipList = "192.168.1.100, 10.0.0.1, 172.16.0.1";
+        const string expectedIp = "192.168.1.100";
+        
+        _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(ipList);
+
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        auditLog!.IpAddress.Should().Be(expectedIp);
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithHttpContextWithXRealIpHeader_ShouldExtractRealIp()
+    {
+        // Arrange
+        const string realIp = "203.0.113.123";
+        _mockHeaders.Setup(h => h["X-Real-IP"]).Returns(realIp);
+        _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(string.Empty);
+
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        auditLog!.IpAddress.Should().Be(realIp);
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithHttpContextWithCfConnectingIpHeader_ShouldExtractCloudflareIp()
+    {
+        // Arrange
+        const string cfIp = "198.51.100.42";
+        _mockHeaders.Setup(h => h["CF-Connecting-IP"]).Returns(cfIp);
+        _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(string.Empty);
+        _mockHeaders.Setup(h => h["X-Real-IP"]).Returns(string.Empty);
+
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        auditLog!.IpAddress.Should().Be(cfIp);
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithHttpContextEnhancementError_ShouldLogWarningAndContinue()
+    {
+        // Arrange
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Setup headers to throw exception
+        _mockHeaders.Setup(h => h["User-Agent"]).Throws(new InvalidOperationException("Header error"));
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to enhance audit log with HTTP context information")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithSessionInformation_ShouldCaptureSessionId()
+    {
+        // Arrange
+        const string sessionId = "session-123";
+        var mockSession = new Mock<ISession>();
+        mockSession.Setup(s => s.Id).Returns(sessionId);
+        
+        // Setup the HttpContext with session - ensure all required properties are mocked
+        _mockHttpContext.Setup(x => x.Session).Returns(mockSession.Object);
+        _mockHttpContext.Setup(x => x.Request).Returns(_mockHttpRequest.Object);
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns((System.Net.IPAddress?)null);
+        _mockHttpRequest.Setup(x => x.Headers).Returns(_mockHeaders.Object);
+        _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(string.Empty);
+        _mockHeaders.Setup(h => h["X-Real-IP"]).Returns(string.Empty);
+        _mockHeaders.Setup(h => h["CF-Connecting-IP"]).Returns(string.Empty);
+        _mockHeaders.Setup(h => h["User-Agent"]).Returns("Test Browser");
+        _mockHttpContextAccessor.Setup(x => x.HttpContext).Returns(_mockHttpContext.Object);
+
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        auditLog!.SessionId.Should().Be(sessionId);
+    }
+
+    [Fact]
+    public async Task LogAuditAsync_WithNullSession_ShouldNotSetSessionId()
+    {
+        // Arrange - setup HttpContext without session
+        _mockHttpContext.Setup(x => x.Request).Returns(_mockHttpRequest.Object);
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns((System.Net.IPAddress?)null);
+        _mockHttpRequest.Setup(x => x.Headers).Returns(_mockHeaders.Object);
+        _mockHeaders.Setup(h => h["User-Agent"]).Returns("Test Browser");
+        _mockHttpContextAccessor.Setup(x => x.HttpContext).Returns(_mockHttpContext.Object);
+        
+        // Don't setup Session property - will return null by default
+
+        const string action = "CREATE";
+        const string tableName = "Songs";
+        const string recordId = "123";
+        const string userId = "user-123";
+
+        // Act
+        await _service.LogAuditAsync(action, tableName, recordId, userId, null);
+
+        // Assert
+        var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
+        auditLog.Should().NotBeNull();
+        auditLog!.SessionId.Should().BeNull();
+    }
+
     private void SetupHttpContext(string ipAddress, string userAgent, string userId)
     {
         _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)

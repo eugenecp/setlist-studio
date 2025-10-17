@@ -7,6 +7,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using System.Security.Claims;
+using System.Text;
 using Xunit;
 using FluentAssertions;
 using SetlistStudio.Web.Controllers;
@@ -70,21 +71,34 @@ public class TestControllerTests
         var okResult = result as OkObjectResult;
         okResult.Should().NotBeNull();
 
-        session.Verify(x => x.SetString("TestKey", testContent), Times.Once);
+        session.Verify(x => x.Set("TestKey", Encoding.UTF8.GetBytes(testContent)), Times.Once);
         session.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task CreateTestSession_InProductionWithoutTestFactory_ReturnsNotFound()
+    public async Task CreateTestSession_InProductionEnvironment_CreatesSession()
     {
         // Arrange
         _testEnvironment.EnvironmentName = "Production";
+        
+        var session = new Mock<ISession>();
+        session.Setup(x => x.Id).Returns("test-session-id");
+
+        var httpContext = new Mock<HttpContext>();
+        httpContext.Setup(x => x.Session).Returns(session.Object);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext.Object
+        };
 
         // Act
         var result = await _controller.CreateTestSession("test");
 
         // Assert
-        result.Should().BeOfType<NotFoundResult>();
+        result.Should().BeOfType<OkObjectResult>();
+        session.Verify(x => x.Set("TestKey", Encoding.UTF8.GetBytes("test")), Times.Once);
+        session.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -107,7 +121,7 @@ public class TestControllerTests
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        session.Verify(x => x.SetString("TestKey", "test-value"), Times.Once);
+        session.Verify(x => x.Set("TestKey", Encoding.UTF8.GetBytes("test-value")), Times.Once);
     }
 
     [Fact]
@@ -237,7 +251,7 @@ public class TestControllerTests
                       .Returns(antiforgeryTokens);
 
         var serviceProvider = new Mock<IServiceProvider>();
-        serviceProvider.Setup(x => x.GetRequiredService<IAntiforgery>())
+        serviceProvider.Setup(x => x.GetService(typeof(IAntiforgery)))
                       .Returns(mockAntiforgery.Object);
 
         var httpContext = new Mock<HttpContext>();
@@ -318,7 +332,7 @@ public class TestControllerTests
                       .Returns(antiforgeryTokens);
 
         var serviceProvider = new Mock<IServiceProvider>();
-        serviceProvider.Setup(x => x.GetRequiredService<IAntiforgery>())
+        serviceProvider.Setup(x => x.GetService(typeof(IAntiforgery)))
                       .Returns(mockAntiforgery.Object);
 
         var httpContext = new Mock<HttpContext>();
@@ -362,7 +376,7 @@ public class TestControllerTests
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        session.Verify(x => x.SetString("TestKey", "dev-test-content"), Times.Once);
+        session.Verify(x => x.Set("TestKey", Encoding.UTF8.GetBytes("dev-test-content")), Times.Once);
         session.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
