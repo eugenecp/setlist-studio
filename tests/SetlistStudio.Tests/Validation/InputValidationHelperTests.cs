@@ -539,4 +539,153 @@ public class InputValidationHelperTests
     }
 
     #endregion
+
+    #region Edge Cases and Coverage Tests
+
+    [Fact]
+    public void ValidateSongTitle_WithNullOrWhiteSpace_ReturnsValidationError()
+    {
+        // Arrange & Act & Assert
+        var result1 = InputValidationHelper.ValidateSongTitle(null!);
+        result1.Should().NotBe(ValidationResult.Success);
+        result1.ErrorMessage.Should().Be("Song title is required");
+
+        var result2 = InputValidationHelper.ValidateSongTitle("");
+        result2.Should().NotBe(ValidationResult.Success);
+        result2.ErrorMessage.Should().Be("Song title is required");
+
+        var result3 = InputValidationHelper.ValidateSongTitle("   ");
+        result3.Should().NotBe(ValidationResult.Success);
+        result3.ErrorMessage.Should().Be("Song title is required");
+    }
+
+    [Fact]
+    public void ValidateSongTitle_WithTooLongTitle_ReturnsValidationError()
+    {
+        // Arrange
+        var title = new string('A', 201); // 201 characters
+
+        // Act
+        var result = InputValidationHelper.ValidateSongTitle(title);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().Be("Song title must be between 1 and 200 characters");
+    }
+
+    [Fact]
+    public void ValidateSetlistName_WithNullOrWhiteSpace_ReturnsValidationError()
+    {
+        // Arrange & Act & Assert
+        var result1 = InputValidationHelper.ValidateSetlistName(null!);
+        result1.Should().NotBe(ValidationResult.Success);
+        result1.ErrorMessage.Should().Be("Setlist name is required");
+
+        var result2 = InputValidationHelper.ValidateSetlistName("");
+        result2.Should().NotBe(ValidationResult.Success);
+        result2.ErrorMessage.Should().Be("Setlist name is required");
+
+        var result3 = InputValidationHelper.ValidateSetlistName("   ");
+        result3.Should().NotBe(ValidationResult.Success);
+        result3.ErrorMessage.Should().Be("Setlist name is required");
+    }
+
+    [Fact]
+    public void ValidateSetlistName_WithTooLongName_ReturnsValidationError()
+    {
+        // Arrange
+        var name = new string('A', 201); // 201 characters
+
+        // Act
+        var result = InputValidationHelper.ValidateSetlistName(name);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().Be("Setlist name must be between 1 and 200 characters");
+    }
+
+    [Fact]
+    public void ValidateMusicalKey_WithInvalidKeyAttribute_ReturnsValidationError()
+    {
+        // Arrange - use a key that passes regex but fails MusicalKeyAttribute validation
+        var invalidKey = "H"; // H is not a valid musical key
+
+        // Act
+        var result = InputValidationHelper.ValidateMusicalKey(invalidKey);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ValidateUserNotes_WithTooLongNotes_ReturnsValidationError()
+    {
+        // Arrange
+        var notes = new string('A', 2001); // 2001 characters
+
+        // Act
+        var result = InputValidationHelper.ValidateUserNotes(notes);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().Be("Notes must be 2000 characters or less");
+    }
+
+    [Fact]
+    public void ValidateDuration_WithNullValue_ReturnsSuccess()
+    {
+        // Arrange
+        int? duration = null;
+
+        // Act
+        var result = InputValidationHelper.ValidateDuration(duration);
+
+        // Assert
+        result.Should().Be(ValidationResult.Success);
+    }
+
+    [Fact]
+    public void ValidateDifficultyRating_WithNullValue_ReturnsSuccess()
+    {
+        // Arrange
+        int? rating = null;
+
+        // Act
+        var result = InputValidationHelper.ValidateDifficultyRating(rating);
+
+        // Assert
+        result.Should().Be(ValidationResult.Success);
+    }
+
+    [Fact]
+    public void SanitizeInput_WithNullOrWhiteSpace_ReturnsEmptyString()
+    {
+        // Arrange & Act & Assert
+        var result1 = InputValidationHelper.SanitizeInput(null);
+        result1.Should().Be(string.Empty);
+
+        var result2 = InputValidationHelper.SanitizeInput("");
+        result2.Should().Be(string.Empty);
+
+        var result3 = InputValidationHelper.SanitizeInput("   ");
+        result3.Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void SanitizeInput_WithValidInput_ReturnsSanitizedString()
+    {
+        // Arrange
+        var input = "Test Song Title";
+
+        // Act
+        var result = InputValidationHelper.SanitizeInput(input);
+
+        // Assert
+        result.Should().NotBeNull();
+        // The actual sanitization logic is handled by SanitizedStringAttribute.SanitizeMusicalContent
+        // We just verify the method calls through and returns a non-null result
+    }
+
+    #endregion
 }
