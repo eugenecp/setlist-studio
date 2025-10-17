@@ -46,6 +46,7 @@
 - **Security**: OAuth authentication, input validation, no hardcoded secrets
 - **Maintainability**: Clean code, clear documentation, consistent patterns
 - **User Experience**: Realistic musical data, smooth interactions
+- **Code Quality**: Zero build warnings in main and test projects
 
 ---
 
@@ -55,8 +56,18 @@
 
 Setlist Studio maintains **100% test success rate requirement** with minimum 90% code coverage for both line and branch coverage at file and project levels.
 
+**PRIORITY: Individual File Coverage First**
+- **Target each file to 90%+ line AND branch coverage before moving to the next file**
+- **Focus on files closest to 90% threshold first** (e.g., 85%+ files get priority)
+- **Complete one file at a time** rather than spreading effort across multiple files
+- **Use file-specific coverage analysis** to identify exact uncovered lines and branches
+- **Create targeted tests** for specific line coverage gaps and branch conditions
+- **Verify both line and branch coverage targets are met before proceeding**
+
 **Quality Metrics Requirements:**
 - **Test Success Rate**: **100% of all tests must pass** - zero tolerance for failing tests
+- **Build Quality**: **Zero build warnings** in main and test projects - clean builds required
+- **Individual File Coverage**: **Each file must achieve at least 90% line AND branch coverage before moving to next file**
 - **Line Coverage**: Each file must achieve at least 90% line coverage
 - **Branch Coverage**: Each file must achieve at least 90% branch coverage
 - **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
@@ -239,9 +250,9 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
-- **Quality Gates**: **100% test success rate** and 90%+ coverage required before merge
+- **Quality Gates**: **100% test success rate**, **zero build warnings**, and 90%+ coverage required before merge
 - **Code Review**: All changes require peer review and approval
-- **Zero Tolerance**: No failing tests allowed in any branch or pull request
+- **Zero Tolerance**: No failing tests or build warnings allowed in any branch or pull request
 
 ### Test Execution Strategy
 - **Unit Tests**: Fast, isolated tests for individual components (must pass 100%)
