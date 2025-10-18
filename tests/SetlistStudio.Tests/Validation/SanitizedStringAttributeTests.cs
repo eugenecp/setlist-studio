@@ -536,6 +536,251 @@ public class SanitizedStringAttributeTests
 
     #endregion
 
+    #region Branch Coverage Enhancement Tests
+
+    [Fact]
+    public void ContainsDangerousContent_ShouldReturnFalse_ForNullOrWhitespaceInput()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+
+        // Act & Assert - Test null input
+        var resultNull = attribute.IsValid(null);
+        resultNull.Should().BeTrue("Null input should be valid");
+
+        // Act & Assert - Test whitespace input
+        var resultWhitespace = attribute.IsValid("   ");
+        resultWhitespace.Should().BeTrue("Whitespace-only input should be valid");
+
+        // Act & Assert - Test empty string
+        var resultEmpty = attribute.IsValid("");
+        resultEmpty.Should().BeTrue("Empty string should be valid");
+    }
+
+    [Fact]
+    public void SanitizedString_ShouldRejectDangerousPatterns_InnerHTML()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+        var input = "test innerHTML manipulation";
+
+        // Act
+        var result = attribute.IsValid(input);
+
+        // Assert
+        result.Should().BeFalse("String with innerHTML pattern should be rejected");
+    }
+
+    [Fact]
+    public void SanitizedString_ShouldRejectDangerousPatterns_OuterHTML()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+        var input = "test outerHTML manipulation";
+
+        // Act
+        var result = attribute.IsValid(input);
+
+        // Assert
+        result.Should().BeFalse("String with outerHTML pattern should be rejected");
+    }
+
+    [Fact]
+    public void SanitizedString_ShouldRejectDangerousPatterns_DocumentWrite()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+        var input = "test document.write attack";
+
+        // Act
+        var result = attribute.IsValid(input);
+
+        // Assert
+        result.Should().BeFalse("String with document.write pattern should be rejected");
+    }
+
+    [Fact]
+    public void SanitizedString_ShouldRejectDangerousPatterns_DocumentCookie()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+        var input = "steal document.cookie data";
+
+        // Act
+        var result = attribute.IsValid(input);
+
+        // Assert
+        result.Should().BeFalse("String with document.cookie pattern should be rejected");
+    }
+
+    [Fact]
+    public void SanitizedString_ShouldRejectDangerousPatterns_EvalFunction()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+        var input = "malicious eval( code execution";
+
+        // Act
+        var result = attribute.IsValid(input);
+
+        // Assert
+        result.Should().BeFalse("String with eval( pattern should be rejected");
+    }
+
+    [Fact]
+    public void IsHtmlEncoded_ShouldDetectAllHtmlEntities()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute();
+
+        // Test different HTML entities
+        var inputs = new[]
+        {
+            "Test &lt;script&gt; encoded",      // Should be detected as HTML encoded
+            "Test &gt;tag&lt; encoded",         // Should be detected as HTML encoded  
+            "Test &amp; encoded",               // Should be detected as HTML encoded
+            "Test &quot;quoted&quot; encoded",  // Should be detected as HTML encoded
+            "Test &#39;apostrophe&#39; encoded", // Should be detected as HTML encoded
+            "Test &apos;apostrophe&apos; encoded", // Should be detected as HTML encoded
+            "Plain text without entities"       // Should NOT be detected as HTML encoded
+        };
+
+        // Act & Assert
+        for (int i = 0; i < inputs.Length - 1; i++)
+        {
+            var result = attribute.IsValid(inputs[i]);
+            result.Should().BeTrue($"HTML encoded input should be valid: {inputs[i]}");
+        }
+
+        // Last input should be plain text and trigger different validation path
+        var plainResult = attribute.IsValid(inputs[inputs.Length - 1]);
+        plainResult.Should().BeTrue("Plain text should be valid");
+    }
+
+    [Fact]
+    public void IsSafeForMusicalContent_ShouldRejectScriptTags()
+    {
+        // Arrange
+        var maliciousInput = "Song Title <script>alert('xss')</script>";
+
+        // Act
+        var result = SanitizedStringAttribute.IsSafeForMusicalContent(maliciousInput);
+
+        // Assert
+        result.Should().BeFalse("Musical content with script tags should be rejected");
+    }
+
+    [Fact]
+    public void IsSafeForMusicalContent_ShouldRejectJavascriptProtocols()
+    {
+        // Arrange
+        var maliciousInput = "Song javascript:alert('xss') Title";
+
+        // Act
+        var result = SanitizedStringAttribute.IsSafeForMusicalContent(maliciousInput);
+
+        // Assert
+        result.Should().BeFalse("Musical content with javascript protocol should be rejected");
+    }
+
+    [Fact]
+    public void IsSafeForMusicalContent_ShouldRejectSqlInjection()
+    {
+        // Arrange
+        var maliciousInput = "Song'; DROP TABLE Songs; --";
+
+        // Act
+        var result = SanitizedStringAttribute.IsSafeForMusicalContent(maliciousInput);
+
+        // Assert
+        result.Should().BeFalse("Musical content with SQL injection should be rejected");
+    }
+
+    [Fact]
+    public void IsSafeForMusicalContent_ShouldAcceptValidMusicalContent()
+    {
+        // Arrange
+        var validInputs = new[]
+        {
+            "Sweet Child O' Mine",
+            "Bohemian Rhapsody (Live Version)",
+            "Song in C# Major",
+            "The Song with \"Quotes\" and 'Apostrophes'",
+            "",
+            "   "
+        };
+
+        // Act & Assert
+        foreach (var input in validInputs)
+        {
+            var result = SanitizedStringAttribute.IsSafeForMusicalContent(input);
+            result.Should().BeTrue($"Valid musical content should be accepted: {input}");
+        }
+    }
+
+    [Fact]
+    public void IsSafeForMusicalContent_ShouldAcceptNullInput()
+    {
+        // Act
+        var result = SanitizedStringAttribute.IsSafeForMusicalContent(null!);
+
+        // Assert
+        result.Should().BeTrue("Null input should be considered safe for musical content");
+    }
+
+    [Fact]
+    public void SanitizeInput_ShouldHandleMaxLengthProperty()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute { MaxLength = 10 };
+        var longInput = "This is a very long song title that exceeds the maximum length";
+
+        // Act
+        var sanitized = attribute.SanitizeInput(longInput);
+
+        // Assert
+        sanitized.Length.Should().BeLessOrEqualTo(10, "Sanitized input should respect MaxLength property");
+        sanitized.Should().NotBeNullOrWhiteSpace("Sanitized input should not be empty");
+    }
+
+    [Fact]
+    public void SanitizeInput_ShouldHandleSpecialCharacterFiltering()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute { AllowSpecialCharacters = false };
+        var inputWithSpecialChars = "Song@Title#With$Special%Characters";
+
+        // Act
+        var sanitized = attribute.SanitizeInput(inputWithSpecialChars);
+
+        // Assert
+        sanitized.Should().NotContain("@", "Special characters should be removed");
+        sanitized.Should().NotContain("$", "Special characters should be removed");
+        sanitized.Should().NotContain("%", "Special characters should be removed");
+        sanitized.Should().Contain("Song", "Valid characters should be preserved");
+        sanitized.Should().Contain("Title", "Valid characters should be preserved");
+    }
+
+    [Fact]
+    public void SanitizeInput_ShouldHandleLineBreakFiltering()
+    {
+        // Arrange
+        var attribute = new SanitizedStringAttribute { AllowLineBreaks = false };
+        var inputWithLineBreaks = "Song Title\r\nWith Line\rBreaks\nIncluded";
+
+        // Act
+        var sanitized = attribute.SanitizeInput(inputWithLineBreaks);
+
+        // Assert
+        sanitized.Should().NotContain("\r\n", "Line breaks should be removed");
+        sanitized.Should().NotContain("\r", "Line breaks should be removed");
+        sanitized.Should().NotContain("\n", "Line breaks should be removed");
+        sanitized.Should().Contain("Song Title", "Valid text should be preserved");
+        sanitized.Should().Contain("With Line", "Valid text should be preserved");
+    }
+
+    #endregion
+
     #region Performance Edge Cases
 
     [Fact]
