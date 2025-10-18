@@ -688,4 +688,53 @@ public class InputValidationHelperTests
     }
 
     #endregion
+
+    #region Coverage Gap Tests - Additional Edge Cases
+
+    [Fact]
+    public void ValidateSongTitle_WithTooLongTitle_ReturnsValidationError_AdditionalCase()
+    {
+        // Arrange - Test the title.Length > 200 branch for additional coverage
+        var title = new string('A', 201); // 201 characters for length check
+
+        // Act
+        var result = InputValidationHelper.ValidateSongTitle(title);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().Be("Song title must be between 1 and 200 characters");
+    }
+
+    [Fact]
+    public void ValidateArtistName_WithTooLongName_ReturnsValidationError()
+    {
+        // Arrange - Test the artist.Length > 200 branch that was missing
+        var artist = new string('A', 201); // 201 characters
+
+        // Act
+        var result = InputValidationHelper.ValidateArtistName(artist);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().Be("Artist name must be between 1 and 200 characters");
+    }
+
+    [Theory]
+    [InlineData("H")] // Invalid musical key that passes regex but fails MusicalKeyAttribute
+    [InlineData("Cmaj7")] // Complex chord that might pass regex but fail attribute validation
+    public void ValidateMusicalKey_WithInvalidKeyThatPassesRegex_ReturnsValidationError(string key)
+    {
+        // Arrange - Test keys that pass MusicalNotationPattern but fail MusicalKeyAttribute.IsValid()
+        // This covers the missing branch in ValidateMusicalKey
+
+        // Act  
+        var result = InputValidationHelper.ValidateMusicalKey(key);
+
+        // Assert
+        result.Should().NotBe(ValidationResult.Success);
+        result.ErrorMessage.Should().NotBeNull();
+        // The error message comes from MusicalKeyAttribute, so we just verify it's not null/empty
+    }
+
+    #endregion
 }

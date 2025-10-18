@@ -160,6 +160,7 @@ public class SecurityEventLoggerTests
     [InlineData(SecurityEventSeverity.Medium, LogLevel.Warning)]
     [InlineData(SecurityEventSeverity.High, LogLevel.Error)]
     [InlineData(SecurityEventSeverity.Critical, LogLevel.Critical)]
+    [InlineData((SecurityEventSeverity)999, LogLevel.Information)] // Test default case for invalid enum values
     public void LogSuspiciousActivity_ShouldMapSeverityToLogLevel(SecurityEventSeverity severity, LogLevel expectedLogLevel)
     {
         // Arrange
@@ -454,6 +455,36 @@ public class SecurityEventLoggerTests
                 It.Is<It.IsAnyType>((v, t) => 
                     v.ToString()!.Contains("BulkRead") &&
                     v.ToString()!.Contains("10000 records")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that invalid severity enum values default to Information log level.
+    /// This test covers the default case in the MapSeverityToLogLevel switch expression.
+    /// </summary>
+    [Fact]
+    public void LogSecurityEvent_WithInvalidSeverity_ShouldDefaultToInformationLevel()
+    {
+        // Arrange
+        var eventType = SecurityEventType.Authentication;
+        var invalidSeverity = (SecurityEventSeverity)(-1); // Invalid enum value
+        var message = "Test security event with invalid severity";
+        var userId = "user123";
+        var resourceType = "TestResource";
+        var resourceId = "resource123";
+        var additionalData = new { TestProperty = "TestValue" };
+
+        // Act
+        _securityEventLogger.LogSecurityEvent(eventType, invalidSeverity, message, userId, resourceType, resourceId, additionalData);
+
+        // Assert - Should use Information level as default
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("SecurityEvent_Authentication")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
