@@ -637,7 +637,10 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         var mockLogger = new Mock<ILogger<SecurityMetricsController>>();
         var mockConfig = new Mock<IConfiguration>();
         
-        mockConfig.Setup(c => c["Security:MaxHistoryDays"]).Returns("30");
+        // Setup configuration section
+        var mockConfigSection = new Mock<IConfigurationSection>();
+        mockConfigSection.Setup(s => s.Value).Returns("30");
+        mockConfig.Setup(c => c.GetSection("Security:MaxHistoryDays")).Returns(mockConfigSection.Object);
 
         var expectedMetrics = new DetailedSecurityMetrics
         {
@@ -659,6 +662,9 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         var objectResult = result.Result as ObjectResult;
         objectResult.Should().NotBeNull();
         objectResult!.StatusCode.Should().Be(200);
+
+        var metrics = objectResult.Value as DetailedSecurityMetrics;
+        metrics.Should().NotBeNull();
 
         // Verify service was called with adjusted time
         mockService.Verify(s => s.GetDetailedMetrics(
@@ -961,7 +967,14 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         };
 
         mockService.Setup(s => s.GetMetricsSnapshot()).Returns(oldSnapshot);
-        mockConfig.Setup(c => c["Security:AlertsEnabled"]).Returns("true");
+        
+        // Setup configuration for GetValue<bool> method using indexer approach
+        mockConfig.SetupGet(c => c["Security:AlertsEnabled"]).Returns("true");
+        
+        // Also setup the section path for the GetValue extension method
+        var mockSection = new Mock<IConfigurationSection>();
+        mockSection.SetupGet(s => s.Value).Returns("true");
+        mockConfig.Setup(c => c.GetSection("Security:AlertsEnabled")).Returns(mockSection.Object);
 
         var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
@@ -972,18 +985,13 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         result.Should().NotBeNull();
         _output.WriteLine($"Result type: {result.Result?.GetType()?.Name}");
         
-        // Check if it's an Unauthorized result
-        if (result.Result is UnauthorizedResult)
-        {
-            _output.WriteLine("Result is UnauthorizedResult - authentication issue");
-            Assert.Fail("Expected authenticated request but got Unauthorized");
-        }
-        
+        // Health endpoint allows anonymous access, so should return OK result directly
         var objectResult = result.Result as ObjectResult;
         objectResult.Should().NotBeNull("Expected ObjectResult but got " + result?.Result?.GetType()?.Name);
         objectResult!.StatusCode.Should().Be(200);
         
-        var health = objectResult.Value as SecurityMonitoringHealth;
+        // The type is from the Web.Controllers namespace, not locally defined
+        var health = objectResult.Value as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;
         health.Should().NotBeNull();
         health!.Status.Should().Be("Warning");
         health.Details.Should().Contain("No recent security events detected");
@@ -1002,6 +1010,14 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         // Configure service to throw exception
         mockService.Setup(s => s.GetMetricsSnapshot()).Throws(new InvalidOperationException("Service unavailable"));
 
+        // Setup configuration for GetValue<bool> method (even though it won't be reached due to exception)
+        mockConfig.SetupGet(c => c["Security:AlertsEnabled"]).Returns("true");
+        
+        // Also setup the section path for the GetValue extension method
+        var mockSection = new Mock<IConfigurationSection>();
+        mockSection.SetupGet(s => s.Value).Returns("true");
+        mockConfig.Setup(c => c.GetSection("Security:AlertsEnabled")).Returns(mockSection.Object);
+
         var controller = CreateControllerWithContext(mockService.Object, mockLogger.Object, mockConfig.Object);
 
         // Act
@@ -1012,7 +1028,7 @@ public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactor
         statusCodeResult.Should().NotBeNull();
         statusCodeResult!.StatusCode.Should().Be(500);
         
-        var health = statusCodeResult.Value as SecurityMonitoringHealth;
+        var health = statusCodeResult.Value as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;
         health.Should().NotBeNull();
         health!.Status.Should().Be("Unhealthy");
         health.Details.Should().Be("Error checking security monitoring health");
