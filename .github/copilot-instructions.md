@@ -46,6 +46,7 @@
 - **Security**: OAuth authentication, input validation, no hardcoded secrets
 - **Maintainability**: Clean code, clear documentation, consistent patterns
 - **User Experience**: Realistic musical data, smooth interactions
+- **Code Quality**: Zero build warnings in main and test projects
 
 ---
 
@@ -53,14 +54,26 @@
 
 ### Coverage Standards
 
-Setlist Studio maintains **minimum 90% code coverage requirements** for both line and branch coverage at file and project levels.
+Setlist Studio maintains **100% test success rate requirement** with minimum 90% code coverage for both line and branch coverage at file and project levels.
+
+**PRIORITY: Individual File Coverage First**
+- **Target each file to 90%+ line AND branch coverage before moving to the next file**
+- **Focus on files closest to 90% threshold first** (e.g., 85%+ files get priority)
+- **Complete one file at a time** rather than spreading effort across multiple files
+- **Use file-specific coverage analysis** to identify exact uncovered lines and branches
+- **Create targeted tests** for specific line coverage gaps and branch conditions
+- **Verify both line and branch coverage targets are met before proceeding**
 
 **Quality Metrics Requirements:**
+- **Test Success Rate**: **100% of all tests must pass** - zero tolerance for failing tests
+- **Build Quality**: **Zero build warnings** in main and test projects - clean builds required
+- **Individual File Coverage**: **Each file must achieve at least 90% line AND branch coverage before moving to next file**
 - **Line Coverage**: Each file must achieve at least 90% line coverage
 - **Branch Coverage**: Each file must achieve at least 90% branch coverage
 - **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
 - **CRAP Score**: All methods must maintain passing CRAP scores
 - **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
+- **Test Reliability**: All tests must be deterministic and pass consistently
 
 ### Test Framework Requirements
 
@@ -237,27 +250,29 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
-- **Quality Gates**: All tests must pass with 90%+ coverage before merge
+- **Quality Gates**: **100% test success rate**, **zero build warnings**, and 90%+ coverage required before merge
 - **Code Review**: All changes require peer review and approval
+- **Zero Tolerance**: No failing tests or build warnings allowed in any branch or pull request
 
 ### Test Execution Strategy
-- **Unit Tests**: Fast, isolated tests for individual components
-- **Integration Tests**: Database and service integration scenarios
-- **Component Tests**: Blazor component rendering and interaction tests
-- **Advanced Tests**: Edge cases, error conditions, and coverage gaps
+- **Unit Tests**: Fast, isolated tests for individual components (must pass 100%)
+- **Integration Tests**: Database and service integration scenarios (must pass 100%)
+- **Component Tests**: Blazor component rendering and interaction tests (must pass 100%)
+- **Advanced Tests**: Edge cases, error conditions, and coverage gaps (must pass 100%)
+- **Test Reliability**: All tests must be deterministic and consistently passing
 
 ### Common Commands
 ```bash
-# Run all tests
+# Run all tests (must achieve 100% success rate)
 dotnet test
 
-# Run tests with coverage
+# Run tests with coverage (must achieve 100% success with 90%+ coverage)
 dotnet test --collect:"XPlat Code Coverage"
 
-# Run specific test class
+# Run specific test class (verify 100% success for targeted testing)
 dotnet test --filter "FullyQualifiedName~SetlistServiceTests"
 
-# Run tests and generate coverage report
+# Run tests and generate coverage report (validate 100% success + coverage)
 ./scripts/run-tests-clean.ps1
 ```
 
@@ -557,7 +572,7 @@ When contributing to Setlist Studio:
 
 **Development Setup:**
 - [ ] Clone repository and set up development environment
-- [ ] Run `dotnet test` to ensure all tests pass
+- [ ] Run `dotnet test` to ensure **100% of tests pass** (zero failures allowed)
 - [ ] Generate coverage report to understand current coverage status
 - [ ] Review existing code patterns and test organization
 - [ ] Create feature branch following naming conventions

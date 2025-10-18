@@ -1,0 +1,70 @@
+version: '3.8'
+
+# Development Docker Compose override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  setliststudio-web:
+    # Development environment configuration
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Enable diagnostics for development
+      - DOTNET_EnableDiagnostics=1
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Debug
+      - ASPNETCORE_LOGGING__LOGLEVEL__Microsoft=Information
+      - ASPNETCORE_LOGGING__LOGLEVEL__SetlistStudio=Debug
+    
+    # Relaxed resource limits for development
+    mem_limit: 1G
+    cpus: '2.0'
+    
+    # Volume mounts for development with security considerations
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - setliststudio-dev-data:/app/data
+      - setliststudio-dev-logs:/app/logs
+      # Temporary filesystem for development
+      - /tmp:/tmp:rw,nosuid,nodev,noexec
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=200m
+    
+    # Development port mapping
+    ports:
+      - "5000:8080"  # Map host port 5000 to container port 8080
+    
+    # Development networks
+    networks:
+      - setlist-dev
+    
+    # Development security - secure but developer-friendly
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE  # Allow file permission overrides for development
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:docker-default
+    # Read-only filesystem disabled in development for easier debugging
+    # Uncomment for production-like testing: read_only: true
+    user: "1001:1001"
+    
+    # Development labels
+    labels:
+      - "com.setliststudio.environment=development"
+      - "com.setliststudio.hotreload=enabled"
+
+networks:
+  setlist-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+volumes:
+  setliststudio-dev-data:
+  setliststudio-dev-logs:

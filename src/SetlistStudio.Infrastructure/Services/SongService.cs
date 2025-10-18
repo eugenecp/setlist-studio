@@ -14,11 +14,13 @@ public class SongService : ISongService
 {
     private readonly SetlistStudioDbContext _context;
     private readonly ILogger<SongService> _logger;
+    private readonly IAuditLogService _auditLogService;
 
-    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger)
+    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger, IAuditLogService auditLogService)
     {
         _context = context;
         _logger = logger;
+        _auditLogService = auditLogService;
     }
 
     public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
@@ -116,6 +118,15 @@ public class SongService : ISongService
             _logger?.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
                 song.Id, song.Title, song.Artist, song.UserId);
 
+            // Log audit trail for song creation
+            await _auditLogService.LogAuditAsync(
+                "CREATE",
+                nameof(Song),
+                song.Id.ToString(),
+                song.UserId,
+                new { song.Title, song.Artist, song.Album, song.Genre, song.Bpm, song.MusicalKey }
+            );
+
             return song;
         }
         catch (Exception ex)
@@ -145,6 +156,21 @@ public class SongService : ISongService
                 throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
             }
 
+            // Capture old values for audit logging
+            var oldValues = new 
+            { 
+                existingSong.Title, 
+                existingSong.Artist, 
+                existingSong.Album, 
+                existingSong.Genre, 
+                existingSong.Bpm, 
+                existingSong.MusicalKey,
+                existingSong.DurationSeconds,
+                existingSong.Notes,
+                existingSong.Tags,
+                existingSong.DifficultyRating
+            };
+
             // Update properties
             existingSong.Title = song.Title;
             existingSong.Artist = song.Artist;
@@ -158,9 +184,33 @@ public class SongService : ISongService
             existingSong.DifficultyRating = song.DifficultyRating;
             existingSong.UpdatedAt = DateTime.UtcNow;
 
+            // Capture new values for audit logging
+            var newValues = new 
+            { 
+                existingSong.Title, 
+                existingSong.Artist, 
+                existingSong.Album, 
+                existingSong.Genre, 
+                existingSong.Bpm, 
+                existingSong.MusicalKey,
+                existingSong.DurationSeconds,
+                existingSong.Notes,
+                existingSong.Tags,
+                existingSong.DifficultyRating
+            };
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Updated song {SongId} for user {UserId}", song.Id, userId);
+
+            // Log audit trail for song update
+            await _auditLogService.LogAuditAsync(
+                "UPDATE",
+                nameof(Song),
+                song.Id.ToString(),
+                userId,
+                newValues
+            );
 
             return existingSong;
         }
@@ -184,11 +234,36 @@ public class SongService : ISongService
                 return false;
             }
 
+            // Capture values for audit logging before deletion
+            var deletedValues = new 
+            { 
+                song.Title, 
+                song.Artist, 
+                song.Album, 
+                song.Genre, 
+                song.Bpm, 
+                song.MusicalKey,
+                song.DurationSeconds,
+                song.Notes,
+                song.Tags,
+                song.DifficultyRating,
+                song.CreatedAt
+            };
+
             _context.Songs.Remove(song);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Deleted song {SongId} '{Title}' for user {UserId}", 
                 songId, song.Title, userId);
+
+            // Log audit trail for song deletion
+            await _auditLogService.LogAuditAsync(
+                "DELETE",
+                nameof(Song),
+                songId.ToString(),
+                userId,
+                deletedValues
+            );
 
             return true;
         }

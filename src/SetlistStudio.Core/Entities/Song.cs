@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SetlistStudio.Core.Validation;
 
 namespace SetlistStudio.Core.Entities;
 
@@ -18,6 +19,7 @@ public class Song
     /// </summary>
     [Required]
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
@@ -25,30 +27,34 @@ public class Song
     /// </summary>
     [Required]
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string Artist { get; set; } = string.Empty;
 
     /// <summary>
     /// The album name (optional)
     /// </summary>
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string? Album { get; set; }
 
     /// <summary>
     /// Musical genre (e.g., "Rock", "Jazz", "Blues")
     /// </summary>
     [StringLength(50)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 50)]
     public string? Genre { get; set; }
 
     /// <summary>
     /// Beats per minute for tempo planning (40-250 BPM range)
     /// </summary>
-    [Range(40, 250)]
+    [BpmRange(40, 250)]
     public int? Bpm { get; set; }
 
     /// <summary>
     /// Musical key (e.g., "C", "F#m", "Bb")
     /// </summary>
     [StringLength(10)]
+    [MusicalKey]
     public string? MusicalKey { get; set; }
 
     /// <summary>
@@ -61,12 +67,14 @@ public class Song
     /// User notes about the song (lyrics, chords, performance notes)
     /// </summary>
     [StringLength(2000)]
+    [SanitizedString(AllowHtml = false, AllowLineBreaks = true, AllowSpecialCharacters = true, MaxLength = 2000)]
     public string? Notes { get; set; }
 
     /// <summary>
     /// Tags for categorizing songs (e.g., "wedding", "upbeat", "slow")
     /// </summary>
     [StringLength(500)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 500)]
     public string? Tags { get; set; }
 
     /// <summary>

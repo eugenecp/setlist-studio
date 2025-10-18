@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SetlistStudio.Core.Validation;
 
 namespace SetlistStudio.Core.Entities;
 
@@ -18,18 +19,21 @@ public class Setlist
     /// </summary>
     [Required]
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the setlist
     /// </summary>
     [StringLength(1000)]
+    [SanitizedString(AllowHtml = false, AllowLineBreaks = true, MaxLength = 1000)]
     public string? Description { get; set; }
 
     /// <summary>
     /// Performance venue or event name
     /// </summary>
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string? Venue { get; set; }
 
     /// <summary>

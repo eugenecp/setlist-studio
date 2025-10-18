@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Web.Controllers;
 using FluentAssertions;
+using System.Reflection;
 using Xunit;
 
 namespace SetlistStudio.Tests.Controllers;
@@ -263,5 +266,59 @@ public class StatusControllerTests
         {
             result.Should().BeOfType<OkObjectResult>();
         }
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveEnableRateLimitingAttribute_WithApiPolicy()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var rateLimitingAttribute = controllerType.GetCustomAttribute<EnableRateLimitingAttribute>();
+
+        // Assert
+        rateLimitingAttribute.Should().NotBeNull("StatusController should have EnableRateLimiting attribute for security");
+        rateLimitingAttribute!.PolicyName.Should().Be("ApiPolicy", "StatusController should use the ApiPolicy rate limiting policy");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveAllowAnonymousAttribute_ForPublicAccess()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var allowAnonymousAttribute = controllerType.GetCustomAttribute<AllowAnonymousAttribute>();
+
+        // Assert
+        allowAnonymousAttribute.Should().NotBeNull("StatusController should allow anonymous access for status monitoring");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveApiControllerAttribute_ForApiBehavior()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var apiControllerAttribute = controllerType.GetCustomAttribute<ApiControllerAttribute>();
+
+        // Assert
+        apiControllerAttribute.Should().NotBeNull("StatusController should have ApiController attribute for API behavior");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveCorrectRouteAttribute()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var routeAttribute = controllerType.GetCustomAttribute<RouteAttribute>();
+
+        // Assert
+        routeAttribute.Should().NotBeNull("StatusController should have Route attribute");
+        routeAttribute!.Template.Should().Be("api/[controller]", "StatusController should use the correct API route template");
     }
 }
