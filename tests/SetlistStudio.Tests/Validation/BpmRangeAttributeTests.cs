@@ -649,6 +649,228 @@ public class BpmRangeAttributeTests
 
     #endregion
 
+    #region GetGenreRange Method Tests
+
+    [Theory]
+    [InlineData("funk", 90, 120)]
+    [InlineData("FUNK", 90, 120)]
+    [InlineData("Funk", 90, 120)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForFunk(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Funk should have 90-120 BPM range");
+        max.Should().Be(expectedMax, "Funk should have 90-120 BPM range");
+    }
+
+    [Theory]
+    [InlineData("reggae", 60, 90)]
+    [InlineData("REGGAE", 60, 90)]
+    [InlineData("Reggae", 60, 90)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForReggae(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Reggae should have 60-90 BPM range");
+        max.Should().Be(expectedMax, "Reggae should have 60-90 BPM range");
+    }
+
+    [Theory]
+    [InlineData("country", 80, 140)]
+    [InlineData("COUNTRY", 80, 140)]
+    [InlineData("Country", 80, 140)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForCountry(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Country should have 80-140 BPM range");
+        max.Should().Be(expectedMax, "Country should have 80-140 BPM range");
+    }
+
+    [Theory]
+    [InlineData("electronic", 120, 140)]
+    [InlineData("ELECTRONIC", 120, 140)]
+    [InlineData("Electronic", 120, 140)]
+    [InlineData("techno", 120, 140)]
+    [InlineData("TECHNO", 120, 140)]
+    [InlineData("Techno", 120, 140)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForElectronicAndTechno(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, $"{genre} should have 120-140 BPM range");
+        max.Should().Be(expectedMax, $"{genre} should have 120-140 BPM range");
+    }
+
+    [Theory]
+    [InlineData("house", 115, 130)]
+    [InlineData("HOUSE", 115, 130)]
+    [InlineData("House", 115, 130)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForHouse(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "House should have 115-130 BPM range");
+        max.Should().Be(expectedMax, "House should have 115-130 BPM range");
+    }
+
+    [Theory]
+    [InlineData("trance", 130, 140)]
+    [InlineData("TRANCE", 130, 140)]
+    [InlineData("Trance", 130, 140)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForTrance(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Trance should have 130-140 BPM range");
+        max.Should().Be(expectedMax, "Trance should have 130-140 BPM range");
+    }
+
+    [Theory]
+    [InlineData("drum and bass", 160, 180)]
+    [InlineData("DRUM AND BASS", 160, 180)]
+    [InlineData("Drum And Bass", 160, 180)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForDrumAndBass(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Drum and Bass should have 160-180 BPM range");
+        max.Should().Be(expectedMax, "Drum and Bass should have 160-180 BPM range");
+    }
+
+    [Theory]
+    [InlineData("dubstep", 140, 150)]
+    [InlineData("DUBSTEP", 140, 150)]
+    [InlineData("Dubstep", 140, 150)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForDubstep(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Dubstep should have 140-150 BPM range");
+        max.Should().Be(expectedMax, "Dubstep should have 140-150 BPM range");
+    }
+
+    [Theory]
+    [InlineData("unknown genre")]
+    [InlineData("metal")]
+    [InlineData("classical")]
+    [InlineData("folk")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void GetGenreRange_ShouldReturnDefaultRange_ForUnknownGenres(string? genre)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(40, "Unknown genres should use default minimum BPM");
+        max.Should().Be(250, "Unknown genres should use default maximum BPM");
+    }
+
+    [Fact]
+    public void GetGenreRange_ShouldHandleNullInput()
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(null);
+
+        // Assert
+        min.Should().Be(40, "Null genre should use default minimum BPM");
+        max.Should().Be(250, "Null genre should use default maximum BPM");
+    }
+
+    [Fact]
+    public void GetGenreRange_ShouldHandleEmptyString()
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange("");
+
+        // Assert
+        min.Should().Be(40, "Empty genre should use default minimum BPM");
+        max.Should().Be(250, "Empty genre should use default maximum BPM");
+    }
+
+    [Fact]
+    public void GetGenreRange_ShouldHandleWhitespaceString()
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange("   ");
+
+        // Assert
+        min.Should().Be(40, "Whitespace-only genre should use default minimum BPM");
+        max.Should().Be(250, "Whitespace-only genre should use default maximum BPM");
+    }
+
+    [Theory]
+    [InlineData("slow", 60, 80)]
+    [InlineData("SLOW", 60, 80)]
+    [InlineData("Slow", 60, 80)]
+    public void GetGenreRange_ShouldReturnCorrectRange_ForSlowAlias(string genre, int expectedMin, int expectedMax)
+    {
+        // Act
+        var (min, max) = BpmRangeAttribute.GetGenreRange(genre);
+
+        // Assert
+        min.Should().Be(expectedMin, "Slow should be alias for ballad (60-80 BPM)");
+        max.Should().Be(expectedMax, "Slow should be alias for ballad (60-80 BPM)");
+    }
+
+    #endregion
+
+    #region GetTempoDescription Method Tests
+
+    [Theory]
+    [InlineData(50, "Very Slow")]
+    [InlineData(70, "Slow")]
+    [InlineData(90, "Moderate")]
+    [InlineData(110, "Medium")]
+    [InlineData(130, "Up-tempo")]
+    [InlineData(150, "Fast")]
+    [InlineData(170, "Very Fast")]
+    [InlineData(200, "Extremely Fast")]
+    public void GetTempoDescription_ShouldReturnCorrectDescription_ForAllBpmRanges(int bpm, string expectedDescription)
+    {
+        // Act
+        var description = BpmRangeAttribute.GetTempoDescription(bpm);
+
+        // Assert
+        description.Should().Be(expectedDescription, $"BPM {bpm} should be classified as {expectedDescription}");
+    }
+
+    [Theory]
+    [InlineData(59)]   // Just below 60
+    [InlineData(79)]   // Just below 80
+    [InlineData(99)]   // Just below 100
+    [InlineData(119)]  // Just below 120
+    [InlineData(139)]  // Just below 140
+    [InlineData(159)]  // Just below 160
+    [InlineData(179)]  // Just below 180
+    public void GetTempoDescription_ShouldHandleBoundaryValues(int bpm)
+    {
+        // Act
+        var description = BpmRangeAttribute.GetTempoDescription(bpm);
+
+        // Assert
+        description.Should().NotBeNullOrEmpty($"BPM {bpm} should have a valid tempo description");
+    }
+
+    #endregion
+
     #region Edge Cases and Extreme Values
 
     [Theory]
