@@ -134,17 +134,25 @@ jobs:
             if [ -f "$trx_file" ]; then
               echo "Processing: $trx_file" >> $GITHUB_STEP_SUMMARY
               
-              # Extract test statistics using XML parsing with grep
-              if grep -q "outcome.*Passed" "$trx_file"; then
-                passed=$(grep -c "outcome.*Passed" "$trx_file" 2>/dev/null || echo "0")
-                failed=$(grep -c "outcome.*Failed" "$trx_file" 2>/dev/null || echo "0")
+              # Extract test statistics using XML parsing with more robust approach
+              if grep -q "outcome" "$trx_file"; then
+                # Count test outcomes more precisely and clean up the results
+                passed=$(grep -o 'outcome="Passed"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
+                failed=$(grep -o 'outcome="Failed"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
+                skipped=$(grep -o 'outcome="NotExecuted"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
                 
-                # Validate that passed and failed are numbers
-                if [[ "$passed" =~ ^[0-9]+$ ]] && [[ "$failed" =~ ^[0-9]+$ ]]; then
-                  total=$((passed + failed))
+                # Clean any whitespace and ensure we have valid numbers
+                passed=$(echo "$passed" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
+                failed=$(echo "$failed" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
+                skipped=$(echo "$skipped" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
+                
+                # Validate that all variables are numbers
+                if [[ "$passed" =~ ^[0-9]+$ ]] && [[ "$failed" =~ ^[0-9]+$ ]] && [[ "$skipped" =~ ^[0-9]+$ ]]; then
+                  total=$((passed + failed + skipped))
                   
                   echo "- ✅ Passed: $passed" >> $GITHUB_STEP_SUMMARY
-                  echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY  
+                  echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY
+                  echo "- ⏭️ Skipped: $skipped" >> $GITHUB_STEP_SUMMARY  
                   echo "- 📊 Total: $total" >> $GITHUB_STEP_SUMMARY
                   
                   # Fail the workflow if any tests failed
@@ -155,10 +163,10 @@ jobs:
                     echo "- ✅ Status: PASSED" >> $GITHUB_STEP_SUMMARY
                   fi
                 else
-                  echo "- ⚠️ Invalid test counts: passed='$passed', failed='$failed'" >> $GITHUB_STEP_SUMMARY
+                  echo "- ⚠️ Invalid test counts after cleanup: passed='$passed', failed='$failed', skipped='$skipped'" >> $GITHUB_STEP_SUMMARY
                 fi
               else
-                echo "- ⚠️ Could not parse test results from $trx_file" >> $GITHUB_STEP_SUMMARY
+                echo "- ⚠️ Could not find test outcomes in $trx_file" >> $GITHUB_STEP_SUMMARY
               fi
             fi
           done

@@ -12,8 +12,7 @@ COPY ["src/SetlistStudio.Infrastructure/SetlistStudio.Infrastructure.csproj", "S
 
 # Restore with explicit package source for security
 RUN dotnet restore "SetlistStudio.Web/SetlistStudio.Web.csproj" \
-    --source https://api.nuget.org/v3/index.json \
-    --locked-mode
+    --source https://api.nuget.org/v3/index.json
 
 # Copy all source code
 COPY src/ .
@@ -23,21 +22,16 @@ WORKDIR /src/SetlistStudio.Web
 RUN dotnet build "SetlistStudio.Web.csproj" \
     -c Release \
     -o /app/build \
-    --no-restore \
     -p:TreatWarningsAsErrors=true \
     -p:WarningsAsErrors="" \
     -p:WarningsNotAsErrors="NU1603"
 
-# Publish stage with AOT compilation for security
+# Publish stage 
 FROM build AS publish
 RUN dotnet publish "SetlistStudio.Web.csproj" \
     -c Release \
     -o /app/publish \
-    --no-restore \
-    --no-build \
-    -p:UseAppHost=false \
-    -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true
+    --no-restore
 
 # Runtime stage with minimal attack surface
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
