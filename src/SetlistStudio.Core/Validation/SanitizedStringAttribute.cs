@@ -39,7 +39,7 @@ public class SanitizedStringAttribute : ValidationAttribute
     private static readonly string[] DangerousPatterns = 
     {
         "<script", "</script>", "javascript:", "vbscript:", "onload=", "onclick=", "onerror=",
-        "eval(", "document.cookie", "document.write", "innerHTML", "outerHTML"
+        "eval(", "document.cookie", "document.write", "innerHTML", "outerHTML", "window.location"
     };
 
     public SanitizedStringAttribute()
@@ -49,7 +49,7 @@ public class SanitizedStringAttribute : ValidationAttribute
 
     public override bool IsValid(object? value)
     {
-        if (value == null || (value is string str && string.IsNullOrWhiteSpace(str)))
+        if (value == null || (value is string str && (string.IsNullOrEmpty(str) || IsOnlyAllowedWhitespace(str))))
         {
             return true;
         }
@@ -73,7 +73,7 @@ public class SanitizedStringAttribute : ValidationAttribute
     /// </summary>
     private bool ContainsDangerousContent(string input)
     {
-        if (string.IsNullOrWhiteSpace(input))
+        if (string.IsNullOrEmpty(input) || IsOnlyAllowedWhitespace(input))
         {
             return false;
         }
@@ -134,19 +134,42 @@ public class SanitizedStringAttribute : ValidationAttribute
     {
         foreach (char c in input)
         {
-            // Check for control characters (0-31 and 127-159) except allowed ones
             int charCode = (int)c;
-            if (char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')
+            
+            // Check for C0 control characters (0-31) except allowed ones
+            if (charCode >= 0 && charCode <= 31 && charCode != 9 && charCode != 10 && charCode != 13)
             {
                 return true;
             }
-            // Also check for specific dangerous control character ranges
-            if (charCode == 0 || (charCode >= 1 && charCode <= 31 && charCode != 9 && charCode != 10 && charCode != 13))
+            
+            // Check for C1 control characters (128-159) - these are always dangerous
+            if (charCode >= 128 && charCode <= 159)
+            {
+                return true;
+            }
+            
+            // Additional check using char.IsControl for completeness
+            if (char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')
             {
                 return true;
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Checks if string contains only allowed whitespace characters (space, tab, newline, carriage return)
+    /// </summary>
+    private static bool IsOnlyAllowedWhitespace(string input)
+    {
+        foreach (char c in input)
+        {
+            if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>

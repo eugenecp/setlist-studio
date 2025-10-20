@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SetlistStudio.Web.Middleware;
 using SetlistStudio.Web.Security;
 using SetlistStudio.Core.Security;
+using SetlistStudio.Tests.Web;
 using System.Security;
 using System.Text;
 using FluentAssertions;
@@ -19,12 +20,12 @@ namespace SetlistStudio.Tests.Web.Middleware;
 /// Integration tests for SecurityEventMiddleware focusing on security event detection,
 /// malicious pattern recognition, and comprehensive security monitoring scenarios.
 /// </summary>
-public class SecurityEventMiddlewareIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly ITestOutputHelper _output;
 
-    public SecurityEventMiddlewareIntegrationTests(WebApplicationFactory<Program> factory, ITestOutputHelper output)
+    public SecurityEventMiddlewareIntegrationTests(TestWebApplicationFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _output = output;

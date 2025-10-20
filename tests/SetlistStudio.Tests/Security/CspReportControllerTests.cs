@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Web.Controllers;
+using SetlistStudio.Tests.Web;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -17,13 +18,13 @@ namespace SetlistStudio.Tests.Security;
 /// Tests CSP violation reporting, security analysis, and endpoint protection.
 /// Ensures proper handling of CSP violation reports from browsers.
 /// </summary>
-public class CspReportControllerTests : IClassFixture<WebApplicationFactory<Program>>
+public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
     private readonly ITestOutputHelper _output;
 
-    public CspReportControllerTests(WebApplicationFactory<Program> factory, ITestOutputHelper output)
+    public CspReportControllerTests(TestWebApplicationFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _output = output;

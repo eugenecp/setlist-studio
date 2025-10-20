@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using SetlistStudio.Web;
+using SetlistStudio.Tests.Web;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -15,13 +16,13 @@ namespace SetlistStudio.Tests.Security;
 /// Tests for SQL injection, XSS, CSRF vulnerabilities, and rate limiting in API endpoints.
 /// Validates security controls and input validation across all API controllers.
 /// </summary>
-public class ApiSecurityTests : IClassFixture<WebApplicationFactory<Program>>
+public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
     private readonly ITestOutputHelper _output;
 
-    public ApiSecurityTests(WebApplicationFactory<Program> factory, ITestOutputHelper output)
+    public ApiSecurityTests(TestWebApplicationFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _output = output;

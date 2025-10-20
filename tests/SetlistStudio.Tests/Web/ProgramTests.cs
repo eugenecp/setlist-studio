@@ -2746,7 +2746,7 @@ public class ProgramTests : IDisposable
         hostEnvironment.Should().NotBeNull("Host environment should be available for production detection");
         
         // Verify the application can start successfully (indicates proper middleware configuration)
-        hostEnvironment!.EnvironmentName.Should().Be("Test", "Test environment should be properly configured");
+        hostEnvironment!.EnvironmentName.Should().Be("Testing", "Test environment should be properly configured");
     }
 
     [Fact]
