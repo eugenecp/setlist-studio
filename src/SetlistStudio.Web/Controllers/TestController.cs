@@ -29,6 +29,7 @@ public class TestController : ControllerBase
         // Only allow in development and test environments (including test factories using Production/Staging)
         if (!_environment.IsDevelopment() && 
             _environment.EnvironmentName != "Test" &&
+            _environment.EnvironmentName != "Testing" &&     // Allow for CI Testing environment
             _environment.EnvironmentName != "Production" &&  // Allow for test factories
             _environment.EnvironmentName != "Staging")       // Allow for test factories
         {
@@ -53,6 +54,7 @@ public class TestController : ControllerBase
         // Only allow in development and test environments (including test factories using Production/Staging)
         if (!_environment.IsDevelopment() && 
             _environment.EnvironmentName != "Test" &&
+            _environment.EnvironmentName != "Testing" &&     // Allow for CI Testing environment
             _environment.EnvironmentName != "Production" &&  // Allow for test factories
             _environment.EnvironmentName != "Staging")       // Allow for test factories
         {
@@ -72,6 +74,7 @@ public class TestController : ControllerBase
         // Only allow in development and test environments (including test factories using Production/Staging)
         if (!_environment.IsDevelopment() && 
             _environment.EnvironmentName != "Test" &&
+            _environment.EnvironmentName != "Testing" &&     // Allow for CI Testing environment
             _environment.EnvironmentName != "Production" &&  // Allow for test factories
             _environment.EnvironmentName != "Staging")       // Allow for test factories
         {

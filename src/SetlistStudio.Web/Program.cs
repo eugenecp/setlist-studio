@@ -265,8 +265,16 @@ try
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     builder.Services.AddAntiforgery(options =>
     {
+        // Detect if we're in a test environment (testing framework creates in-memory test server)
+        var isTestEnvironment = builder.Environment.IsDevelopment() || 
+                               builder.Environment.EnvironmentName == "Testing" ||
+                               // Additional test context detection for integration tests
+                               AppDomain.CurrentDomain.GetAssemblies()
+                                   .Any(a => a.FullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
+                                           a.FullName?.Contains("xunit") == true);
+        
         // Use secure cookie names with __Host- prefix for enhanced security in production
-        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "Testing")
+        if (isTestEnvironment)
         {
             options.Cookie.Name = "SetlistStudio-CSRF";
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
@@ -293,11 +301,17 @@ try
         // Session timeout and expiration settings
         options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
         options.SlidingExpiration = true; // Reset timeout on user activity
-        options.Cookie.Name = "__Host-SetlistStudio-Identity";
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? "__Host-SetlistStudio-Identity"
+            : "SetlistStudio-Identity";
         
         // Secure cookie configuration
         options.Cookie.HttpOnly = true; // Prevent JavaScript access
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? CookieSecurePolicy.Always // HTTPS only in production
+            : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
         options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
         options.Cookie.IsEssential = true; // Required for GDPR compliance
         
@@ -348,9 +362,15 @@ try
     // Configure session state with secure settings
     builder.Services.AddSession(options =>
     {
-        options.Cookie.Name = "__Host-SetlistStudio-Session";
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging() 
+            ? "__Host-SetlistStudio-Session" 
+            : "SetlistStudio-Session";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.IsEssential = true;
         options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity

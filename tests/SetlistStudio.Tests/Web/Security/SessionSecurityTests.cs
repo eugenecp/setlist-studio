@@ -42,7 +42,22 @@ public class SessionSecurityTests : IClassFixture<SessionSecurityTests.TestWebAp
 
         public HttpClient CreateClient(string environment = "Development")
         {
-            var client = base.CreateClient();
+            var factory = this.WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(environment);
+                builder.ConfigureAppConfiguration((context, config) =>
+                {
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:DefaultConnection"] = "DataSource=:memory:",
+                        ["Authentication:Google:ClientId"] = "test-client-id",
+                        ["Authentication:Google:ClientSecret"] = "test-client-secret",
+                        ["AllowedHosts"] = "*"
+                    });
+                });
+            });
+
+            var client = factory.CreateClient();
             client.DefaultRequestHeaders.Add("User-Agent", "SetlistStudio-SessionTest-Client/1.0");
             return client;
         }
