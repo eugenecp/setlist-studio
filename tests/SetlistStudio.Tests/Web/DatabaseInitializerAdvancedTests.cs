@@ -889,4 +889,108 @@ public class DatabaseInitializerAdvancedTests
     }
 
     #endregion
+
+    #region Additional Branch Coverage Tests
+
+
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseCreated_WhenDatabaseIsNew()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var tempDbPath = Path.GetTempFileName();
+        File.Delete(tempDbPath); // Ensure it doesn't exist so it will be created
+        
+        var services = new ServiceCollection();
+        
+        try
+        {
+            var connectionString = $"Data Source={tempDbPath};";
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite(connectionString);
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert - Should log that database was created
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: True (true = created, false = already existed)");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database was created, allowing schema to settle");
+        }
+        finally
+        {
+            // Cleanup
+            TryDeleteFile(tempDbPath);
+        }
+    }
+
+
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseFileDetails_OnError()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var tempDbPath = Path.GetTempFileName();
+        
+        var services = new ServiceCollection();
+        
+        try
+        {
+            var connectionString = $"Data Source={tempDbPath};Invalid=Parameter;";
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite(connectionString);
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Corrupt the database file to ensure error logging
+            File.WriteAllText(tempDbPath, "definitely not a database");
+
+            // Act
+            var exception = await Record.ExceptionAsync(() => 
+                DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+            // Assert - Should log database file details on error
+            exception.Should().NotBeNull("Invalid database should cause an exception");
+            
+            // Should log database file information on error
+            VerifyLogMessage(mockLogger, LogLevel.Error, $"Connection string: {connectionString}");
+            VerifyLogMessage(mockLogger, LogLevel.Error, $"Database file path: {Path.GetFullPath(tempDbPath)}");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database file exists: True");
+        }
+        finally
+        {
+            // Cleanup
+            TryDeleteFile(tempDbPath);
+        }
+    }
+
+
+
+    #endregion
+
+    #region Helper Methods
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+        catch
+        {
+            // Ignore cleanup failures in tests
+        }
+    }
+
+    #endregion
 }
