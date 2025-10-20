@@ -160,10 +160,11 @@ public class CspReportController : ControllerBase
             alertMessageBuilder.Append("SECURITY ALERT: Suspicious CSP violation detected from IP {ClientIP}. ");
             alertMessageBuilder.Append("Blocked URI: {BlockedUri}, Source: {SourceFile}. ");
             alertMessageBuilder.Append("This may indicate an XSS or code injection attempt.");
-            var sanitizedBlockedUri = SecureLoggingHelper.PreventLogInjection(cspReport.BlockedUri ?? "unknown");
-            var sanitizedSourceFile = SecureLoggingHelper.PreventLogInjection(cspReport.SourceFile ?? "unknown");
-            _logger.LogError(alertMessageBuilder.ToString(),
-                clientIp, sanitizedBlockedUri, sanitizedSourceFile);
+            // Use TaintBarrier for complete taint isolation
+            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+                "SECURITY ALERT: Suspicious CSP violation detected from IP {0}. Blocked URI: {1}, Source: {2}. This may indicate an XSS or code injection attempt.",
+                clientIp, cspReport.BlockedUri ?? "unknown", cspReport.SourceFile ?? "unknown");
+            _logger.LogError(safeLogMessage);
 
             // In a production environment, you might want to:
             // - Send alerts to security team

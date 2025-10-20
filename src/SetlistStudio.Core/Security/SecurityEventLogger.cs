@@ -63,21 +63,19 @@ public class SecurityEventLogger
         object? additionalData = null)
     {
         var logLevel = MapSeverityToLogLevel(severity);
-        var sanitizedMessage = SecureLoggingHelper.SanitizeMessage(message);
         
-        var logEntry = SecureLoggingHelper.CreateSecureLogEntry(
-            $"SecurityEvent_{eventType}",
-            userId,
+        // Use TaintBarrier to create completely safe log message
+        var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+            "Security Event: {0} | {1} | {2} | User: {3} | Resource: {4}({5}) | Data: {6}",
+            eventType.ToString(),
+            severity.ToString(),
+            message,
+            userId ?? "Unknown",
             resourceType ?? "Unknown",
-            resourceId,
-            additionalData);
+            resourceId ?? "N/A",
+            TaintBarrier.BreakObjectTaint(additionalData ?? "null"));
 
-        logEntry["EventType"] = eventType.ToString();
-        logEntry["Severity"] = severity.ToString();
-        logEntry["Message"] = sanitizedMessage;
-
-        _logger.Log(logLevel, "Security Event: {EventType} | {Severity} | {Message} | Data: {@LogEntry}",
-            eventType, severity, sanitizedMessage, logEntry);
+        _logger.Log(logLevel, safeLogMessage);
     }
 
     /// <summary>

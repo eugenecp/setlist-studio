@@ -192,6 +192,57 @@ public class SecurityEventHandler
     }
 
     /// <summary>
+    /// Logs suspicious activity with pre-sanitized context data to prevent log injection.
+    /// This overload should be used when the context data has already been sanitized.
+    /// </summary>
+    /// <param name="activityType">The type of suspicious activity</param>
+    /// <param name="description">Description of the activity</param>
+    /// <param name="userId">The user associated with the activity (optional)</param>
+    /// <param name="severity">The severity level</param>
+    /// <param name="sanitizedUserAgent">Pre-sanitized user agent string</param>
+    /// <param name="sanitizedIpAddress">Pre-sanitized IP address</param>
+    /// <param name="sanitizedRequestPath">Pre-sanitized request path</param>
+    /// <param name="sanitizedRequestMethod">Pre-sanitized request method</param>
+    public void OnSuspiciousActivity(
+        string activityType, 
+        string description, 
+        string? userId = null, 
+        SecurityEventSeverity severity = SecurityEventSeverity.High,
+        string? sanitizedUserAgent = null,
+        string? sanitizedIpAddress = null,
+        string? sanitizedRequestPath = null,
+        string? sanitizedRequestMethod = null)
+    {
+        try
+        {
+            var additionalContext = new
+            {
+                UserAgent = sanitizedUserAgent ?? "Unknown",
+                IpAddress = sanitizedIpAddress ?? "Unknown",
+                RequestPath = sanitizedRequestPath ?? "Unknown",
+                RequestMethod = sanitizedRequestMethod ?? "Unknown",
+                DetectionTime = DateTimeOffset.UtcNow
+            };
+
+            _securityEventLogger.LogSuspiciousActivity(
+                activityType,
+                description,
+                userId,
+                severity,
+                additionalContext);
+
+            _logger.LogError("Suspicious activity logged: {ActivityType} - {Description} for user {UserId}", 
+                activityType, 
+                SecureLoggingHelper.SanitizeMessage(description), 
+                SecureLoggingHelper.SanitizeUserId(userId));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to log suspicious activity event");
+        }
+    }
+
+    /// <summary>
     /// Determines the authentication method used based on the HTTP context.
     /// </summary>
     /// <param name="context">The HTTP context</param>

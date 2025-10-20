@@ -193,23 +193,41 @@ public class SecurityEventMiddleware
                 // Check for XSS patterns
                 if (ContainsXssPattern(fieldValue))
                 {
+                    // Use the overload that doesn't extract data from HttpContext to break taint chain
+                    var sanitizedUserAgent = SecureLoggingHelper.SanitizeMessage(context.Request.Headers.UserAgent.ToString());
+                    var sanitizedIpAddress = SecureLoggingHelper.SanitizeMessage(GetClientIpAddress(context) ?? "Unknown");
+                    var sanitizedRequestPath = SecureLoggingHelper.SanitizeMessage(context.Request.Path.ToString());
+                    var sanitizedRequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method);
+
                     securityEventHandler.OnSuspiciousActivity(
-                        context,
                         "XSS_Pattern_Detection",
                         $"XSS pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
                         context.User.Identity?.Name,
-                        SecurityEventSeverity.High);
+                        SecurityEventSeverity.High,
+                        sanitizedUserAgent,
+                        sanitizedIpAddress,
+                        sanitizedRequestPath,
+                        sanitizedRequestMethod);
                 }
 
                 // Check for SQL injection patterns
                 if (ContainsSqlInjectionPattern(fieldValue))
                 {
+                    // Use the overload that doesn't extract data from HttpContext to break taint chain
+                    var sanitizedUserAgent = SecureLoggingHelper.SanitizeMessage(context.Request.Headers.UserAgent.ToString());
+                    var sanitizedIpAddress = SecureLoggingHelper.SanitizeMessage(GetClientIpAddress(context) ?? "Unknown");
+                    var sanitizedRequestPath = SecureLoggingHelper.SanitizeMessage(context.Request.Path.ToString());
+                    var sanitizedRequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method);
+
                     securityEventHandler.OnSuspiciousActivity(
-                        context,
                         "SQL_Injection_Pattern_Detection",
                         $"SQL injection pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
                         context.User.Identity?.Name,
-                        SecurityEventSeverity.High);
+                        SecurityEventSeverity.High,
+                        sanitizedUserAgent,
+                        sanitizedIpAddress,
+                        sanitizedRequestPath,
+                        sanitizedRequestMethod);
                 }
             }
         }
