@@ -104,8 +104,8 @@ jobs:
       with:
         name: test-results                # Artifact name for test results
         path: |                          # Include all test result files
-          ./test-results/**/*.trx        # TRX format test results
-          ./test-results/**/*.xml        # XML format test results
+          ./test-results/*.trx           # TRX format test results (directly in test-results)
+          ./test-results/**/*.xml        # XML format test results (in subdirectories)
         retention-days: 30               # Keep test results for 30 days
     
     # Step 9: Upload code coverage data for analysis
@@ -130,7 +130,7 @@ jobs:
           echo "Test results found, processing..." >> $GITHUB_STEP_SUMMARY
           
           # Parse TRX files to extract test statistics
-          for trx_file in ./test-results/**/*.trx; do
+          for trx_file in ./test-results/*.trx; do
             if [ -f "$trx_file" ]; then
               echo "Processing: $trx_file" >> $GITHUB_STEP_SUMMARY
               
@@ -168,7 +168,7 @@ jobs:
       if: always() && github.event_name != 'pull_request' # Skip on PRs to avoid permission issues
       with:
         name: Test Results               # Display name for test report
-        path: './test-results/**/*.trx'  # Path to TRX test result files
+        path: './test-results/*.trx'     # Path to TRX test result files (directly in test-results)
         reporter: dotnet-trx             # Use .NET TRX format reporter
         fail-on-error: false             # Don't fail workflow on test failures (handled elsewhere)
         token: ${{ secrets.GITHUB_TOKEN }} # GitHub token for API access

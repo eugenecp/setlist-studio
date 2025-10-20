@@ -24,7 +24,7 @@ public class UsersController : ControllerBase
     /// Get the authenticated user's profile
     /// </summary>
     [HttpGet("profile")]
-    public async Task<IActionResult> GetProfile()
+    public IActionResult GetProfile()
     {
         try
         {

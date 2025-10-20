@@ -13,7 +13,7 @@ public class ArtistsController : ControllerBase
 {
     [HttpGet("search")]
     [AllowAnonymous] // Allow anonymous access for XSS testing
-    public async Task<IActionResult> SearchArtists([FromQuery] string name)
+    public IActionResult SearchArtists([FromQuery] string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -47,7 +47,7 @@ public class ArtistsController : ControllerBase
 
     [HttpGet]
     [Authorize] // Require authentication for full artist listing
-    public async Task<IActionResult> GetArtists()
+    public IActionResult GetArtists()
     {
         try
         {

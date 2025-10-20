@@ -25,7 +25,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithAuthenticatedUser_ReturnsUserProfile()
+    public void GetProfile_WithAuthenticatedUser_ReturnsUserProfile()
     {
         // Arrange
         var testUserId = "test-user-123";
@@ -49,7 +49,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await _controller.GetProfile();
+        var result = _controller.GetProfile();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -76,7 +76,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithUnauthenticatedUser_ReturnsAnonymousProfile()
+    public void GetProfile_WithUnauthenticatedUser_ReturnsAnonymousProfile()
     {
         // Arrange
         var identity = new ClaimsIdentity(); // Not authenticated
@@ -91,7 +91,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await _controller.GetProfile();
+        var result = _controller.GetProfile();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -107,7 +107,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithNullUserIdentity_ReturnsAnonymousProfile()
+    public void GetProfile_WithNullUserIdentity_ReturnsAnonymousProfile()
     {
         // Arrange
         _controller.ControllerContext = new ControllerContext
@@ -119,7 +119,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await _controller.GetProfile();
+        var result = _controller.GetProfile();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -137,7 +137,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_LogsUserRequest()
+    public void GetProfile_LogsUserRequest()
     {
         // Arrange
         var testUserName = "testuser@example.com";
@@ -158,7 +158,7 @@ public class UsersControllerTests
         };
 
         // Act
-        await _controller.GetProfile();
+        _controller.GetProfile();
 
         // Assert
         _mockLogger.Verify(
@@ -172,7 +172,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithException_ReturnsInternalServerError()
+    public void GetProfile_WithException_ReturnsInternalServerError()
     {
         // Arrange
         // Create a simple test that doesn't rely on logger extension methods
@@ -192,7 +192,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await controller.GetProfile();
+        var result = controller.GetProfile();
 
         // Assert - Should return OK even with minimal user info
         result.Should().BeOfType<OkObjectResult>();
@@ -201,7 +201,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithMultipleClaims_ReturnsAllClaims()
+    public void GetProfile_WithMultipleClaims_ReturnsAllClaims()
     {
         // Arrange
         var claims = new List<Claim>
@@ -225,7 +225,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await _controller.GetProfile();
+        var result = _controller.GetProfile();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -251,7 +251,7 @@ public class UsersControllerTests
     }
 
     [Fact]
-    public async Task GetProfile_WithEmptyClaimsCollection_ReturnsEmptyClaimsArray()
+    public void GetProfile_WithEmptyClaimsCollection_ReturnsEmptyClaimsArray()
     {
         // Arrange
         var identity = new ClaimsIdentity(new List<Claim>(), "TestAuthType");
@@ -266,7 +266,7 @@ public class UsersControllerTests
         };
 
         // Act
-        var result = await _controller.GetProfile();
+        var result = _controller.GetProfile();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();

@@ -31,13 +31,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         #region SearchArtists Endpoint Tests
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnBadRequest_WhenNameIsNull()
+        public void SearchArtists_ShouldReturnBadRequest_WhenNameIsNull()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists(null!);
+            var result = controller.SearchArtists(null!);
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -46,13 +46,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnBadRequest_WhenNameIsEmpty()
+        public void SearchArtists_ShouldReturnBadRequest_WhenNameIsEmpty()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("");
+            var result = controller.SearchArtists("");
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -61,13 +61,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnBadRequest_WhenNameIsWhitespace()
+        public void SearchArtists_ShouldReturnBadRequest_WhenNameIsWhitespace()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("   ");
+            var result = controller.SearchArtists("   ");
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -85,13 +85,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         [InlineData("test onclick=alert('xss')")]
         [InlineData("test onmouseover=alert('xss')")]
         [InlineData("test onfocus=alert('xss')")]
-        public async Task SearchArtists_ShouldReturnBadRequest_WhenNameContainsMaliciousXssContent(string maliciousName)
+        public void SearchArtists_ShouldReturnBadRequest_WhenNameContainsMaliciousXssContent(string maliciousName)
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists(maliciousName);
+            var result = controller.SearchArtists(maliciousName);
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -108,13 +108,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         [InlineData("test--")]
         [InlineData("test/*comment*/")]
         [InlineData("test*/")]
-        public async Task SearchArtists_ShouldReturnBadRequest_WhenNameContainsMaliciousSqlContent(string maliciousName)
+        public void SearchArtists_ShouldReturnBadRequest_WhenNameContainsMaliciousSqlContent(string maliciousName)
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists(maliciousName);
+            var result = controller.SearchArtists(maliciousName);
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -123,14 +123,14 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnOkWithMatchingArtists_WhenValidNameProvided()
+        public void SearchArtists_ShouldReturnOkWithMatchingArtists_WhenValidNameProvided()
         {
             // Arrange
             var controller = new ArtistsController();
             var searchName = "Queen";
 
             // Act
-            var result = await controller.SearchArtists(searchName);
+            var result = controller.SearchArtists(searchName);
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -151,15 +151,15 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnCaseInsensitiveResults()
+        public void SearchArtists_ShouldReturnCaseInsensitiveResults()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act - Test different cases
-            var resultLower = await controller.SearchArtists("queen");
-            var resultUpper = await controller.SearchArtists("QUEEN");
-            var resultMixed = await controller.SearchArtists("QuEeN");
+            var resultLower = controller.SearchArtists("queen");
+            var resultUpper = controller.SearchArtists("QUEEN");
+            var resultMixed = controller.SearchArtists("QuEeN");
 
             // Assert - All should return the same result
             resultLower.Should().BeOfType<OkObjectResult>();
@@ -181,13 +181,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnPartialMatches()
+        public void SearchArtists_ShouldReturnPartialMatches()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("Beat");
+            var result = controller.SearchArtists("Beat");
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -197,13 +197,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnEmptyResults_WhenNoMatchesFound()
+        public void SearchArtists_ShouldReturnEmptyResults_WhenNoMatchesFound()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("NonExistentArtist");
+            var result = controller.SearchArtists("NonExistentArtist");
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -213,13 +213,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnMultipleMatches_WhenMultipleArtistsMatch()
+        public void SearchArtists_ShouldReturnMultipleMatches_WhenMultipleArtistsMatch()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("The");
+            var result = controller.SearchArtists("The");
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -233,14 +233,14 @@ namespace SetlistStudio.Tests.Web.Controllers
         #region GetArtists Endpoint Tests
 
         [Fact]
-        public async Task GetArtists_ShouldReturnOkWithAllArtists()
+        public void GetArtists_ShouldReturnOkWithAllArtists()
         {
             // Arrange
             var controller = new ArtistsController();
             SetupAuthenticatedUser(controller);
 
             // Act
-            var result = await controller.GetArtists();
+            var result = controller.GetArtists();
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -309,42 +309,42 @@ namespace SetlistStudio.Tests.Web.Controllers
         [InlineData("\t")]
         [InlineData("\n")]
         [InlineData("\r\n")]
-        public async Task SearchArtists_ShouldHandleVariousWhitespaceInputs(string whitespaceInput)
+        public void SearchArtists_ShouldHandleVariousWhitespaceInputs(string whitespaceInput)
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists(whitespaceInput);
+            var result = controller.SearchArtists(whitespaceInput);
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldHandleVeryLongInput()
+        public void SearchArtists_ShouldHandleVeryLongInput()
         {
             // Arrange
             var controller = new ArtistsController();
             var longInput = new string('a', 1000);
 
             // Act
-            var result = await controller.SearchArtists(longInput);
+            var result = controller.SearchArtists(longInput);
 
             // Assert
             result.Should().BeOfType<OkObjectResult>(); // Should not crash, even if no matches
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldHandleSpecialMusicCharacters()
+        public void SearchArtists_ShouldHandleSpecialMusicCharacters()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act & Assert - These should be allowed as they're legitimate musical characters
-            var resultSharp = await controller.SearchArtists("C# Major");
-            var resultFlat = await controller.SearchArtists("B♭ Minor");
-            var resultDegree = await controller.SearchArtists("7° Chord");
+            var resultSharp = controller.SearchArtists("C# Major");
+            var resultFlat = controller.SearchArtists("B♭ Minor");
+            var resultDegree = controller.SearchArtists("7° Chord");
 
             resultSharp.Should().BeOfType<OkObjectResult>();
             resultFlat.Should().BeOfType<OkObjectResult>();
@@ -357,13 +357,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         [InlineData("Guns N' Roses")]
         [InlineData("AC/DC")]
         [InlineData("50 Cent")]
-        public async Task SearchArtists_ShouldHandleLegitimateArtistNames(string artistName)
+        public void SearchArtists_ShouldHandleLegitimateArtistNames(string artistName)
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists(artistName);
+            var result = controller.SearchArtists(artistName);
 
             // Assert
             result.Should().BeOfType<OkObjectResult>("Legitimate artist names should not be blocked");
@@ -378,7 +378,7 @@ namespace SetlistStudio.Tests.Web.Controllers
         [InlineData("")]
         [InlineData("Queen")]
         [InlineData("The Beatles")]
-        public async Task SearchArtists_ShouldAllowSafeContent(string safeName)
+        public void SearchArtists_ShouldAllowSafeContent(string safeName)
         {
             // Arrange
             var controller = new ArtistsController();
@@ -386,24 +386,24 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Act & Assert
             if (string.IsNullOrWhiteSpace(safeName))
             {
-                var result = await controller.SearchArtists(safeName);
+                var result = controller.SearchArtists(safeName);
                 result.Should().BeOfType<BadRequestObjectResult>();
             }
             else
             {
-                var result = await controller.SearchArtists(safeName);
+                var result = controller.SearchArtists(safeName);
                 result.Should().BeOfType<OkObjectResult>();
             }
         }
 
         [Fact]
-        public async Task SearchArtists_ShouldBlockMixedCaseMaliciousContent()
+        public void SearchArtists_ShouldBlockMixedCaseMaliciousContent()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("TeSt<ScRiPt>AlErT('XsS')</ScRiPt>");
+            var result = controller.SearchArtists("TeSt<ScRiPt>AlErT('XsS')</ScRiPt>");
 
             // Assert
             result.Should().BeOfType<BadRequestObjectResult>();
@@ -414,13 +414,13 @@ namespace SetlistStudio.Tests.Web.Controllers
         #region HTTP Response Format Tests
 
         [Fact]
-        public async Task SearchArtists_ShouldReturnCorrectResponseFormat_WhenSuccessful()
+        public void SearchArtists_ShouldReturnCorrectResponseFormat_WhenSuccessful()
         {
             // Arrange
             var controller = new ArtistsController();
 
             // Act
-            var result = await controller.SearchArtists("Queen");
+            var result = controller.SearchArtists("Queen");
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -438,14 +438,14 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public async Task GetArtists_ShouldReturnCorrectResponseFormat()
+        public void GetArtists_ShouldReturnCorrectResponseFormat()
         {
             // Arrange
             var controller = new ArtistsController();
             SetupAuthenticatedUser(controller);
 
             // Act
-            var result = await controller.GetArtists();
+            var result = controller.GetArtists();
 
             // Assert
             result.Should().BeOfType<OkObjectResult>();
@@ -518,28 +518,28 @@ namespace SetlistStudio.Tests.Web.Controllers
         #region Edge Case and Error Handling Tests
 
         [Fact]
-        public async Task SearchArtists_ShouldHandleExceptionGracefully()
+        public void SearchArtists_ShouldHandleExceptionGracefully()
         {
             // Arrange
             var controller = new ArtistsController();
             
             // Act & Assert - This is tricky since the method doesn't have external dependencies that can fail
             // We'll test with a valid input to ensure the happy path works and exception handling is in place
-            var result = await controller.SearchArtists("ValidArtist");
+            var result = controller.SearchArtists("ValidArtist");
             
             // The method should complete without throwing exceptions
             result.Should().NotBeNull();
         }
 
         [Fact]
-        public async Task GetArtists_ShouldHandleExceptionGracefully()
+        public void GetArtists_ShouldHandleExceptionGracefully()
         {
             // Arrange
             var controller = new ArtistsController();
             SetupAuthenticatedUser(controller);
             
             // Act & Assert - Similar to SearchArtists, testing that the method doesn't throw
-            var result = await controller.GetArtists();
+            var result = controller.GetArtists();
             
             // The method should complete without throwing exceptions
             result.Should().NotBeNull();
