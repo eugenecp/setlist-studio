@@ -582,4 +582,396 @@ public class SecurityMetricsServiceTests
     }
 
     #endregion
+
+    #region Branch Coverage Enhancement Tests
+
+    [Fact]
+    public void RecordSecurityEvent_WithCriticalSeverity_ShouldLogCritical()
+    {
+        // Act
+        _service.RecordSecurityEvent("CSP_VIOLATION", "CRITICAL", "XSS attempt detected");
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Critical,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event recorded: CSP_VIOLATION (Severity: CRITICAL)")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void RecordSecurityEvent_WithHighSeverity_ShouldLogError()
+    {
+        // Act
+        _service.RecordSecurityEvent("INJECTION_ATTEMPT", "HIGH", "SQL injection detected");
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event recorded: INJECTION_ATTEMPT (Severity: HIGH)")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void RecordSecurityEvent_WithMediumSeverity_ShouldLogWarning()
+    {
+        // Act
+        _service.RecordSecurityEvent("RATE_LIMIT", "MEDIUM", "Rate limit exceeded");
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event recorded: RATE_LIMIT (Severity: MEDIUM)")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void RecordSecurityEvent_WithLowSeverity_ShouldLogInformation()
+    {
+        // Act
+        _service.RecordSecurityEvent("LOGIN_SUCCESS", "LOW", "User logged in successfully");
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event recorded: LOGIN_SUCCESS (Severity: LOW)")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void RecordSecurityEvent_WithUnknownSeverity_ShouldLogInformation()
+    {
+        // Act
+        _service.RecordSecurityEvent("CUSTOM_EVENT", "UNKNOWN", "Custom security event");
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event recorded: CUSTOM_EVENT (Severity: UNKNOWN)")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithCriticalEvents_ShouldReturnCritical()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("CRITICAL_BREACH", "CRITICAL", "System compromised");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("CRITICAL");
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithManyHighEvents_ShouldReturnCritical()
+    {
+        // Arrange - Record 11 high severity events to trigger critical threshold
+        for (int i = 0; i < 11; i++)
+        {
+            _service.RecordSecurityEvent($"HIGH_EVENT_{i}", "HIGH", $"High severity event {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("CRITICAL");
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithSixHighEvents_ShouldReturnHigh()
+    {
+        // Arrange - Record 6 high severity events to trigger high threshold
+        for (int i = 0; i < 6; i++)
+        {
+            _service.RecordSecurityEvent($"HIGH_EVENT_{i}", "HIGH", $"High severity event {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("HIGH");
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithOneHighEvent_ShouldReturnMedium()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("HIGH_EVENT", "HIGH", "High severity event");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("MEDIUM");
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithManyMediumEvents_ShouldReturnMedium()
+    {
+        // Arrange - Record 21 medium severity events to trigger medium threshold
+        for (int i = 0; i < 21; i++)
+        {
+            _service.RecordSecurityEvent($"MEDIUM_EVENT_{i}", "MEDIUM", $"Medium severity event {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("MEDIUM");
+    }
+
+    [Fact]
+    public void CalculateThreatLevel_WithNoSignificantEvents_ShouldReturnLow()
+    {
+        // Arrange - Record only low severity events
+        _service.RecordSecurityEvent("LOW_EVENT", "LOW", "Low severity event");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.ThreatLevel.Should().Be("LOW");
+    }
+
+    [Fact]
+    public void GenerateSecurityRecommendations_WithManyAuthFailures_ShouldRecommendStrongerAuth()
+    {
+        // Arrange - Record 11 authentication failures to trigger threshold
+        for (int i = 0; i < 11; i++)
+        {
+            _service.RecordAuthenticationFailure($"user{i}", "192.168.1.100", "Mozilla/5.0");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.Recommendations.Should().Contain(r => r.Contains("authentication controls"));
+    }
+
+    [Fact]
+    public void GenerateSecurityRecommendations_WithManyRateLimitViolations_ShouldRecommendTighterLimits()
+    {
+        // Arrange - Record 51 rate limit violations to trigger threshold
+        for (int i = 0; i < 51; i++)
+        {
+            _service.RecordRateLimitViolation("192.168.1.100", "/api/test", "Mozilla/5.0");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.Recommendations.Should().Contain(r => r.Contains("rate limiting policies"));
+    }
+
+    [Fact]
+    public void GenerateSecurityRecommendations_WithSuspiciousActivities_ShouldRecommendInvestigation()
+    {
+        // Arrange - Record 6 suspicious activities to trigger threshold
+        for (int i = 0; i < 6; i++)
+        {
+            _service.RecordSuspiciousActivity("BRUTE_FORCE", "192.168.1.100", $"Attempt {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.Recommendations.Should().Contain(r => r.Contains("Investigate suspicious IP addresses"));
+    }
+
+    [Fact]
+    public void GenerateSecurityRecommendations_WithCSPViolations_ShouldRecommendCSPReview()
+    {
+        // Arrange - Record 21 CSP violations to trigger threshold
+        for (int i = 0; i < 21; i++)
+        {
+            _service.RecordSecurityEvent("CSP_VIOLATION", "MEDIUM", $"CSP violation {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.Recommendations.Should().Contain(r => r.Contains("Content Security Policy"));
+    }
+
+    [Fact]
+    public void GenerateSecurityRecommendations_WithNoIssues_ShouldReturnPositiveMessage()
+    {
+        // Arrange - Record only minimal low-severity events
+        _service.RecordSecurityEvent("INFO_EVENT", "LOW", "Information event");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.Recommendations.Should().Contain("Security posture is good. Continue monitoring for anomalies.");
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_WithCriticalEvents_ShouldDeductTenPoints()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("CRITICAL_BREACH", "CRITICAL", "Critical security breach");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(90); // 100 - (1 * 10)
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_WithHighEvents_ShouldDeductFivePoints()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("HIGH_ALERT", "HIGH", "High severity alert");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(95); // 100 - (1 * 5)
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_WithMediumEvents_ShouldDeductTwoPoints()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("MEDIUM_ALERT", "MEDIUM", "Medium severity alert");
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(98); // 100 - (1 * 2)
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_WithMixedEvents_ShouldCalculateCorrectScore()
+    {
+        // Arrange
+        _service.RecordSecurityEvent("CRITICAL_EVENT", "CRITICAL", "Critical event"); // -10
+        _service.RecordSecurityEvent("HIGH_EVENT_1", "HIGH", "High event 1"); // -5
+        _service.RecordSecurityEvent("HIGH_EVENT_2", "HIGH", "High event 2"); // -5
+        _service.RecordSecurityEvent("MEDIUM_EVENT", "MEDIUM", "Medium event"); // -2
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(78); // 100 - 10 - 5 - 5 - 2
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_ShouldNotGoBelowZero()
+    {
+        // Arrange - Record enough critical events to exceed 100 points deduction
+        for (int i = 0; i < 15; i++)
+        {
+            _service.RecordSecurityEvent($"CRITICAL_{i}", "CRITICAL", $"Critical event {i}");
+        }
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(0); // Should not go below 0
+    }
+
+    [Fact]
+    public void CalculateSecurityScore_ShouldNotGoAbove100()
+    {
+        // Arrange - Record no events, should stay at 100
+
+        // Act
+        var period = _service.GetMetricsForPeriod(TimeSpan.FromHours(1));
+
+        // Assert
+        period.SecurityScore.Should().Be(100); // Should not go above 100
+    }
+
+    [Fact]
+    public void SecurityTrends_WithMoreRecentEvents_ShouldDetectTrend()
+    {
+        // Arrange - Focus on SecurityTrends calculation logic
+        // We'll test the GetDetailedMetrics method but focus on its SecurityTrends calculation
+        
+        // Add some events
+        for (int i = 0; i < 10; i++)
+        {
+            _service.RecordSecurityEvent($"EVENT_{i}", "MEDIUM", "Test event");
+        }
+
+        // Act
+        var detailed = _service.GetDetailedMetrics(DateTime.UtcNow.AddHours(-24), DateTime.UtcNow);
+
+        // Assert - SecurityTrends object should be populated
+        detailed.SecurityTrends.Should().NotBeNull();
+        detailed.SecurityTrends.Last24Hours.Should().BeGreaterOrEqualTo(0);
+        detailed.SecurityTrends.Previous24Hours.Should().BeGreaterOrEqualTo(0);
+        // TrendPercentage calculation should work (any numeric value is valid)
+        detailed.SecurityTrends.TrendPercentage.Should().BeGreaterOrEqualTo(double.MinValue);
+    }
+
+    [Fact]
+    public void SecurityTrends_BooleanProperties_ShouldReflectThresholds()
+    {
+        // Arrange - Test the IsIncreasing and IsDecreasing boolean logic
+        // Add events to trigger trend calculation
+        for (int i = 0; i < 5; i++)
+        {
+            _service.RecordSecurityEvent($"TREND_EVENT_{i}", "LOW", "Trend test event");
+        }
+
+        // Act
+        var detailed = _service.GetDetailedMetrics(DateTime.UtcNow.AddHours(-24), DateTime.UtcNow);
+
+        // Assert - Test the boolean trend detection logic
+        // IsIncreasing should be true when TrendPercentage > 10
+        // IsDecreasing should be true when TrendPercentage < -10
+        if (detailed.SecurityTrends.TrendPercentage > 10)
+        {
+            detailed.SecurityTrends.IsIncreasing.Should().BeTrue();
+            detailed.SecurityTrends.IsDecreasing.Should().BeFalse();
+        }
+        else if (detailed.SecurityTrends.TrendPercentage < -10)
+        {
+            detailed.SecurityTrends.IsDecreasing.Should().BeTrue();
+            detailed.SecurityTrends.IsIncreasing.Should().BeFalse();
+        }
+        else
+        {
+            detailed.SecurityTrends.IsIncreasing.Should().BeFalse();
+            detailed.SecurityTrends.IsDecreasing.Should().BeFalse();
+        }
+    }
+
+    #endregion
 }

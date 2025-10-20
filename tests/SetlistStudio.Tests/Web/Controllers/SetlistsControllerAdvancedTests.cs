@@ -481,6 +481,301 @@ public class SetlistsControllerAdvancedTests
 
     #endregion
 
+    #region Additional Edge Cases for Branch Coverage
+
+    [Fact]
+    public async Task GetSetlists_WithSpecificPaginationEdgeCases_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+        
+        // Test with page 0 (should default to 1)
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, 0, 20))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.GetSetlists(page: 0);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlists_WithLimitZero_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, 1, 0))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.GetSetlists(limit: 0);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM")]
+    [InlineData("'; DROP TABLE")]
+    [InlineData("UNION SELECT")]
+    [InlineData("INSERT INTO")]
+    [InlineData("DELETE FROM")]
+    [InlineData("UPDATE SET")]
+    public async Task SearchSetlists_WithSqlInjectionPatterns_AllowedByCurrentValidator(string sqlPattern)
+    {
+        // NOTE: Current ContainsMaliciousContent only checks specific patterns, not SQL injection
+        // These patterns will pass through and be treated as valid searches
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", $"song {sqlPattern} hack", null, null, 1, 20))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.SearchSetlists($"song {sqlPattern} hack");
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>(); // Should pass through current validation
+    }
+
+    [Theory]
+    [InlineData("&#xss")]
+    [InlineData("%3Cscript%3E")]
+    [InlineData("&lt;script&gt;")]
+    public async Task SearchSetlists_WithEncodedXssPatterns_AllowedByCurrentValidator(string encodedPattern)
+    {
+        // NOTE: Current ContainsMaliciousContent only checks specific literal patterns
+        // Encoded patterns will pass through current validation
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", $"test {encodedPattern}script", null, null, 1, 20))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.SearchSetlists($"test {encodedPattern}script");
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>(); // Should pass through current validation
+    }
+
+    [Fact]
+    public async Task CreateSetlist_WithExtremelylongName_PassesMaliciousCheckButFailsValidation()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var longName = new string('A', 1000); // Very long but not malicious
+        var request = new CreateSetlistRequest
+        {
+            Name = longName,
+            Description = "Valid description"
+        };
+
+        // Add model validation error for long name
+        _controller.ModelState.AddModelError("Name", "Name is too long");
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task CreateSetlist_WithEmptyName_FailsModelValidation()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = "",
+            Description = "Valid description"
+        };
+
+        _controller.ModelState.AddModelError("Name", "Name cannot be empty");
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task CreateSetlist_WithWhitespaceOnlyName_FailsModelValidation()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = "   ",
+            Description = "Valid description"
+        };
+
+        _controller.ModelState.AddModelError("Name", "Name cannot be whitespace only");
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlist_WithMaxIntId_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistByIdAsync(int.MaxValue, "test-user"))
+            .ReturnsAsync((Setlist?)null);
+
+        // Act
+        var result = await _controller.GetSetlist(int.MaxValue);
+
+        // Assert
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task SearchSetlists_WhenServiceReturnsEmptySetlists_HandlesGracefully()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", "test", null, null, 1, 20))
+            .ReturnsAsync((new List<Setlist>(), 0)); // Return empty list instead of null
+
+        // Act
+        var result = await _controller.SearchSetlists("test");
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlists_WhenServiceReturnsEmptySetlists_HandlesGracefully()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, 1, 20))
+            .ReturnsAsync((new List<Setlist>(), 0)); // Return empty list instead of null
+
+        // Act
+        var result = await _controller.GetSetlists();
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task CreateSetlist_WhenServiceThrowsException_ReturnsInternalServerError()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = "Test Setlist",
+            Description = "Test Description"
+        };
+
+        _mockSetlistService
+            .Setup(s => s.CreateSetlistAsync(It.IsAny<Setlist>()))
+            .ThrowsAsync(new NullReferenceException("Setlist service returned null"));
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+        statusResult.Value.Should().Be("Internal server error");
+    }
+
+    [Theory]
+    [InlineData("test<SCRIPT>")]
+    [InlineData("<IFRAME src=x>")]
+    [InlineData("JAVASCRIPT:alert")]
+    [InlineData("VBSCRIPT:msgbox")]
+    [InlineData("ONLOAD=evil")]
+    [InlineData("DOCUMENT.COOKIE")]
+    public async Task CreateSetlist_WithMaliciousContentUppercase_ReturnsBadRequest(string maliciousContent)
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = maliciousContent,
+            Description = "Valid description"
+        };
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequestResult.Value.Should().Be("Invalid setlist data");
+    }
+
+    [Fact]
+    public async Task GetSetlists_WithDatabaseConnectionException_ReturnsInternalServerError()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, 1, 20))
+            .ThrowsAsync(new InvalidOperationException("Database connection failed"));
+
+        // Act
+        var result = await _controller.GetSetlists();
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+        statusResult.Value.Should().Be("Internal server error");
+    }
+
+    [Fact]
+    public async Task CreateSetlist_WithDatabaseConstraintException_ReturnsInternalServerError()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = "Test Setlist",
+            Description = "Test Description"
+        };
+
+        _mockSetlistService
+            .Setup(s => s.CreateSetlistAsync(It.IsAny<Setlist>()))
+            .ThrowsAsync(new InvalidOperationException("Duplicate setlist name"));
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+        statusResult.Value.Should().Be("Internal server error");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void SetupAuthenticatedUser(string userId)
