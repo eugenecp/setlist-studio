@@ -260,7 +260,9 @@ public class SecurityEventLogger
         LogSecurityEvent(
             SecurityEventType.DataAccess,
             SecurityEventSeverity.Low,
-            $"User performed {action} on {resourceType}" + (recordCount.HasValue ? $" ({recordCount} records)" : ""),
+            recordCount.HasValue 
+                ? $"User performed {action} on {resourceType} ({recordCount} records)"
+                : $"User performed {action} on {resourceType}",
             userId,
             resourceType,
             resourceId,

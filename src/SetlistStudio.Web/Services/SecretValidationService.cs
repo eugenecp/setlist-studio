@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SetlistStudio.Core.Security;
+using System.Text;
 
 namespace SetlistStudio.Web.Services;
 
@@ -280,8 +281,13 @@ public class SecretValidationService
                 
             if (criticalErrors.Any() && (_environment.IsProduction() || _environment.IsStaging()) && !isInTestContext)
             {
-                var errorMessage = $"Critical secret validation failed in {_environment.EnvironmentName} environment:\n" +
-                    string.Join("\n", criticalErrors.Select(e => $"- {e.Description}: {e.Details}"));
+                var errorMessageBuilder = new StringBuilder();
+                errorMessageBuilder.AppendLine($"Critical secret validation failed in {_environment.EnvironmentName} environment:");
+                foreach (var error in criticalErrors)
+                {
+                    errorMessageBuilder.AppendLine($"- {error.Description}: {error.Details}");
+                }
+                var errorMessage = errorMessageBuilder.ToString();
 
                 _logger.LogCritical("Secret validation failed: {ErrorMessage}", errorMessage);
                 throw new InvalidOperationException(errorMessage);

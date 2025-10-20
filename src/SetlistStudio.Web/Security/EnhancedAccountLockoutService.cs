@@ -37,7 +37,7 @@ public class EnhancedAccountLockoutService
             // Log suspicious activity for non-existent user attempts
             _securityEventLogger.LogSuspiciousActivity(
                 "NonExistentUserLogin",
-                "Login attempt for non-existent user from IP: " + ipAddress,
+                $"Login attempt for non-existent user from IP: {ipAddress}",
                 null,
                 SecurityEventSeverity.High,
                 new { IpAddress = ipAddress, UserAgent = userAgent }

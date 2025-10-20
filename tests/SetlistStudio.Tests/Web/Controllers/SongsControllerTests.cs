@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
@@ -16,12 +17,14 @@ namespace SetlistStudio.Tests.Web.Controllers;
 public class SongsControllerTests
 {
     private readonly Mock<ISongService> _mockSongService;
+    private readonly Mock<ILogger<SongsController>> _mockLogger;
     private readonly SongsController _controller;
 
     public SongsControllerTests()
     {
         _mockSongService = new Mock<ISongService>();
-        _controller = new SongsController(_mockSongService.Object);
+        _mockLogger = new Mock<ILogger<SongsController>>();
+        _controller = new SongsController(_mockSongService.Object, _mockLogger.Object);
 
         // Setup authenticated user context
         SetupAuthenticatedUser("test-user");

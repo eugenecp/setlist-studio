@@ -265,14 +265,14 @@ namespace SetlistStudio.Tests.Web.Controllers
         }
 
         [Fact]
-        public void SearchArtists_ShouldHaveAllowAnonymousAttribute()
+        public void SearchArtists_ShouldRequireAuthorization()
         {
             // Arrange & Act
             var method = typeof(ArtistsController).GetMethod("SearchArtists");
             var allowAnonymousAttributes = method!.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute), false);
 
             // Assert
-            allowAnonymousAttributes.Should().NotBeEmpty("SearchArtists should allow anonymous access for testing");
+            allowAnonymousAttributes.Should().BeEmpty("SearchArtists should require authentication for security consistency");
         }
 
         [Fact]

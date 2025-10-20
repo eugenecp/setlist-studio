@@ -15,10 +15,12 @@ namespace SetlistStudio.Web.Controllers;
 public class SongsController : ControllerBase
 {
     private readonly ISongService _songService;
+    private readonly ILogger<SongsController> _logger;
 
-    public SongsController(ISongService songService)
+    public SongsController(ISongService songService, ILogger<SongsController> logger)
     {
         _songService = songService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -30,14 +32,16 @@ public class SongsController : ControllerBase
             var (songs, totalCount) = await _songService.GetSongsAsync(userId);
             return Ok(new { songs, totalCount });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the actual exception for debugging but don't expose details to client
+            _logger.LogError(ex, "Error retrieving songs for user");
             return StatusCode(500, new { error = "An error occurred while retrieving songs" });
         }
     }
 
     [HttpGet("search")]
-    [AllowAnonymous] // For testing SQL injection
+    // Removed AllowAnonymous - require authentication for search endpoint
     public async Task<IActionResult> SearchSongs([FromQuery] string query)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -57,8 +61,10 @@ public class SongsController : ControllerBase
             var (songs, totalCount) = await _songService.GetSongsAsync(userId, searchTerm: query);
             return Ok(new { songs, totalCount });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the actual exception for debugging but don't expose details to client
+            _logger.LogError(ex, "Error searching songs for user");
             return StatusCode(500, new { error = "An error occurred while searching songs" });
         }
     }
@@ -89,8 +95,10 @@ public class SongsController : ControllerBase
             var createdSong = await _songService.CreateSongAsync(song);
             return CreatedAtAction(nameof(GetSongs), new { id = createdSong.Id }, createdSong);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the actual exception for debugging but don't expose details to client
+            _logger.LogError(ex, "Error creating song for user");
             return StatusCode(500, new { error = "An error occurred while creating the song" });
         }
     }

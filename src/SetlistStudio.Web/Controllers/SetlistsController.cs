@@ -62,7 +62,7 @@ public class SetlistsController : ControllerBase
     /// Search setlists by name
     /// </summary>
     [HttpGet("search")]
-    [AllowAnonymous] // Allow anonymous search for testing
+    [Authorize] // Require authentication for setlist search to protect user data
     public async Task<ActionResult<IEnumerable<SetlistResponse>>> SearchSetlists(
         [FromQuery, Required] string query,
         [FromQuery] int page = 1,

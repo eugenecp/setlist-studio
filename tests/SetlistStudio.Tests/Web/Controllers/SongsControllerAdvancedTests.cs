@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
@@ -20,12 +21,14 @@ namespace SetlistStudio.Tests.Web.Controllers;
 public class SongsControllerAdvancedTests
 {
     private readonly Mock<ISongService> _mockSongService;
+    private readonly Mock<ILogger<SongsController>> _mockLogger;
     private readonly SongsController _controller;
 
     public SongsControllerAdvancedTests()
     {
         _mockSongService = new Mock<ISongService>();
-        _controller = new SongsController(_mockSongService.Object);
+        _mockLogger = new Mock<ILogger<SongsController>>();
+        _controller = new SongsController(_mockSongService.Object, _mockLogger.Object);
     }
 
     #region Constructor Tests
@@ -35,7 +38,7 @@ public class SongsControllerAdvancedTests
     {
         // The SongsController constructor doesn't have null validation
         // Act & Assert - should not throw
-        var controller = new SongsController(null!);
+        var controller = new SongsController(null!, null!);
         controller.Should().NotBeNull();
     }
 

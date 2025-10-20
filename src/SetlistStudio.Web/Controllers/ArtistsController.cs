@@ -12,7 +12,7 @@ namespace SetlistStudio.Web.Controllers;
 public class ArtistsController : ControllerBase
 {
     [HttpGet("search")]
-    [AllowAnonymous] // Allow anonymous access for XSS testing
+    [Authorize] // Require authentication for consistency and security
     public IActionResult SearchArtists([FromQuery] string name)
     {
         if (string.IsNullOrWhiteSpace(name))

@@ -12,17 +12,17 @@ public static class SecureLoggingHelper
     // Sensitive data patterns that should never be logged
     public static readonly Regex[] SensitivePatterns = 
     {
-        new(@"password\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"token\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"secret\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"(?<!musical\s)(?<!song\s)(?<!and\s)key\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled), // Exclude musical keys
-        new(@"api[_-]?key\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"client[_-]?secret\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"bearer\s+([a-zA-Z0-9._-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"authorization\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Z|a-z]{2,})\b", RegexOptions.Compiled), // Email addresses
-        new(@"\b\d{3}-\d{2}-\d{4}\b", RegexOptions.Compiled), // SSN pattern
-        new(@"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", RegexOptions.Compiled), // Credit card pattern
+        new(@"password\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"token\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"secret\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"(?<!musical\s)(?<!song\s)(?<!and\s)key\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Exclude musical keys
+        new(@"api[_-]?key\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"client[_-]?secret\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"bearer\s+([a-zA-Z0-9._-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"authorization\s*[:=]\s*[""']?(.{1,})([""'\s;,}]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)),
+        new(@"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Z|a-z]{2,})\b", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Email addresses
+        new(@"\b\d{3}-\d{2}-\d{4}\b", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // SSN pattern
+        new(@"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Credit card pattern
     };
 
     // Fields that should be completely redacted

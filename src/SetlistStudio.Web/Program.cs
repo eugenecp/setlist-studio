@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
+using System.Text;
 using Serilog;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
@@ -382,8 +383,8 @@ try
         options.ApplicationDiscriminator = "SetlistStudio";
     })
     .SetApplicationName("SetlistStudio")
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(
-        builder.Environment.ContentRootPath, "DataProtection-Keys")))
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys"))))
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
 
     // Configure Rate Limiting - CRITICAL SECURITY ENHANCEMENT
@@ -519,21 +520,24 @@ try
         
         // Content Security Policy - restrictive default with violation reporting
         var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
-        var cspPolicy = "default-src 'self'; " +
-                       "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +  // Blazor requires unsafe-inline/eval
-                       "style-src 'self' 'unsafe-inline'; " +                  // MudBlazor requires unsafe-inline
-                       "img-src 'self' data: https:; " +
-                       "font-src 'self'; " +
-                       "connect-src 'self'; " +
-                       "frame-ancestors 'none'; " +
-                       "base-uri 'self'; " +
-                       "form-action 'self'";
+        var cspPolicyBuilder = new StringBuilder();
+        cspPolicyBuilder.Append("default-src 'self'; ");
+        cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline' 'unsafe-eval'; "); // Blazor requires unsafe-inline/eval
+        cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; "); // MudBlazor requires unsafe-inline
+        cspPolicyBuilder.Append("img-src 'self' data: https:; ");
+        cspPolicyBuilder.Append("font-src 'self'; ");
+        cspPolicyBuilder.Append("connect-src 'self'; ");
+        cspPolicyBuilder.Append("frame-ancestors 'none'; ");
+        cspPolicyBuilder.Append("base-uri 'self'; ");
+        cspPolicyBuilder.Append("form-action 'self'");
         
         // Add CSP violation reporting if enabled
         if (cspReportingEnabled)
         {
-            cspPolicy += "; report-uri /api/cspreport/report";
+            cspPolicyBuilder.Append("; report-uri /api/cspreport/report");
         }
+        
+        var cspPolicy = cspPolicyBuilder.ToString();
         
         context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
         
