@@ -80,7 +80,7 @@ public class SetlistsControllerAdvancedTests
                 Name = "Test Setlist", 
                 UserId = "test-user", 
                 CreatedAt = DateTime.UtcNow,
-                SetlistSongs = null // This should trigger the null check branch
+                SetlistSongs = null! // This should trigger the null check branch
             }
         };
         
@@ -410,7 +410,7 @@ public class SetlistsControllerAdvancedTests
             Description = "Test Description",
             UserId = "test-user",
             CreatedAt = DateTime.UtcNow,
-            SetlistSongs = null // This should trigger the null check branch
+            SetlistSongs = null! // This should trigger the null check branch
         };
 
         _mockSetlistService
@@ -796,6 +796,219 @@ public class SetlistsControllerAdvancedTests
             }
         };
     }
+
+    #region Additional Coverage Tests
+
+    [Fact]
+    public async Task GetSetlists_WithDifferentPageCombinations_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>
+        {
+            new Setlist { Id = 1, Name = "Test Setlist 1", UserId = "test-user", CreatedAt = DateTime.UtcNow },
+            new Setlist { Id = 2, Name = "Test Setlist 2", UserId = "test-user", CreatedAt = DateTime.UtcNow }
+        };
+
+        // Setup different parameter combinations to ensure all branches are hit
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, 2, 10))
+            .ReturnsAsync((testSetlists, 2));
+
+        // Act - Test with different page and limit combination
+        var result = await _controller.GetSetlists(2, 10);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = (OkObjectResult)result.Result!;
+        var setlists = okResult.Value as IEnumerable<SetlistResponse>;
+        setlists.Should().NotBeNull();
+        setlists!.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task SearchSetlists_WithDifferentPageCombinations_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>
+        {
+            new Setlist { Id = 1, Name = "Jazz Setlist", UserId = "test-user", CreatedAt = DateTime.UtcNow }
+        };
+
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", "jazz", null, null, 3, 5))
+            .ReturnsAsync((testSetlists, 1));
+
+        // Act - Test with different page and limit combination for search
+        var result = await _controller.SearchSetlists("jazz", 3, 5);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = (OkObjectResult)result.Result!;
+        var setlists = okResult.Value as IEnumerable<SetlistResponse>;
+        setlists.Should().NotBeNull();
+        setlists!.Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("safe content")]
+    public async Task SearchSetlists_WithSafeContent_AllowsRequest(string query)
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", query, null, null, 1, 20))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.SearchSetlists(query);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("safe name")]
+    public async Task CreateSetlist_WithSafeName_AllowsCreation(string name)
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = name,
+            Description = "Safe description"
+        };
+
+        var createdSetlist = new Setlist
+        {
+            Id = 1,
+            Name = name,
+            Description = "Safe description",
+            UserId = "test-user",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _mockSetlistService
+            .Setup(s => s.CreateSetlistAsync(It.IsAny<Setlist>()))
+            .ReturnsAsync(createdSetlist);
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        result.Result.Should().BeOfType<CreatedAtActionResult>();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("safe description")]
+    public async Task CreateSetlist_WithSafeDescription_AllowsCreation(string description)
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var request = new CreateSetlistRequest
+        {
+            Name = "Safe Name",
+            Description = description
+        };
+
+        var createdSetlist = new Setlist
+        {
+            Id = 1,
+            Name = "Safe Name",
+            Description = description,
+            UserId = "test-user",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _mockSetlistService
+            .Setup(s => s.CreateSetlistAsync(It.IsAny<Setlist>()))
+            .ReturnsAsync(createdSetlist);
+
+        // Act
+        var result = await _controller.CreateSetlist(request);
+
+        // Assert
+        result.Result.Should().BeOfType<CreatedAtActionResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlist_WithZeroId_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        _mockSetlistService
+            .Setup(s => s.GetSetlistByIdAsync(0, "test-user"))
+            .ReturnsAsync((Setlist?)null);
+
+        // Act
+        var result = await _controller.GetSetlist(0);
+
+        // Assert
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlist_WithNegativeId_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        _mockSetlistService
+            .Setup(s => s.GetSetlistByIdAsync(-1, "test-user"))
+            .ReturnsAsync((Setlist?)null);
+
+        // Act
+        var result = await _controller.GetSetlist(-1);
+
+        // Assert
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task GetSetlists_WithMaximumPageValues_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", null, null, null, int.MaxValue, int.MaxValue))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.GetSetlists(int.MaxValue, int.MaxValue);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task SearchSetlists_WithMaximumPageValues_HandlesCorrectly()
+    {
+        // Arrange
+        SetupAuthenticatedUser("test-user");
+        var testSetlists = new List<Setlist>();
+
+        _mockSetlistService
+            .Setup(s => s.GetSetlistsAsync("test-user", "test", null, null, int.MaxValue, int.MaxValue))
+            .ReturnsAsync((testSetlists, 0));
+
+        // Act
+        var result = await _controller.SearchSetlists("test", int.MaxValue, int.MaxValue);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    #endregion
 
     #endregion
 }
