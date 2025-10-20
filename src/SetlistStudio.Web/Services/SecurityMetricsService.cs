@@ -197,11 +197,11 @@ public class SecurityMetricsService : ISecurityMetricsService
             _ => LogLevel.Information
         };
 
-        var sanitizedEventType = SecureLoggingHelper.PreventLogInjection(eventType);
-        var sanitizedSeverity = SecureLoggingHelper.PreventLogInjection(severity);
-        var sanitizedDetails = SecureLoggingHelper.PreventLogInjection(details);
-        _logger.Log(logLevel, "Security event recorded: {EventType} (Severity: {Severity}). Details: {Details}", 
-            sanitizedEventType, sanitizedSeverity, sanitizedDetails);
+        // Use TaintBarrier for complete taint isolation
+        var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+            "Security event recorded: {0} (Severity: {1}). Details: {2}",
+            eventType, severity, details);
+        _logger.Log(logLevel, safeLogMessage);
     }
 
     public SecurityMetricsSnapshot GetMetricsSnapshot()

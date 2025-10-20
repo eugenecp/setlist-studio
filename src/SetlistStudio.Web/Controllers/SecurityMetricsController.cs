@@ -284,8 +284,11 @@ public class SecurityMetricsController : ControllerBase
                 sanitizedSeverity, 
                 sanitizedDetails);
 
-            _logger.LogInformation("Manual security event recorded by user {UserId}: {EventType}", 
+            // Use TaintBarrier for complete taint isolation
+            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+                "Manual security event recorded by user {0}: {1}",
                 User.Identity?.Name ?? "Unknown", sanitizedEventType);
+            _logger.LogInformation(safeLogMessage);
 
             return Created("", new { Message = "Security event recorded successfully" });
         }
