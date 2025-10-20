@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using System.Text;
 
@@ -125,8 +126,11 @@ public class SongService : ISongService
             _context.Songs.Add(song);
             await _context.SaveChangesAsync();
 
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
             _logger?.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
-                song.Id, song.Title, song.Artist, song.UserId);
+                song.Id, sanitizedTitle, sanitizedArtist, sanitizedUserId);
 
             // Log audit trail for song creation
             await _auditLogService.LogAuditAsync(
@@ -141,8 +145,11 @@ public class SongService : ISongService
         }
         catch (Exception ex)
         {
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
             _logger?.LogError(ex, "Error creating song '{Title}' by '{Artist}' for user {UserId}", 
-                song.Title, song.Artist, song.UserId);
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
             throw;
         }
     }

@@ -196,7 +196,7 @@ public class SecurityEventMiddleware
                     securityEventHandler.OnSuspiciousActivity(
                         context,
                         "XSS_Pattern_Detection",
-                        $"XSS pattern detected in field {field.Key}",
+                        $"XSS pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
                         context.User.Identity?.Name,
                         SecurityEventSeverity.High);
                 }
@@ -207,7 +207,7 @@ public class SecurityEventMiddleware
                     securityEventHandler.OnSuspiciousActivity(
                         context,
                         "SQL_Injection_Pattern_Detection",
-                        $"SQL injection pattern detected in field {field.Key}",
+                        $"SQL injection pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
                         context.User.Identity?.Name,
                         SecurityEventSeverity.High);
                 }
@@ -324,7 +324,7 @@ public class SecurityEventMiddleware
         securityEventHandler.OnSuspiciousActivity(
             context,
             "SecurityException",
-            $"Security-related exception occurred: {exception.GetType().Name}",
+            $"Security-related exception occurred: {SecureLoggingHelper.PreventLogInjection(exception.GetType().Name)}",
             context.User.Identity?.Name,
             SecurityEventSeverity.High);
             

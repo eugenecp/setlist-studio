@@ -25,6 +25,15 @@ public static class SecureLoggingHelper
         new(@"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Credit card pattern
     };
 
+    // Log injection patterns that could be used for log forging attacks (CWE-117)
+    public static readonly Regex[] LogInjectionPatterns = 
+    {
+        new(@"[\r\n]+", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // CRLF injection
+        new(@"[\x00-\x1F\x7F-\x9F]", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Control characters
+        new(@"\x1B\[[0-9;]*m", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // ANSI escape sequences
+        new(@"(\r\n|\r|\n).*?(INFO|WARN|ERROR|DEBUG|TRACE|FATAL)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Log level injection
+    };
+
     // Fields that should be completely redacted
     private static readonly string[] SensitiveFields =
     {
@@ -33,16 +42,19 @@ public static class SecureLoggingHelper
     };
 
     /// <summary>
-    /// Sanitizes a message by removing or masking sensitive data patterns.
+    /// Sanitizes a message by removing or masking sensitive data patterns and preventing log injection.
     /// </summary>
     /// <param name="message">The original message that may contain sensitive data</param>
-    /// <returns>A sanitized version of the message with sensitive data masked</returns>
+    /// <returns>A sanitized version of the message with sensitive data masked and log injection prevented</returns>
     public static string SanitizeMessage(string message)
     {
         if (string.IsNullOrEmpty(message))
             return message;
 
         var sanitized = message;
+
+        // First, prevent log injection attacks (CWE-117)
+        sanitized = PreventLogInjection(sanitized);
 
         // Replace sensitive patterns with masked versions
         for (int i = 0; i < SensitivePatterns.Length; i++)
@@ -65,6 +77,50 @@ public static class SecureLoggingHelper
                 // For simple patterns (SSN, credit cards)
                 return "[REDACTED]";
             });
+        }
+
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Prevents log injection attacks by sanitizing user input that could forge log entries.
+    /// This method addresses CWE-117: Improper Output Neutralization for Logs.
+    /// </summary>
+    /// <param name="input">The user input to sanitize</param>
+    /// <returns>A sanitized string safe for logging</returns>
+    public static string PreventLogInjection(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var sanitized = input;
+
+        // Apply log injection prevention patterns
+        foreach (var pattern in LogInjectionPatterns)
+        {
+            sanitized = pattern.Replace(sanitized, match =>
+            {
+                // Replace CRLF and control characters with safe alternatives
+                if (match.Value.Contains('\r') || match.Value.Contains('\n'))
+                    return " [NEWLINE] ";
+                
+                // Replace control characters with safe representation
+                if (match.Value.Length == 1 && char.IsControl(match.Value[0]))
+                    return $"[CTRL-{(int)match.Value[0]:X2}]";
+                
+                // Replace ANSI escape sequences
+                if (match.Value.StartsWith("\x1B["))
+                    return "[ANSI]";
+                
+                // Replace potential log level injection
+                return " [LOG-INJECT] ";
+            });
+        }
+
+        // Additional safety: limit message length to prevent log flooding
+        if (sanitized.Length > 1000)
+        {
+            sanitized = sanitized.Substring(0, 997) + "...";
         }
 
         return sanitized;

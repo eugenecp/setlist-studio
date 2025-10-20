@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Services;
 using System.Diagnostics;
 
@@ -274,13 +275,17 @@ public class SecurityMetricsController : ControllerBase
             var ipAddress = GetClientIpAddress();
             var userAgent = Request.Headers.UserAgent.ToString();
 
+            var sanitizedEventType = SecureLoggingHelper.PreventLogInjection(request.EventType);
+            var sanitizedSeverity = SecureLoggingHelper.PreventLogInjection(request.Severity ?? "MEDIUM");
+            var sanitizedDetails = SecureLoggingHelper.PreventLogInjection(request.Details ?? $"Manual event recorded by {User.Identity?.Name}");
+            
             _securityMetricsService.RecordSecurityEvent(
-                request.EventType, 
-                request.Severity ?? "MEDIUM", 
-                request.Details ?? $"Manual event recorded by {User.Identity?.Name}");
+                sanitizedEventType, 
+                sanitizedSeverity, 
+                sanitizedDetails);
 
             _logger.LogInformation("Manual security event recorded by user {UserId}: {EventType}", 
-                User.Identity?.Name ?? "Unknown", request.EventType);
+                User.Identity?.Name ?? "Unknown", sanitizedEventType);
 
             return Created("", new { Message = "Security event recorded successfully" });
         }

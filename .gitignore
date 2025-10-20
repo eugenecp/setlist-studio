@@ -451,3 +451,13 @@ $RECYCLE.BIN/
 
 ## .nfs files are created when an open file is removed but is still being accessed
 .nfs*
+
+# CodeQL Analysis
+## CodeQL databases are large binary files that should not be committed
+## They can be regenerated from source code during analysis
+codeql-database/
+**/codeql-database/
+*.sarif
+*-results.sarif
+*-results.csv
+codeql-results/

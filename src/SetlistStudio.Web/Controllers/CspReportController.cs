@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using SetlistStudio.Core.Security;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -159,8 +160,10 @@ public class CspReportController : ControllerBase
             alertMessageBuilder.Append("SECURITY ALERT: Suspicious CSP violation detected from IP {ClientIP}. ");
             alertMessageBuilder.Append("Blocked URI: {BlockedUri}, Source: {SourceFile}. ");
             alertMessageBuilder.Append("This may indicate an XSS or code injection attempt.");
+            var sanitizedBlockedUri = SecureLoggingHelper.PreventLogInjection(cspReport.BlockedUri ?? "unknown");
+            var sanitizedSourceFile = SecureLoggingHelper.PreventLogInjection(cspReport.SourceFile ?? "unknown");
             _logger.LogError(alertMessageBuilder.ToString(),
-                clientIp, cspReport.BlockedUri, cspReport.SourceFile);
+                clientIp, sanitizedBlockedUri, sanitizedSourceFile);
 
             // In a production environment, you might want to:
             // - Send alerts to security team

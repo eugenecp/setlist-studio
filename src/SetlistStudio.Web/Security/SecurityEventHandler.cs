@@ -166,10 +166,10 @@ public class SecurityEventHandler
 
             var additionalContext = new
             {
-                UserAgent = userAgent,
-                IpAddress = ipAddress,
-                RequestPath = requestPath.ToString(),
-                RequestMethod = context.Request.Method,
+                UserAgent = SecureLoggingHelper.SanitizeMessage(userAgent),
+                IpAddress = SecureLoggingHelper.SanitizeMessage(ipAddress ?? "Unknown"),
+                RequestPath = SecureLoggingHelper.SanitizeMessage(requestPath.ToString()),
+                RequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method),
                 DetectionTime = DateTimeOffset.UtcNow
             };
 
