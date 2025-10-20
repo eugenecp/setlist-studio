@@ -333,10 +333,16 @@ jobs:
         docker rm test-container test-debug 2>/dev/null || true
         
         echo "Testing container in foreground first (for debugging)..."
-        timeout 10s docker run --rm --name test-debug -p 8081:5000 setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
+        timeout 10s docker run --rm --name test-debug -p 8081:8080 \
+          -e ASPNETCORE_ENVIRONMENT=Development \
+          -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+          setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
         
         echo "Starting container in background..."
-        docker run --rm -d --name test-container -p 8080:5000 setlist-studio:${{ github.sha }}
+        docker run --rm -d --name test-container -p 8080:8080 \
+          -e ASPNETCORE_ENVIRONMENT=Development \
+          -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+          setlist-studio:${{ github.sha }}
         
         echo "Waiting for container to start..."
         # Wait and check if container is running
