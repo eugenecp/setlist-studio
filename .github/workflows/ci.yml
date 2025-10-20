@@ -102,21 +102,21 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always() # Upload even if tests fail
       with:
-        name: test-results                # Artifact name for test results
-        path: |                          # Include all test result files
-          ./test-results/*.trx           # TRX format test results (directly in test-results)
-          ./test-results/**/*.xml        # XML format test results (in subdirectories)
-        retention-days: 30               # Keep test results for 30 days
+        name: test-results
+        path: |
+          ./test-results/*.trx
+          ./test-results/**/*.xml
+        retention-days: 30
     
     # Step 9: Upload code coverage data for analysis
     # Provides coverage metrics for quality monitoring
     - name: 📈 Upload code coverage
       uses: actions/upload-artifact@v4
-      if: always()                       # Upload even if tests failed
+      if: always()
       with:
-        name: code-coverage              # Artifact name for coverage data
-        path: ./test-results/**/coverage.cobertura.xml # Cobertura format coverage
-        retention-days: 30               # Keep coverage data for 30 days
+        name: code-coverage
+        path: ./test-results/**/coverage.cobertura.xml
+        retention-days: 30
     
     # Step 10: Parse and display test results summary
     # Creates human-readable test results in GitHub workflow summary
