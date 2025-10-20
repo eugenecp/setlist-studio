@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using SetlistStudio.Tests.Web;
 
 namespace SetlistStudio.Tests.Security;
 
@@ -13,12 +14,12 @@ namespace SetlistStudio.Tests.Security;
 /// Validates that all required security headers are present and properly configured
 /// Tests against OWASP security header recommendations
 /// </summary>
-public class SecurityHeadersTests : IClassFixture<WebApplicationFactory<Program>>
+public class SecurityHeadersTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
-    public SecurityHeadersTests(WebApplicationFactory<Program> factory)
+    public SecurityHeadersTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
         _client = _factory.CreateClient();

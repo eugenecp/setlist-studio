@@ -89,8 +89,9 @@ jobs:
         dotnet clean SetlistStudio.sln --configuration Release
         
         # Set test environment variables to avoid database conflicts
-        export ASPNETCORE_ENVIRONMENT=Test
-        export DOTNET_ENVIRONMENT=Test
+        export ASPNETCORE_ENVIRONMENT=Testing
+        export DOTNET_ENVIRONMENT=Testing
+        export CI=true
 
         # Run comprehensive test suite with coverage collection
         dotnet test SetlistStudio.sln --configuration Release --verbosity normal --logger trx --logger "console;verbosity=detailed" --collect "XPlat Code Coverage" --results-directory ./test-results

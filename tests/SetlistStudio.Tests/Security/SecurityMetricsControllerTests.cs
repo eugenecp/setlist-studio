@@ -16,6 +16,7 @@ using System.Text;
 using System.Text.Json;
 using Xunit;
 using Xunit.Abstractions;
+using SetlistStudio.Tests.Web;
 
 namespace SetlistStudio.Tests.Security;
 
@@ -24,13 +25,13 @@ namespace SetlistStudio.Tests.Security;
 /// Tests security metrics endpoints, authorization, and dashboard functionality.
 /// Ensures proper security monitoring API functionality and access control.
 /// </summary>
-public class SecurityMetricsControllerTests : IClassFixture<WebApplicationFactory<Program>>
+public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
     private readonly ITestOutputHelper _output;
 
-    public SecurityMetricsControllerTests(WebApplicationFactory<Program> factory, ITestOutputHelper output)
+    public SecurityMetricsControllerTests(TestWebApplicationFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _output = output;

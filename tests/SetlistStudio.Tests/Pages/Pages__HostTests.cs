@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net;
 using Xunit;
+using SetlistStudio.Tests.Web;
 
 namespace SetlistStudio.Tests.Pages;
 
@@ -10,11 +11,11 @@ namespace SetlistStudio.Tests.Pages;
 /// Target: Achieve 90%+ line and branch coverage
 /// Note: Testing the _Host page through integration tests since it's a Razor page
 /// </summary>
-public class Pages__HostTests : IClassFixture<WebApplicationFactory<Program>>
+public class Pages__HostTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public Pages__HostTests(WebApplicationFactory<Program> factory)
+    public Pages__HostTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }

@@ -24,7 +24,7 @@ public class TestController : ControllerBase
     /// Used by SessionSecurityTests to validate cookie security attributes.
     /// </summary>
     [HttpPost("test-session")]
-    public async Task<IActionResult> CreateTestSession([FromBody] string content)
+    public async Task<IActionResult> CreateTestSession([FromBody] string? content)
     {
         // Only allow in development and test environments (including test factories using Production/Staging)
         if (!_environment.IsDevelopment() && 
