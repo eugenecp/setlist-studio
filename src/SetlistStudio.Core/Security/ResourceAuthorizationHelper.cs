@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
+using System.Text;
 
 namespace SetlistStudio.Core.Security;
 
@@ -118,7 +119,18 @@ public static class ResourceAuthorizationHelper
     /// <param name="requestContext">Additional request context for security analysis</param>
     public static void LogAuthorizationFailure(ILogger logger, AuthorizationResult result, Dictionary<string, object>? requestContext = null)
     {
-        var contextInfo = requestContext != null ? string.Join(", ", requestContext.Select(kvp => $"{kvp.Key}={kvp.Value}")) : "none";
+        var contextInfoBuilder = new StringBuilder();
+        if (requestContext != null)
+        {
+            bool first = true;
+            foreach (var kvp in requestContext)
+            {
+                if (!first) contextInfoBuilder.Append(", ");
+                contextInfoBuilder.Append(kvp.Key).Append("=").Append(kvp.Value);
+                first = false;
+            }
+        }
+        var contextInfo = requestContext != null ? contextInfoBuilder.ToString() : "none";
         
         logger.LogWarning("SECURITY ALERT: Authorization failed - User {UserId} attempted {Action} on {ResourceType} {ResourceId}. Reason: {Reason}. Context: {Context}",
             result.UserId, result.Action, result.ResourceType, result.ResourceId, result.Reason, contextInfo);
@@ -133,7 +145,15 @@ public static class ResourceAuthorizationHelper
     /// <param name="details">Additional details about the suspicious activity</param>
     public static void LogSuspiciousActivity(ILogger logger, string userId, string pattern, Dictionary<string, object> details)
     {
-        var detailsInfo = string.Join(", ", details.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+        var detailsInfoBuilder = new StringBuilder();
+        bool first = true;
+        foreach (var kvp in details)
+        {
+            if (!first) detailsInfoBuilder.Append(", ");
+            detailsInfoBuilder.Append(kvp.Key).Append("=").Append(kvp.Value);
+            first = false;
+        }
+        var detailsInfo = detailsInfoBuilder.ToString();
         
         logger.LogError("SECURITY THREAT: Suspicious activity detected - User {UserId}, Pattern: {Pattern}, Details: {Details}",
             userId, pattern, detailsInfo);

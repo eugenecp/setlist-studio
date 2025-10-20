@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using SetlistStudio.Core.Security;
 
 namespace SetlistStudio.Web.Services;
 
@@ -107,8 +110,9 @@ public class SecurityMetricsService : ISecurityMetricsService
             ["Timestamp"] = DateTime.UtcNow
         });
 
+        var sanitizedUsername = SecureLoggingHelper.SanitizeUserId(username);
         _logger.LogWarning("Authentication failure recorded for user {Username} from IP {IPAddress}", 
-            username, ipAddress);
+            sanitizedUsername, ipAddress);
 
         // Check for brute force patterns
         CheckForBruteForcePattern(ipAddress, username);

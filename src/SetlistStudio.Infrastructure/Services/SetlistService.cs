@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
+using System.Text;
 
 namespace SetlistStudio.Infrastructure.Services;
 
@@ -110,7 +112,16 @@ public class SetlistService : ISetlistService
             var validationErrors = ValidateSetlist(setlist);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             setlist.CreatedAt = DateTime.UtcNow;
@@ -119,15 +130,19 @@ public class SetlistService : ISetlistService
             _context.Setlists.Add(setlist);
             await _context.SaveChangesAsync();
 
+            var sanitizedName = SecureLoggingHelper.SanitizeMessage(setlist.Name);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(setlist.UserId);
             _logger.LogInformation("Created setlist {SetlistId} '{Name}' for user {UserId}", 
-                setlist.Id, setlist.Name, setlist.UserId);
+                setlist.Id, sanitizedName, sanitizedUserId);
 
             return setlist;
         }
         catch (Exception ex)
         {
+            var sanitizedName = SecureLoggingHelper.SanitizeMessage(setlist.Name);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(setlist.UserId);
             _logger.LogError(ex, "Error creating setlist '{Name}' for user {UserId}", 
-                setlist.Name, setlist.UserId);
+                sanitizedName, sanitizedUserId);
             throw;
         }
     }
@@ -152,7 +167,16 @@ public class SetlistService : ISetlistService
             var validationErrors = ValidateSetlist(setlist);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             // Update properties
@@ -196,8 +220,10 @@ public class SetlistService : ISetlistService
             _context.Setlists.Remove(setlist);
             await _context.SaveChangesAsync();
 
+            var sanitizedName = SecureLoggingHelper.SanitizeMessage(setlist.Name);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogInformation("Deleted setlist {SetlistId} '{Name}' for user {UserId}", 
-                setlistId, setlist.Name, userId);
+                setlistId, sanitizedName, sanitizedUserId);
 
             return true;
         }

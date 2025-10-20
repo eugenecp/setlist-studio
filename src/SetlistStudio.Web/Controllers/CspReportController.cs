@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
@@ -111,8 +112,10 @@ public class CspReportController : ControllerBase
             ["Timestamp"] = DateTime.UtcNow
         });
 
-        _logger.LogWarning("CSP Violation Detected: {DirectiveViolated} blocked {ViolatedDirective} from {SourceFile} at line {LineNumber}. " +
-                          "Blocked URI: {BlockedUri}, Document URI: {DocumentUri}",
+        var messageBuilder = new StringBuilder();
+        messageBuilder.Append("CSP Violation Detected: {DirectiveViolated} blocked {ViolatedDirective} from {SourceFile} at line {LineNumber}. ");
+        messageBuilder.Append("Blocked URI: {BlockedUri}, Document URI: {DocumentUri}");
+        _logger.LogWarning(messageBuilder.ToString(),
             cspReport.ViolatedDirective,
             cspReport.EffectiveDirective,
             cspReport.SourceFile,
@@ -152,9 +155,11 @@ public class CspReportController : ControllerBase
                 ["ThreatType"] = "POTENTIAL_XSS_ATTEMPT"
             });
 
-            _logger.LogError("SECURITY ALERT: Suspicious CSP violation detected from IP {ClientIP}. " +
-                           "Blocked URI: {BlockedUri}, Source: {SourceFile}. " +
-                           "This may indicate an XSS or code injection attempt.",
+            var alertMessageBuilder = new StringBuilder();
+            alertMessageBuilder.Append("SECURITY ALERT: Suspicious CSP violation detected from IP {ClientIP}. ");
+            alertMessageBuilder.Append("Blocked URI: {BlockedUri}, Source: {SourceFile}. ");
+            alertMessageBuilder.Append("This may indicate an XSS or code injection attempt.");
+            _logger.LogError(alertMessageBuilder.ToString(),
                 clientIp, cspReport.BlockedUri, cspReport.SourceFile);
 
             // In a production environment, you might want to:

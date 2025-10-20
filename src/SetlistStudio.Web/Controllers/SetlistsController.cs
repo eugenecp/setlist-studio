@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Models;
 using System.ComponentModel.DataAnnotations;
 
@@ -73,12 +74,15 @@ public class SetlistsController : ControllerBase
             // Check for malicious content
             if (ContainsMaliciousContent(query))
             {
-                _logger.LogWarning("Malicious content detected in setlist search query: {Query}", query);
+                var sanitizedQuery = SecureLoggingHelper.SanitizeMessage(query);
+                _logger.LogWarning("Malicious content detected in setlist search query: {Query}", sanitizedQuery);
                 return BadRequest("Invalid search query");
             }
 
             var userId = User.Identity?.Name ?? "anonymous";
-            _logger.LogInformation("Searching setlists for user {UserId} with query '{Query}' (page {Page})", userId, query, page);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedSearchQuery = SecureLoggingHelper.SanitizeMessage(query);
+            _logger.LogInformation("Searching setlists for user {UserId} with query '{Query}' (page {Page})", sanitizedUserId, sanitizedSearchQuery, page);
 
             var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, searchTerm: query, pageNumber: page, pageSize: limit);
             var response = setlists.Select(s => new SetlistResponse
@@ -120,7 +124,9 @@ public class SetlistsController : ControllerBase
             }
 
             var userId = User.Identity?.Name ?? "anonymous";
-            _logger.LogInformation("Creating setlist '{Name}' for user {UserId}", request.Name, userId);
+            var sanitizedName = SecureLoggingHelper.SanitizeMessage(request.Name);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogInformation("Creating setlist '{Name}' for user {UserId}", sanitizedName, sanitizedUserId);
 
             var setlist = new Setlist
             {

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
+using System.Text;
 
 namespace SetlistStudio.Infrastructure.Services;
 
@@ -106,7 +107,16 @@ public class SongService : ISongService
             var validationErrors = ValidateSong(song);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             song.CreatedAt = DateTime.UtcNow;
@@ -153,7 +163,16 @@ public class SongService : ISongService
             var validationErrors = ValidateSong(song);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             // Capture old values for audit logging

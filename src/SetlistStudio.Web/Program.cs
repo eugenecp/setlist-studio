@@ -102,8 +102,11 @@ try
         // Add support for application/csp-report content type
         var jsonInputFormatter = options.InputFormatters
             .OfType<Microsoft.AspNetCore.Mvc.Formatters.SystemTextJsonInputFormatter>()
-            .First();
-        jsonInputFormatter.SupportedMediaTypes.Add("application/csp-report");
+            .FirstOrDefault();
+        if (jsonInputFormatter != null)
+        {
+            jsonInputFormatter.SupportedMediaTypes.Add("application/csp-report");
+        }
     });
     
     builder.Services.AddHttpContextAccessor(); // Required for audit logging
@@ -873,7 +876,15 @@ static async Task<ApplicationUser?> CreateDemoUserAsync(UserManager<ApplicationU
     var result = await userManager.CreateAsync(demoUser, "Demo123!");
     if (!result.Succeeded)
     {
-        Log.Warning("Failed to create demo user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+        var errorsBuilder = new StringBuilder();
+        bool first = true;
+        foreach (var error in result.Errors)
+        {
+            if (!first) errorsBuilder.Append(", ");
+            errorsBuilder.Append(error.Description);
+            first = false;
+        }
+        Log.Warning("Failed to create demo user: {Errors}", errorsBuilder.ToString());
         return null;
     }
 
