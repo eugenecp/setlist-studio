@@ -5,6 +5,7 @@
 ### Essential Rules
 - **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
 - **Coverage Target**: 90%+ line and branch coverage
+- **Security Analysis**: All code must pass CodeQL security scans with zero high/critical issues
 - **Architecture**: Clean Architecture (Core/Infrastructure/Web)
 - **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
 
@@ -37,6 +38,7 @@
 - **ASP.NET Core Identity**: Authentication with OAuth (Google, Microsoft, Facebook)
 - **MudBlazor**: Material Design component library
 - **xUnit + FluentAssertions + Bunit**: Testing framework
+- **CodeQL**: Static application security testing (SAST) for vulnerability detection
 - **Docker**: Containerization for deployment
 - **GitHub Actions**: CI/CD pipeline
 
@@ -67,6 +69,7 @@ Setlist Studio maintains **100% test success rate requirement** with minimum 90%
 **Quality Metrics Requirements:**
 - **Test Success Rate**: **100% of all tests must pass** - zero tolerance for failing tests
 - **Build Quality**: **Zero build warnings** in main and test projects - clean builds required
+- **Security Analysis**: **Zero high/critical CodeQL security issues** - all security vulnerabilities must be resolved
 - **Individual File Coverage**: **Each file must achieve at least 90% line AND branch coverage before moving to next file**
 - **Line Coverage**: Each file must achieve at least 90% line coverage
 - **Branch Coverage**: Each file must achieve at least 90% branch coverage
@@ -239,6 +242,79 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 - **Cyclomatic Complexity**: Measures code complexity through decision points
   - Target: Break down methods with high complexity or ensure comprehensive testing
 
+### CodeQL Static Security Analysis
+
+**CodeQL is MANDATORY for all code contributions** - it performs static application security testing (SAST) to identify vulnerabilities before they reach production.
+
+#### Running CodeQL Analysis
+
+CodeQL analysis runs automatically on:
+- **All pull requests** to main branch
+- **Push to main branch** (for baseline maintenance)
+- **Scheduled scans** (weekly comprehensive analysis)
+
+#### CodeQL Security Standards
+
+**ZERO TOLERANCE POLICY:**
+- **High severity issues**: Must be fixed before merge - no exceptions
+- **Critical severity issues**: Must be fixed before merge - no exceptions  
+- **Medium severity issues**: Should be fixed or justified with suppression
+- **Low severity issues**: Should be reviewed and addressed when practical
+
+**IMPORTANT**: CodeQL findings override general security scan summaries. Even if a Security Scan Summary shows "secure", **any CodeQL high/critical issues constitute a security failure** and must be resolved before merge.
+
+#### CodeQL Results Interpretation
+
+**CRITICAL: Security Scan Summary Limitations**
+
+The automated Security Scan Summary in workflows may show "secure" status even when CodeQL has identified high/critical security issues. This occurs because:
+
+- CodeQL uploads results directly to GitHub Security tab
+- Summary scripts may not have access to all CodeQL findings
+- Aggregate security status can be misleading
+
+**ALWAYS CHECK GitHub Security Tab directly** rather than relying solely on workflow summaries.
+
+#### CodeQL Issue Resolution
+
+**When CodeQL identifies security issues:**
+
+1. **Treat as security failure**: CodeQL high/critical issues are security failures regardless of other scan results
+2. **Review the finding**: Understand the vulnerability and its potential impact
+3. **Fix the root cause**: Address the underlying security flaw, don't just suppress
+4. **Test the fix**: Ensure the fix doesn't break functionality and resolves the issue
+5. **Validate resolution**: Re-run CodeQL to confirm the issue is resolved
+6. **Document changes**: Explain security improvements in commit messages
+
+**CRITICAL**: Do not rely on general security scan summaries. CodeQL static analysis findings take precedence over aggregate security status indicators.
+
+#### CodeQL Best Practices
+
+**To minimize CodeQL findings:**
+- **Input validation**: Always validate and sanitize user inputs
+- **Parameterized queries**: Never concatenate user input into SQL strings
+- **Secure defaults**: Use secure configurations and libraries
+- **Error handling**: Don't expose sensitive information in error messages
+- **Access control**: Implement proper authorization checks
+- **Secrets management**: Never hardcode credentials or API keys
+
+#### CodeQL Suppression Guidelines
+
+**Suppressions should be rare and well-justified:**
+- Only suppress false positives after thorough analysis
+- Add detailed comments explaining why suppression is appropriate
+- Get security team approval for suppressing high/critical issues
+- Regular review of all suppressions to ensure they remain valid
+
+#### Common CodeQL Issues in .NET Applications
+
+- **SQL Injection**: Use Entity Framework LINQ queries instead of raw SQL
+- **XSS Vulnerabilities**: Always encode output, validate inputs
+- **Path Traversal**: Validate file paths, use safe file operations
+- **Information Disclosure**: Sanitize error messages and logs
+- **Authentication Bypass**: Implement proper authorization checks
+- **Cryptographic Issues**: Use strong algorithms and proper key management
+
 ---
 
 ## Development Workflow
@@ -250,9 +326,11 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
-- **Quality Gates**: **100% test success rate**, **zero build warnings**, and 90%+ coverage required before merge
+- **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 90%+ coverage required before merge
+- **CodeQL Analysis**: Mandatory static security analysis on all pull requests - **CodeQL findings override general security summaries**
 - **Code Review**: All changes require peer review and approval
-- **Zero Tolerance**: No failing tests or build warnings allowed in any branch or pull request
+- **Zero Tolerance**: No failing tests, build warnings, or high/critical security issues allowed in any branch or pull request
+- **Security Priority**: CodeQL high/critical issues constitute security failures regardless of other scan status indicators
 
 ### Test Execution Strategy
 - **Unit Tests**: Fast, isolated tests for individual components (must pass 100%)
@@ -387,6 +465,32 @@ Use realistic musical data in all examples, tests, and documentation:
 "Add audit trails for all data modifications with user tracking and timestamps"
 
 "Configure CORS policy to only allow specific trusted domains, never use wildcards"
+
+"Run CodeQL static analysis and fix all high/critical security vulnerabilities before submitting PR"
+
+"Analyze CodeQL findings and implement proper fixes rather than just suppressing alerts"
+
+"Review CodeQL security recommendations and apply secure coding patterns for .NET applications"
+
+"Validate that all CodeQL security issues are resolved and analysis passes with zero critical/high issues"
+
+"Implement CodeQL-recommended security practices: input validation, parameterized queries, output encoding"
+
+"Address CodeQL SQL injection findings by using Entity Framework LINQ queries exclusively"
+
+"Fix CodeQL XSS vulnerabilities by implementing proper input validation and output sanitization"
+
+"Resolve CodeQL authentication bypass issues by adding proper authorization checks to all endpoints"
+
+"Apply CodeQL cryptographic recommendations: use strong algorithms, proper key management, secure defaults"
+
+"Ignore Security Scan Summary if CodeQL shows high/critical issues - CodeQL findings take precedence over aggregate security status"
+
+"Treat CodeQL high/critical findings as security failures even if other security scans show 'secure' status"
+
+"Always check CodeQL results directly rather than relying on general security summary indicators"
+
+"Never merge code with CodeQL high/critical issues regardless of overall security scan status"
 ```
 
 ### User Experience & Content
@@ -517,6 +621,7 @@ Setlist Studio maintains **strict security standards** that must be followed for
 
 **Before submitting any code, verify:**
 
+- [ ] **CodeQL Analysis** passes with zero high/critical security issues
 - [ ] **Input validation** implemented for all user inputs
 - [ ] **Authorization checks** verify user ownership of resources  
 - [ ] **Parameterized queries** used exclusively (no string concatenation)
@@ -532,10 +637,11 @@ Setlist Studio maintains **strict security standards** that must be followed for
 
 **All pull requests must pass security review:**
 
-1. **Automated Security Scans**: All PRs trigger security vulnerability scans
-2. **Manual Security Review**: Security-sensitive changes require manual review
-3. **Threat Modeling**: New features require security impact assessment
-4. **Penetration Testing**: Regular security testing of the application
+1. **CodeQL Analysis**: All PRs must pass CodeQL static security analysis with zero high/critical issues
+2. **Automated Security Scans**: All PRs trigger comprehensive security vulnerability scans
+3. **Manual Security Review**: Security-sensitive changes require manual review
+4. **Threat Modeling**: New features require security impact assessment
+5. **Penetration Testing**: Regular security testing of the application
 
 ### Security Incident Response
 
@@ -594,6 +700,7 @@ When contributing to Setlist Studio:
 **Code Review Preparation:**
 - [ ] Complete security validation checklist
 - [ ] Run security scans and address any issues
+- [ ] Ensure CodeQL analysis passes with zero high/critical issues
 - [ ] Document security considerations in PR description
 - [ ] Submit pull request with clear description and test evidence
 
@@ -617,13 +724,14 @@ When contributing to Setlist Studio:
 
 **Security is MANDATORY - not optional. Every contribution must:**
 
-1. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
-2. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
-3. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
-4. **PROTECT SECRETS**: Never hardcode credentials - use secure storage
-5. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
-6. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
-7. **FAIL SECURELY**: Error messages must not leak sensitive information
+1. **PASS CODEQL ANALYSIS**: All code must pass CodeQL static security analysis with zero high/critical issues
+2. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
+3. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
+4. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
+5. **PROTECT SECRETS**: Never hardcode credentials - use secure storage
+6. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
+7. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
+8. **FAIL SECURELY**: Error messages must not leak sensitive information
 
 **Security violations will result in immediate pull request rejection.**
 

@@ -357,15 +357,31 @@ jobs:
         fi
         
         # Analyze CodeQL static analysis results
-        codeql_status="✅ Secure | No vulnerabilities detected"
-        for sarif_file in ./results/*.sarif; do
+        # CodeQL uploads results to GitHub Security automatically, so we check for workflow step success
+        # If CodeQL analysis step failed, it indicates security issues were found
+        codeql_status="⚠️ Analysis | CodeQL results uploaded to GitHub Security - check Security tab for details"
+        
+        # Check if there are any SARIF files generated locally (if any)
+        sarif_found=false
+        for sarif_file in ./results/*.sarif /tmp/*.sarif *.sarif; do
           if [ -f "$sarif_file" ]; then
-            if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" > /dev/null; then
-              codeql_status="⚠️ Issues | Code vulnerabilities detected"
+            sarif_found=true
+            if jq -e '.runs[].results[]? | select(.level == "error" or (.level == "warning" and .properties.["security-severity"] and (.properties.["security-severity"] | tonumber) >= 7.0))' "$sarif_file" > /dev/null 2>&1; then
+              codeql_status="⚠️ HIGH/CRITICAL | High or critical security vulnerabilities detected"
               break
+            elif jq -e '.runs[].results[]?' "$sarif_file" > /dev/null 2>&1; then
+              codeql_status="⚠️ Issues | Security vulnerabilities detected"
+            else
+              codeql_status="✅ Secure | No vulnerabilities detected in local analysis"
             fi
           fi
         done
+        
+        # If no local SARIF files found, remind to check GitHub Security tab
+        if [ "$sarif_found" = false ]; then
+          codeql_status="📊 Uploaded | Results uploaded to GitHub Security tab - manual review required"
+        fi
+        
         echo "| CodeQL | $codeql_status |" >> security-summary.md
         
         # Analyze Semgrep SAST results
@@ -428,7 +444,16 @@ jobs:
         fi
 
 
+        echo "" >> security-summary.md
+        echo "### ⚠️ CRITICAL: CodeQL Security Analysis" >> security-summary.md
+        echo "**IMPORTANT**: This summary may show CodeQL as 'secure' even if issues exist." >> security-summary.md
+        echo "**ALWAYS check the [GitHub Security Tab](../../security) for CodeQL findings.**" >> security-summary.md
+        echo "**High/Critical CodeQL issues MUST be resolved before merge, regardless of this summary.**" >> security-summary.md
+        echo "" >> security-summary.md
+        
         echo "### 📋 Recommendations" >> security-summary.md
+        echo "- **PRIORITY**: Check GitHub Security tab for CodeQL findings" >> security-summary.md
+        echo "- Fix all high/critical CodeQL issues before merge" >> security-summary.md
         echo "- Review all findings in the Security tab" >> security-summary.md
         echo "- Update vulnerable dependencies promptly" >> security-summary.md
         echo "- Follow secure coding practices from copilot-instructions.md" >> security-summary.md
