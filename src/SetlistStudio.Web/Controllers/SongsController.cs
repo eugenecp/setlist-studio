@@ -73,6 +73,7 @@ public class SongsController : ControllerBase
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateSong([FromBody] CreateSongRequest request)
     {
         if (!ModelState.IsValid)
@@ -90,7 +91,7 @@ public class SongsController : ControllerBase
                 Bpm = request.Bpm,
                 MusicalKey = request.Key,
                 Genre = request.Genre,
-                DurationSeconds = request.Duration?.TotalSeconds > 0 ? (int)Math.Round(request.Duration.Value.TotalSeconds) : null,
+                DurationSeconds = request.Duration.HasValue && request.Duration.Value.TotalSeconds > 0 ? (int)Math.Round(request.Duration.Value.TotalSeconds) : null,
                 Notes = request.Notes,
                 UserId = userId
             };

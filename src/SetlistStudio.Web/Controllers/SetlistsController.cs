@@ -109,6 +109,7 @@ public class SetlistsController : ControllerBase
     /// Create a new setlist
     /// </summary>
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<ActionResult<SetlistResponse>> CreateSetlist([FromBody] CreateSetlistRequest request)
     {
         try

@@ -1622,7 +1622,9 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error retrieving songs")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving songs") || 
+                                            v.ToString()!.Contains("Invalid argument retrieving songs") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving songs")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1644,7 +1646,9 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Error retrieving song {songId}")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Database error retrieving song {songId}") || 
+                                            v.ToString()!.Contains($"Invalid argument retrieving song {songId}") || 
+                                            v.ToString()!.Contains($"Invalid operation retrieving song {songId}")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1672,7 +1676,9 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error creating song")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error creating song") || 
+                                            v.ToString()!.Contains("Invalid argument creating song") || 
+                                            v.ToString()!.Contains("Invalid operation creating song")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1711,7 +1717,10 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error updating song")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Concurrency error updating song") || 
+                                            v.ToString()!.Contains("Database error updating song") || 
+                                            v.ToString()!.Contains("Invalid argument updating song") || 
+                                            v.ToString()!.Contains("Invalid operation updating song")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1742,7 +1751,9 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error deleting song")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Concurrency error deleting song") || 
+                                            v.ToString()!.Contains("Database error deleting song") || 
+                                            v.ToString()!.Contains("Invalid operation deleting song")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1763,7 +1774,8 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error retrieving genres")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving genres") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving genres")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -1784,7 +1796,8 @@ public class SongServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error retrieving tags")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving tags") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving tags")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

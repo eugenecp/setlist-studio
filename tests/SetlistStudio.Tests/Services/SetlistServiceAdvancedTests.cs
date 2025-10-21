@@ -209,12 +209,13 @@ public class SetlistServiceAdvancedTests : IDisposable
         var act = async () => await _service.DeleteSetlistAsync(setlist.Id, _testUserId);
         await act.Should().ThrowAsync<Exception>();
         
-        // Verify error logging
+        // Verify error logging - should be database error or concurrency error
         _mockLogger.Verify(
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error deleting setlist")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error deleting setlist") || 
+                                            v.ToString()!.Contains("Concurrency error deleting setlist")),
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

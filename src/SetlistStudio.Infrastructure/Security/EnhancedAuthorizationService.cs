@@ -59,10 +59,15 @@ public class EnhancedAuthorizationService
 
             return authResult;
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Exception during song authorization for user {UserId}, song {SongId}", userId, songId);
+            _logger.LogError(ex, "Invalid operation during song authorization for user {UserId}, song {SongId}", userId, songId);
             return AuthorizationResult.NotFound(userId, "Song", songId.ToString(), action.ToString());
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument during song authorization for user {UserId}, song {SongId}", userId, songId);
+            return AuthorizationResult.Forbidden(userId, "Song", songId.ToString(), action.ToString());
         }
     }
 
@@ -104,9 +109,19 @@ public class EnhancedAuthorizationService
 
             return authResult;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Exception during setlist authorization for user {UserId}, setlist {SetlistId}", userId, setlistId);
+            _logger.LogError(ex, "Database error during setlist authorization for user {UserId}, setlist {SetlistId}", userId, setlistId);
+            return AuthorizationResult.NotFound(userId, "Setlist", setlistId.ToString(), action.ToString());
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument during setlist authorization for user {UserId}, setlist {SetlistId}", userId, setlistId);
+            return AuthorizationResult.NotFound(userId, "Setlist", setlistId.ToString(), action.ToString());
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation during setlist authorization for user {UserId}, setlist {SetlistId}", userId, setlistId);
             return AuthorizationResult.NotFound(userId, "Setlist", setlistId.ToString(), action.ToString());
         }
     }
@@ -192,9 +207,19 @@ public class EnhancedAuthorizationService
             ResourceAuthorizationHelper.LogAuthorizationSuccess(_logger, successResult);
             return successResult;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Exception during setlist song authorization for user {UserId}, setlist song {SetlistSongId}", userId, setlistSongId);
+            _logger.LogError(ex, "Database error during setlist song authorization for user {UserId}, setlist song {SetlistSongId}", userId, setlistSongId);
+            return AuthorizationResult.NotFound(userId, "SetlistSong", setlistSongId.ToString(), action.ToString());
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument during setlist song authorization for user {UserId}, setlist song {SetlistSongId}", userId, setlistSongId);
+            return AuthorizationResult.NotFound(userId, "SetlistSong", setlistSongId.ToString(), action.ToString());
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation during setlist song authorization for user {UserId}, setlist song {SetlistSongId}", userId, setlistSongId);
             return AuthorizationResult.NotFound(userId, "SetlistSong", setlistSongId.ToString(), action.ToString());
         }
     }
@@ -254,9 +279,31 @@ public class EnhancedAuthorizationService
 
             return results;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Exception during bulk song authorization for user {UserId}", userId);
+            _logger.LogError(ex, "Database error during bulk song authorization for user {UserId}", userId);
+            
+            // Return failure for all songs on exception
+            foreach (var songId in songIdList)
+            {
+                results[songId] = AuthorizationResult.NotFound(userId, "Song", songId.ToString(), action.ToString());
+            }
+            return results;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument during bulk song authorization for user {UserId}", userId);
+            
+            // Return failure for all songs on exception
+            foreach (var songId in songIdList)
+            {
+                results[songId] = AuthorizationResult.NotFound(userId, "Song", songId.ToString(), action.ToString());
+            }
+            return results;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation during bulk song authorization for user {UserId}", userId);
             
             // Return failure for all songs on exception
             foreach (var songId in songIdList)
@@ -318,9 +365,19 @@ public class EnhancedAuthorizationService
             ResourceAuthorizationHelper.LogAuthorizationSuccess(_logger, successResult);
             return successResult;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Exception during add song to setlist authorization for user {UserId}, setlist {SetlistId}, song {SongId}", userId, setlistId, songId);
+            _logger.LogError(ex, "Database error during add song to setlist authorization for user {UserId}, setlist {SetlistId}, song {SongId}", userId, setlistId, songId);
+            return AuthorizationResult.NotFound(userId, "SetlistSong", $"{setlistId}-{songId}", "AddSongToSetlist");
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument during add song to setlist authorization for user {UserId}, setlist {SetlistId}, song {SongId}", userId, setlistId, songId);
+            return AuthorizationResult.NotFound(userId, "SetlistSong", $"{setlistId}-{songId}", "AddSongToSetlist");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation during add song to setlist authorization for user {UserId}, setlist {SetlistId}, song {SongId}", userId, setlistId, songId);
             return AuthorizationResult.NotFound(userId, "SetlistSong", $"{setlistId}-{songId}", "AddSongToSetlist");
         }
     }

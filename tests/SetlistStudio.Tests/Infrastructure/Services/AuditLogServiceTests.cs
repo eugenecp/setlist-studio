@@ -515,7 +515,7 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to create audit log")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Context disposed error creating audit log")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -536,7 +536,8 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to retrieve audit logs")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving audit logs") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving audit logs")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -599,7 +600,8 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Failed to retrieve audit logs for {tableName} {recordId}")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Database error retrieving audit logs for {tableName} {recordId}") || 
+                                            v.ToString()!.Contains($"Invalid operation retrieving audit logs for {tableName} {recordId}")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -641,7 +643,8 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Failed to retrieve audit logs for correlation ID {correlationId}")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Database error retrieving audit logs for correlation ID {correlationId}") || 
+                                            v.ToString()!.Contains($"Invalid operation retrieving audit logs for correlation ID {correlationId}")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -663,7 +666,9 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to delete old audit logs older than")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Concurrency error deleting old audit logs older than") || 
+                                            v.ToString()!.Contains("Database error deleting old audit logs older than") || 
+                                            v.ToString()!.Contains("Invalid operation deleting old audit logs older than")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -787,7 +792,7 @@ public class AuditLogServiceTests : IDisposable
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to enhance audit log with HTTP context information")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Invalid operation enhancing audit log with HTTP context information")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

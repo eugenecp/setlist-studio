@@ -69,9 +69,21 @@ public class AuditLogService : IAuditLogService
             _logger.LogDebug("Audit log created: {Action} on {TableName} {RecordId} by user {UserId}", 
                 action, tableName, recordId, userId);
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Failed to create audit log: {Action} on {TableName} {RecordId} by user {UserId}", 
+            _logger.LogError(ex, "Database error creating audit log: {Action} on {TableName} {RecordId} by user {UserId}", 
+                action, tableName, recordId, userId);
+            // Don't throw - audit logging failures should not break the main operation
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument creating audit log: {Action} on {TableName} {RecordId} by user {UserId}", 
+                action, tableName, recordId, userId);
+            // Don't throw - audit logging failures should not break the main operation
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Context disposed error creating audit log: {Action} on {TableName} {RecordId} by user {UserId}", 
                 action, tableName, recordId, userId);
             // Don't throw - audit logging failures should not break the main operation
         }
@@ -112,9 +124,14 @@ public class AuditLogService : IAuditLogService
                 .Take(pageSize)
                 .ToListAsync();
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Failed to retrieve audit logs");
+            _logger.LogError(ex, "Invalid operation retrieving audit logs");
+            return Enumerable.Empty<AuditLog>();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument retrieving audit logs");
             return Enumerable.Empty<AuditLog>();
         }
     }
@@ -135,9 +152,14 @@ public class AuditLogService : IAuditLogService
                 .OrderByDescending(a => a.Timestamp)
                 .ToListAsync();
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Failed to retrieve audit logs for {TableName} {RecordId}", tableName, recordId);
+            _logger.LogError(ex, "Database error retrieving audit logs for {TableName} {RecordId}", tableName, recordId);
+            return Enumerable.Empty<AuditLog>();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation retrieving audit logs for {TableName} {RecordId}", tableName, recordId);
             return Enumerable.Empty<AuditLog>();
         }
     }
@@ -155,9 +177,14 @@ public class AuditLogService : IAuditLogService
                 .OrderBy(a => a.Timestamp)
                 .ToListAsync();
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Failed to retrieve audit logs for correlation ID {CorrelationId}", correlationId);
+            _logger.LogError(ex, "Database error retrieving audit logs for correlation ID {CorrelationId}", correlationId);
+            return Enumerable.Empty<AuditLog>();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation retrieving audit logs for correlation ID {CorrelationId}", correlationId);
             return Enumerable.Empty<AuditLog>();
         }
     }
@@ -182,9 +209,19 @@ public class AuditLogService : IAuditLogService
 
             return oldLogs.Count;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Failed to delete old audit logs older than {CutoffDate}", cutoffDate);
+            _logger.LogError(ex, "Concurrency error deleting old audit logs older than {CutoffDate}", cutoffDate);
+            return 0;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error deleting old audit logs older than {CutoffDate}", cutoffDate);
+            return 0;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation deleting old audit logs older than {CutoffDate}", cutoffDate);
             return 0;
         }
     }
@@ -218,9 +255,13 @@ public class AuditLogService : IAuditLogService
                 auditLog.UserId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
             }
         }
-        catch (Exception ex)
+        catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Failed to enhance audit log with HTTP context information");
+            _logger.LogWarning(ex, "Invalid argument enhancing audit log with HTTP context information");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation enhancing audit log with HTTP context information");
         }
     }
 
@@ -254,6 +295,6 @@ public class AuditLogService : IAuditLogService
         }
 
         // Fall back to remote IP address
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        return httpContext.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
     }
 }

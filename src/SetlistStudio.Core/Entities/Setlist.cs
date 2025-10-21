@@ -93,7 +93,7 @@ public class Setlist
     /// </summary>
     public int CalculatedDurationMinutes => SetlistSongs
         .Where(ss => ss.Song.DurationSeconds.HasValue)
-        .Sum(ss => ss.Song.DurationSeconds!.Value) / 60;
+        .Sum(ss => ss.Song.DurationSeconds.GetValueOrDefault()) / 60;
 
     /// <summary>
     /// Helper property to get song count

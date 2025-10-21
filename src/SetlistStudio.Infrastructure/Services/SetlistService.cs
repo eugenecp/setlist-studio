@@ -72,9 +72,19 @@ public class SetlistService : ISetlistService
 
             return (setlists, totalCount);
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Error retrieving setlists for user {UserId}", userId);
+            _logger.LogError(ex, "Invalid operation while retrieving setlists for user {UserId}", userId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument while retrieving setlists for user {UserId}", userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error while retrieving setlists for user {UserId}", userId);
             throw;
         }
     }
@@ -95,9 +105,14 @@ public class SetlistService : ISetlistService
 
             return setlist;
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Error retrieving setlist {SetlistId} for user {UserId}", setlistId, userId);
+            _logger.LogError(ex, "Invalid operation while retrieving setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error while retrieving setlist {SetlistId} for user {UserId}", setlistId, userId);
             throw;
         }
     }
@@ -137,11 +152,19 @@ public class SetlistService : ISetlistService
 
             return setlist;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
             var sanitizedName = SecureLoggingHelper.SanitizeMessage(setlist.Name);
             var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(setlist.UserId);
-            _logger.LogError(ex, "Error creating setlist '{Name}' for user {UserId}", 
+            _logger.LogError(ex, "Database error creating setlist '{Name}' for user {UserId}", 
+                sanitizedName, sanitizedUserId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedName = SecureLoggingHelper.SanitizeMessage(setlist.Name);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(setlist.UserId);
+            _logger.LogError(ex, "Invalid argument creating setlist '{Name}' for user {UserId}", 
                 sanitizedName, sanitizedUserId);
             throw;
         }
@@ -196,9 +219,14 @@ public class SetlistService : ISetlistService
 
             return existingSetlist;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error updating setlist {SetlistId} for user {UserId}", setlist.Id, userId);
+            _logger.LogError(ex, "Concurrency error updating setlist {SetlistId} for user {UserId}", setlist.Id, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error updating setlist {SetlistId} for user {UserId}", setlist.Id, userId);
             throw;
         }
     }
@@ -227,9 +255,24 @@ public class SetlistService : ISetlistService
 
             return true;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error deleting setlist {SetlistId} for user {UserId}", setlistId, userId);
+            _logger.LogError(ex, "Concurrency error deleting setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error deleting setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Database error deleting setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Database error deleting setlist {SetlistId} for user {UserId}", setlistId, userId);
             throw;
         }
     }
@@ -255,9 +298,21 @@ public class SetlistService : ISetlistService
 
             return result;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error adding song {SongId} to setlist {SetlistId} for user {UserId}", 
+            _logger.LogError(ex, "Database error adding song {SongId} to setlist {SetlistId} for user {UserId}", 
+                songId, setlistId, userId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument adding song {SongId} to setlist {SetlistId} for user {UserId}", 
+                songId, setlistId, userId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation adding song {SongId} to setlist {SetlistId} for user {UserId}", 
                 songId, setlistId, userId);
             throw;
         }
@@ -318,9 +373,8 @@ public class SetlistService : ISetlistService
     {
         if (!position.HasValue) return;
 
-        var positionValue = position.Value;
         var songsToShift = await _context.SetlistSongs
-            .Where(ss => ss.SetlistId == setlistId && ss.Position >= positionValue)
+            .Where(ss => ss.SetlistId == setlistId && ss.Position >= position.Value)
             .ToListAsync();
 
         foreach (var songToShift in songsToShift)
@@ -395,9 +449,15 @@ public class SetlistService : ISetlistService
 
             return true;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error removing song {SongId} from setlist {SetlistId} for user {UserId}", 
+            _logger.LogError(ex, "Concurrency error removing song {SongId} from setlist {SetlistId} for user {UserId}", 
+                songId, setlistId, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error removing song {SongId} from setlist {SetlistId} for user {UserId}", 
                 songId, setlistId, userId);
             throw;
         }
@@ -442,9 +502,19 @@ public class SetlistService : ISetlistService
 
             return true;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error reordering setlist {SetlistId} for user {UserId}", setlistId, userId);
+            _logger.LogError(ex, "Concurrency error reordering setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error reordering setlist {SetlistId} for user {UserId}", setlistId, userId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation reordering setlist {SetlistId} for user {UserId}", setlistId, userId);
             throw;
         }
     }
@@ -494,9 +564,15 @@ public class SetlistService : ISetlistService
 
             return setlistSong;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error updating setlist song {SetlistSongId} for user {UserId}", 
+            _logger.LogError(ex, "Concurrency error updating setlist song {SetlistSongId} for user {UserId}", 
+                setlistSongId, userId);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error updating setlist song {SetlistSongId} for user {UserId}", 
                 setlistSongId, userId);
             throw;
         }
@@ -522,9 +598,15 @@ public class SetlistService : ISetlistService
 
             return newSetlist;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error copying setlist {SetlistId} for user {UserId}", 
+            _logger.LogError(ex, "Database error copying setlist {SetlistId} for user {UserId}", 
+                sourceSetlistId, userId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument copying setlist {SetlistId} for user {UserId}", 
                 sourceSetlistId, userId);
             throw;
         }
