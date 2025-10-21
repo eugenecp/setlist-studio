@@ -7,7 +7,7 @@ namespace SetlistStudio.Tests.Core.Validation
 {
     /// <summary>
     /// Advanced tests for SanitizedStringAttribute focusing on edge cases, 
-    /// error conditions, and validation boundaries to achieve 90%+ branch coverage.
+    /// error conditions, and validation boundaries to achieve 80%+ branch coverage.
     /// 
     /// These tests complement the base SanitizedStringAttributeTests.cs by targeting
     /// specific uncovered branches and complex validation scenarios.

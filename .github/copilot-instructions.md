@@ -4,7 +4,7 @@
 
 ### Essential Rules
 - **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
-- **Coverage Target**: 90%+ line and branch coverage
+- **Coverage Target**: 80%+ line and branch coverage
 - **Security Analysis**: All code must pass CodeQL security scans with zero high/critical issues
 - **Architecture**: Clean Architecture (Core/Infrastructure/Web)
 - **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
@@ -56,11 +56,11 @@
 
 ### Coverage Standards
 
-Setlist Studio maintains **100% test success rate requirement** with minimum 90% code coverage for both line and branch coverage at file and project levels.
+Setlist Studio maintains **100% test success rate requirement** with minimum 80% code coverage for both line and branch coverage at file and project levels.
 
 **PRIORITY: Individual File Coverage First**
-- **Target each file to 90%+ line AND branch coverage before moving to the next file**
-- **Focus on files closest to 90% threshold first** (e.g., 85%+ files get priority)
+- **Target each file to 80%+ line AND branch coverage before moving to the next file**
+- **Focus on files closest to 80% threshold first** (e.g., 75%+ files get priority)
 - **Complete one file at a time** rather than spreading effort across multiple files
 - **Use file-specific coverage analysis** to identify exact uncovered lines and branches
 - **Create targeted tests** for specific line coverage gaps and branch conditions
@@ -70,10 +70,10 @@ Setlist Studio maintains **100% test success rate requirement** with minimum 90%
 - **Test Success Rate**: **100% of all tests must pass** - zero tolerance for failing tests
 - **Build Quality**: **Zero build warnings** in main and test projects - clean builds required
 - **Security Analysis**: **Zero high/critical CodeQL security issues** - all security vulnerabilities must be resolved
-- **Individual File Coverage**: **Each file must achieve at least 90% line AND branch coverage before moving to next file**
-- **Line Coverage**: Each file must achieve at least 90% line coverage
-- **Branch Coverage**: Each file must achieve at least 90% branch coverage
-- **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
+- **Individual File Coverage**: **Each file must achieve at least 80% line AND branch coverage before moving to next file**
+- **Line Coverage**: Each file must achieve at least 80% line coverage
+- **Branch Coverage**: Each file must achieve at least 80% branch coverage
+- **Project Coverage**: Overall project must maintain at least 80% line and branch coverage
 - **CRAP Score**: All methods must maintain passing CRAP scores
 - **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
 - **Test Reliability**: All tests must be deterministic and pass consistently
@@ -142,7 +142,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 - **File Size**: Base test files exceed ~1,400 lines
 - **Different Purposes**: Tests target specific coverage gaps rather than core business logic
 - **Specialized Testing**: Error handling, validation boundaries, configuration scenarios
-- **Coverage Targeting**: Tests specifically to reach 90%+ line and branch coverage
+- **Coverage Targeting**: Tests specifically to reach 80%+ line and branch coverage
 - **Base Tests Complete**: Core functionality is fully tested in base test file
 
 #### Advanced Test Content Guidelines
@@ -222,7 +222,7 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### Coverage Improvement Methodology
 
-1. **Identify Gaps**: Use coverage reports to find files below 90% line/branch coverage
+1. **Identify Gaps**: Use coverage reports to find files below 80% line/branch coverage
 2. **Analyze Uncovered Code**: Determine if gaps are in core logic (add to base tests) or edge cases (create advanced tests)
 3. **Strategic Testing**: Create targeted advanced tests for authentication, validation, error handling
 4. **Validate Impact**: Run coverage analysis after adding advanced tests to measure improvement
@@ -326,7 +326,7 @@ The automated Security Scan Summary in workflows may show "secure" status even w
 
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
-- **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 90%+ coverage required before merge
+- **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 80%+ coverage required before merge
 - **CodeQL Analysis**: Mandatory static security analysis on all pull requests - **CodeQL findings override general security summaries**
 - **Code Review**: All changes require peer review and approval
 - **Zero Tolerance**: No failing tests, build warnings, or high/critical security issues allowed in any branch or pull request
@@ -344,7 +344,7 @@ The automated Security Scan Summary in workflows may show "secure" status even w
 # Run all tests (must achieve 100% success rate)
 dotnet test
 
-# Run tests with coverage (must achieve 100% success with 90%+ coverage)
+# Run tests with coverage (must achieve 100% success with 80%+ coverage)
 dotnet test --collect:"XPlat Code Coverage"
 
 # Run specific test class (verify 100% success for targeted testing)
@@ -408,7 +408,7 @@ Use realistic musical data in all examples, tests, and documentation:
 
 "Create performance edge case tests for large datasets, concurrent operations, and resource exhaustion scenarios"
 
-"Analyze current code coverage and identify classes/methods missing tests to reach 90% line and branch coverage"
+"Analyze current code coverage and identify classes/methods missing tests to reach 80% line and branch coverage"
 
 "Generate coverage report in CoverageReport/NewFeature and analyze which classes need additional testing"
 ```
@@ -665,7 +665,7 @@ When contributing to Setlist Studio:
 3. **Security first**: Always implement security requirements (validation, authorization, secure headers, rate limiting) before adding functionality
 4. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
 5. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-6. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
+6. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 80%+ line and branch coverage
 7. **Organize tests strategically**: 
    - Add core functionality tests to base test files (e.g., `SetlistServiceTests.cs`)
    - Create advanced test files for edge cases, error handling, and coverage gaps when base files exceed ~1,400 lines
@@ -693,7 +693,7 @@ When contributing to Setlist Studio:
 
 **Testing & Quality:**
 - [ ] Write tests first (TDD approach recommended)
-- [ ] Ensure 90%+ line and branch coverage for new code
+- [ ] Ensure 80%+ line and branch coverage for new code
 - [ ] Include security test cases (authentication, authorization, validation)
 - [ ] Test with malicious inputs and edge cases
 

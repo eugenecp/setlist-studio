@@ -195,13 +195,13 @@ jobs:
       with:
         filename: './test-results/**/coverage.cobertura.xml' # Cobertura coverage file
         badge: true                      # Generate coverage badge
-        fail_below_min: false            # Don't fail workflow on low coverage (set true to enforce)
+        fail_below_min: true             # Fail workflow when coverage drops below 80%
         format: markdown                 # Output format for GitHub display
         hide_branch_rate: false          # Show branch coverage metrics
         hide_complexity: false           # Show code complexity metrics
         indicators: true                 # Show visual indicators for coverage levels
         output: both                     # Output to console and file
-        thresholds: '60 80'             # Warning at 60%, good at 80% coverage
+        thresholds: '80 90'              # Fail below 80%, excellent at 90% coverage
     
     # Step 13: Create comprehensive test and build summary for pull requests
     # Provides detailed feedback on PR quality and test results

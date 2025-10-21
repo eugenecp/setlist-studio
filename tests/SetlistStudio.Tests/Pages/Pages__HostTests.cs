@@ -8,7 +8,7 @@ namespace SetlistStudio.Tests.Pages;
 
 /// <summary>
 /// Tests for Pages__Host razor page
-/// Target: Achieve 90%+ line and branch coverage
+/// Target: Achieve 80%+ line and branch coverage
 /// Note: Testing the _Host page through integration tests since it's a Razor page
 /// </summary>
 public class Pages__HostTests : IClassFixture<TestWebApplicationFactory>

@@ -14,7 +14,7 @@ namespace SetlistStudio.Tests.Web.Controllers;
 
 /// <summary>
 /// Advanced tests for SetlistsController targeting edge cases, error conditions, and validation boundaries
-/// to improve branch coverage from 58.8% to 90%+ by covering uncovered branches
+/// to improve branch coverage from 58.8% to 80%+ by covering uncovered branches
 /// </summary>
 public class SetlistsControllerAdvancedTests
 {

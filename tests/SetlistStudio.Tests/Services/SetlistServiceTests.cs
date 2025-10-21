@@ -11,7 +11,7 @@ namespace SetlistStudio.Tests.Services;
 
 /// <summary>
 /// Comprehensive tests for SetlistService covering all scenarios
-/// Target: Maintain 90%+ line and branch coverage
+/// Target: Maintain 80%+ line and branch coverage
 /// </summary>
 public class SetlistServiceTests : IDisposable
 {
@@ -1254,7 +1254,7 @@ public class SetlistServiceTests : IDisposable
 
     #endregion
 
-    #region Enhanced Coverage Tests for 90% Target
+    #region Enhanced Coverage Tests for 80% Target
 
     [Fact]
     public async Task GetSetlistsAsync_ShouldHandleNullSearchTerm_WhenSearchTermIsNull()
@@ -1428,7 +1428,7 @@ public class SetlistServiceTests : IDisposable
         result.IsOptional.Should().Be(false);
     }
 
-    #region Additional Coverage Tests for 90% Target
+    #region Additional Coverage Tests for 80% Target
 
     [Fact]
     public async Task GetSetlistsAsync_ShouldReturnFilteredSetlists_WhenSearchTermMatchesVenue()
