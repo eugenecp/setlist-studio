@@ -82,7 +82,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
     public async Task Report_WithInvalidJson_ShouldReturn400BadRequest()
     {
         // Arrange
-        var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -97,7 +97,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
     public async Task Report_WithEmptyBody_ShouldReturn400BadRequest()
     {
         // Arrange
-        var content = new StringContent("", Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent("", Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -130,7 +130,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -163,7 +163,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -199,7 +199,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await client.PostAsync("/api/cspreport/report", content);
@@ -293,7 +293,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         var tasks = new List<Task<HttpResponseMessage>>();
         for (int i = 0; i < 10; i++)
         {
-            var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+            using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
             tasks.Add(_client.PostAsync("/api/cspreport/report", content));
         }
 
@@ -325,7 +325,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -425,7 +425,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -457,7 +457,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -489,7 +489,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -513,7 +513,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
@@ -543,7 +543,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
@@ -573,7 +573,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
@@ -611,7 +611,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -627,7 +627,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         // For now, we'll test with malformed data that might cause processing issues
         var invalidJson = @"{""csp-report"":{""document-uri"":""https://example.com""";
         
-        var content = new StringContent(invalidJson, Encoding.UTF8, "application/json");
+        using var content = new StringContent(invalidJson, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -642,7 +642,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var incompleteReport = new { SomeOtherProperty = "value" };
         var json = JsonSerializer.Serialize(incompleteReport);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -705,7 +705,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -729,7 +729,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -755,7 +755,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -781,7 +781,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
