@@ -336,16 +336,11 @@ public class ProgramAdvancedTests : IDisposable
         {
             var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            if (string.Equals(environment, "Test", StringComparison.OrdinalIgnoreCase))
-            {
-                connectionString = "Data Source=:memory:";
-            }
-            else
-            {
-                connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+            connectionString = string.Equals(environment, "Test", StringComparison.OrdinalIgnoreCase) 
+                ? "Data Source=:memory:"
+                : Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
                     ? "Data Source=/app/data/setliststudio.db"
                     : "Data Source=setliststudio.db";
-            }
         }
         
         return connectionString;

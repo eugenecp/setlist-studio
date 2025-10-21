@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
 
@@ -104,12 +105,9 @@ public class SanitizedStringAttribute : ValidationAttribute
         }
 
         // Check for dangerous patterns
-        foreach (var pattern in DangerousPatterns)
+        if (DangerousPatterns.Any(pattern => input.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
         {
-            if (input.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return true;
         }
 
         // Check for control characters
@@ -162,14 +160,7 @@ public class SanitizedStringAttribute : ValidationAttribute
     /// </summary>
     private static bool IsOnlyAllowedWhitespace(string input)
     {
-        foreach (char c in input)
-        {
-            if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
-            {
-                return false;
-            }
-        }
-        return true;
+        return input.All(c => c == ' ' || c == '\t' || c == '\n' || c == '\r');
     }
 
     /// <summary>
@@ -262,12 +253,9 @@ public class SanitizedStringAttribute : ValidationAttribute
         }
 
         // Check for obviously dangerous patterns
-        foreach (var pattern in DangerousPatterns)
+        if (DangerousPatterns.Any(pattern => input.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
         {
-            if (input.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
+            return false;
         }
 
         // Check for script tags

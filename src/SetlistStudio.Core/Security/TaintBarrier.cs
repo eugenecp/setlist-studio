@@ -36,9 +36,19 @@ namespace SetlistStudio.Core.Security
                 // Additional verification - ensure no taint can leak
                 return CreateNewStringInstance(result ?? string.Empty);
             }
-            catch
+            catch (JsonException)
             {
-                // If anything fails, return safe default
+                // If JSON serialization fails, return safe default
+                return "[SANITIZED]";
+            }
+            catch (NotSupportedException)
+            {
+                // If serialization is not supported for the type, return safe default
+                return "[SANITIZED]";
+            }
+            catch (ArgumentException)
+            {
+                // If arguments are invalid, return safe default
                 return "[SANITIZED]";
             }
         }
@@ -62,8 +72,19 @@ namespace SetlistStudio.Core.Security
                 // Break taint through complete reconstruction
                 return BreakTaint(sanitized);
             }
-            catch
+            catch (ArgumentNullException)
             {
+                // If object is null, return safe default
+                return "[OBJECT_SANITIZED]";
+            }
+            catch (InvalidOperationException)
+            {
+                // If object operations fail, return safe default
+                return "[OBJECT_SANITIZED]";
+            }
+            catch (NotSupportedException)
+            {
+                // If object type is not supported, return safe default
                 return "[OBJECT_SANITIZED]";
             }
         }

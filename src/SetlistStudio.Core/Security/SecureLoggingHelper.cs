@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace SetlistStudio.Core.Security;
@@ -104,9 +105,19 @@ public static class SecureLoggingHelper
                     return "[REDACTED]";
                 });
             }
-            catch
+            catch (RegexMatchTimeoutException)
             {
-                // If regex fails, continue with other patterns
+                // If regex times out, continue with other patterns
+                continue;
+            }
+            catch (InvalidOperationException)
+            {
+                // If regex operation is invalid, continue with other patterns
+                continue;
+            }
+            catch (ArgumentException)
+            {
+                // If regex arguments are invalid, continue with other patterns
                 continue;
             }
         }
@@ -189,9 +200,19 @@ public static class SecureLoggingHelper
                     return "[SANITIZED]";
                 });
             }
-            catch
+            catch (RegexMatchTimeoutException)
             {
-                // If regex fails, continue with other patterns
+                // If regex times out, continue with other patterns
+                continue;
+            }
+            catch (InvalidOperationException)
+            {
+                // If regex operation is invalid, continue with other patterns
+                continue;
+            }
+            catch (ArgumentException)
+            {
+                // If regex arguments are invalid, continue with other patterns
                 continue;
             }
         }
@@ -279,9 +300,24 @@ public static class SecureLoggingHelper
                     result[propertyName] = typeName;
                 }
             }
-            catch
+            catch (TargetParameterCountException)
             {
-                // If we can't read the property, skip it
+                // If property has parameters and can't be read, skip it
+                continue;
+            }
+            catch (TargetInvocationException)
+            {
+                // If property accessor throws an exception, skip it
+                continue;
+            }
+            catch (ArgumentException)
+            {
+                // If property access arguments are invalid, skip it
+                continue;
+            }
+            catch (NotSupportedException)
+            {
+                // If property type is not supported for reflection, skip it
                 continue;
             }
         }

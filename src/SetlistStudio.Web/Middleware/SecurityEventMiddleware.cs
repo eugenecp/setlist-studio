@@ -88,19 +88,18 @@ public class SecurityEventMiddleware
             "exec(", "execute(", "sp_executesql", "xp_cmdshell"
         };
 
-        foreach (var pattern in suspiciousUrlPatterns)
+        var suspiciousPattern = suspiciousUrlPatterns.FirstOrDefault(pattern =>
+            requestPath.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
+            request.QueryString.Value?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true);
+            
+        if (suspiciousPattern != null)
         {
-            if (requestPath.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
-                request.QueryString.Value?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true)
-            {
-                securityEventHandler.OnSuspiciousActivity(
-                    context,
-                    "MaliciousUrlPattern",
-                    $"Suspicious pattern '{pattern}' detected in request",
-                    userId,
-                    SecurityEventSeverity.High);
-                break;
-            }
+            securityEventHandler.OnSuspiciousActivity(
+                context,
+                "MaliciousUrlPattern",
+                $"Suspicious pattern '{suspiciousPattern}' detected in request",
+                userId,
+                SecurityEventSeverity.High);
         }
 
         // Check for suspicious user agents

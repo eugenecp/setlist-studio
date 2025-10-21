@@ -456,7 +456,7 @@ $RECYCLE.BIN/
 ## CodeQL databases are large binary files that should not be committed
 ## They can be regenerated from source code during analysis
 codeql-database/
-**/codeql-database/
+**/codeql-database*/
 *.sarif
 *-results.sarif
 *-results*.csv

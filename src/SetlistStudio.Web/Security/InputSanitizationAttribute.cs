@@ -15,13 +15,11 @@ namespace SetlistStudio.Web.Security
         public override void OnActionExecuting(ActionExecutingContext context)
         {
             // Validate and sanitize all action parameters
-            foreach (var parameter in context.ActionArguments.ToList())
+            var parametersToSanitize = context.ActionArguments.Where(p => p.Value != null).ToList();
+            foreach (var parameter in parametersToSanitize)
             {
-                if (parameter.Value != null)
-                {
-                    var sanitizedValue = SanitizeObject(parameter.Value);
-                    context.ActionArguments[parameter.Key] = sanitizedValue;
-                }
+                var sanitizedValue = SanitizeObject(parameter.Value);
+                context.ActionArguments[parameter.Key] = sanitizedValue;
             }
 
             // Validate model state after sanitization

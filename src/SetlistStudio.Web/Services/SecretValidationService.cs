@@ -151,44 +151,35 @@ public class SecretValidationService
         }
 
         // Validate OAuth secret format
-        if (secretKey.Contains("ClientId") || secretKey.Contains("AppId"))
+        if ((secretKey.Contains("ClientId") || secretKey.Contains("AppId")) && secretValue.Length < 10)
         {
-            if (secretValue.Length < 10)
-            {
-                return new SecretValidationError(
-                    secretKey,
-                    description,
-                    SecretValidationIssue.InvalidFormat,
-                    "OAuth Client ID appears to be too short"
-                );
-            }
+            return new SecretValidationError(
+                secretKey,
+                description,
+                SecretValidationIssue.InvalidFormat,
+                "OAuth Client ID appears to be too short"
+            );
         }
 
-        if (secretKey.Contains("ClientSecret") || secretKey.Contains("AppSecret"))
+        if ((secretKey.Contains("ClientSecret") || secretKey.Contains("AppSecret")) && secretValue.Length < 16)
         {
-            if (secretValue.Length < 16)
-            {
-                return new SecretValidationError(
-                    secretKey,
-                    description,
-                    SecretValidationIssue.InvalidFormat,
-                    "OAuth Client Secret appears to be too short"
-                );
-            }
+            return new SecretValidationError(
+                secretKey,
+                description,
+                SecretValidationIssue.InvalidFormat,
+                "OAuth Client Secret appears to be too short"
+            );
         }
 
         // Validate connection string format
-        if (secretKey.Contains("ConnectionString"))
+        if (secretKey.Contains("ConnectionString") && !IsValidConnectionString(secretValue))
         {
-            if (!IsValidConnectionString(secretValue))
-            {
-                return new SecretValidationError(
-                    secretKey,
-                    description,
-                    SecretValidationIssue.InvalidFormat,
-                    "Connection string format appears invalid"
-                );
-            }
+            return new SecretValidationError(
+                secretKey,
+                description,
+                SecretValidationIssue.InvalidFormat,
+                "Connection string format appears invalid"
+            );
         }
 
         return null;
