@@ -149,7 +149,8 @@ public class SecureLoggingHelperTests
     }
 
     /// <summary>
-    /// Tests that null messages are handled gracefully.
+    /// Tests that null input is handled gracefully without throwing exceptions.
+    /// Returns empty string to prevent user-controlled bypass warnings.
     /// </summary>
     [Fact]
     public void SanitizeMessage_ShouldHandleNullInput()
@@ -158,7 +159,7 @@ public class SecureLoggingHelperTests
         var result = SecureLoggingHelper.SanitizeMessage(null!);
 
         // Assert
-        result.Should().BeNull();
+        result.Should().Be(string.Empty);
     }
 
     /// <summary>
@@ -320,8 +321,8 @@ public class SecureLoggingHelperTests
     [InlineData("test.user@setliststudio.com", "test.user@[DOMAIN]")]
     [InlineData("user123", "user123")]
     [InlineData("guid-like-id-12345", "guid-like-id-12345")]
-    [InlineData(null, null)]
-    [InlineData("", "")]
+    [InlineData(null, "anonymous")]
+    [InlineData("", "anonymous")]
     public void CreateSecureLogEntry_ShouldSanitizeUserIdProperly(string? input, string? expected)
     {
         // Act

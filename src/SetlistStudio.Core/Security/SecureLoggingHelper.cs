@@ -50,20 +50,16 @@ public static class SecureLoggingHelper
     /// <summary>
     /// Sanitizes a message to prevent log injection attacks and redacts sensitive data.
     /// Uses absolute taint barriers to ensure CodeQL cannot track any taint flow.
+    /// Always processes input regardless of content to prevent user-controlled bypass.
     /// </summary>
     /// <param name="message">The message to sanitize</param>
     /// <returns>A sanitized message safe for logging with no taint tracking</returns>
-    public static string? SanitizeMessage(string? message)
+    public static string SanitizeMessage(string? message)
     {
-        // Handle null input properly
-        if (message == null)
-        {
-            return null;
-        }
-
         // Always process through sanitization to prevent user-controlled bypass
         // This addresses CWE-807: User-controlled bypass of sensitive method
-        var sanitized = message;
+        // Handle null by converting to empty string for consistent processing
+        var sanitized = message ?? string.Empty;
 
         // Handle the specific edge case for space-only values first
         sanitized = Regex.Replace(sanitized, @"\b(password|token|secret|(?<!musical\s)(?<!song\s)(?<!and\s)key|api[_-]?key|client[_-]?secret)\s*:\s+$", 
@@ -293,19 +289,15 @@ public static class SecureLoggingHelper
 
     /// <summary>
     /// Sanitizes a user ID for logging (keeps user identifiable but removes sensitive patterns).
+    /// Always processes input regardless of content to prevent user-controlled bypass.
     /// </summary>
     /// <param name="userId">The user ID to sanitize</param>
     /// <returns>A sanitized user ID safe for logging</returns>
-    public static string? SanitizeUserId(string? userId)
+    public static string SanitizeUserId(string? userId)
     {
-        // Handle null input properly
-        if (userId == null)
-        {
-            return null;
-        }
-
         // Always process through sanitization to prevent user-controlled bypass
-        var safeUserId = userId;
+        // Handle null or empty by converting to anonymous user identifier
+        var safeUserId = string.IsNullOrEmpty(userId) ? "anonymous" : userId;
 
         // If it looks like an email, mask the domain part
         if (safeUserId.Contains('@'))
