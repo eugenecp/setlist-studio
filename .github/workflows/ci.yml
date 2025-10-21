@@ -259,6 +259,7 @@ jobs:
       if: github.event_name == 'pull_request' # Only on pull requests
       with:
         recreate: true                   # Replace existing comment
+        header: build-test-summary       # Unique identifier for build and test summary
         path: pr-summary.md              # Path to summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
@@ -269,6 +270,7 @@ jobs:
       if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != '' # Only if coverage file exists
       with:
         recreate: false                  # Don't replace existing comments
+        header: coverage-report           # Unique identifier to distinguish from security comments
         path: code-coverage-results.md   # Path to coverage results file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
