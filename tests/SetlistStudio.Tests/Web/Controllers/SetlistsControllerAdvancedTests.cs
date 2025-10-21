@@ -198,7 +198,7 @@ public class SetlistsControllerAdvancedTests
     }
 
     [Fact]
-    public async Task SearchSetlists_WhenServiceThrowsException_ReturnsInternalServerError()
+    public async Task SearchSetlists_WhenServiceThrowsException_ReturnsServiceUnavailable()
     {
         // Arrange
         SetupAuthenticatedUser("test-user");
@@ -213,8 +213,8 @@ public class SetlistsControllerAdvancedTests
 
         // Assert
         var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        statusResult.StatusCode.Should().Be(500);
-        statusResult.Value.Should().Be("Internal server error");
+        statusResult.StatusCode.Should().Be(503);
+        statusResult.Value.Should().Be("Search service temporarily unavailable");
     }
 
     #endregion
@@ -732,7 +732,7 @@ public class SetlistsControllerAdvancedTests
     }
 
     [Fact]
-    public async Task GetSetlists_WithDatabaseConnectionException_ReturnsInternalServerError()
+    public async Task GetSetlists_WithDatabaseConnectionException_ReturnsServiceUnavailable()
     {
         // Arrange
         SetupAuthenticatedUser("test-user");
@@ -746,12 +746,12 @@ public class SetlistsControllerAdvancedTests
 
         // Assert
         var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        statusResult.StatusCode.Should().Be(500);
-        statusResult.Value.Should().Be("Internal server error");
+        statusResult.StatusCode.Should().Be(503);
+        statusResult.Value.Should().Be("Service temporarily unavailable");
     }
 
     [Fact]
-    public async Task CreateSetlist_WithDatabaseConstraintException_ReturnsInternalServerError()
+    public async Task CreateSetlist_WithDatabaseConstraintException_ReturnsServiceUnavailable()
     {
         // Arrange
         SetupAuthenticatedUser("test-user");
@@ -770,8 +770,8 @@ public class SetlistsControllerAdvancedTests
 
         // Assert
         var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        statusResult.StatusCode.Should().Be(500);
-        statusResult.Value.Should().Be("Internal server error");
+        statusResult.StatusCode.Should().Be(503);
+        statusResult.Value.Should().Be("Service temporarily unavailable");
     }
 
     #endregion

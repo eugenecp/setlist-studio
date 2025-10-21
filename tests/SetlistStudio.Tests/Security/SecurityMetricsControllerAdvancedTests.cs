@@ -146,8 +146,8 @@ public class SecurityMetricsControllerAdvancedTests
 
         // Assert
         var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(500);
-        objectResult.Value.Should().Be("Error retrieving security metrics");
+        objectResult.StatusCode.Should().Be(503);
+        objectResult.Value.Should().Be("Security metrics service temporarily unavailable");
     }
 
     [Fact]
@@ -537,11 +537,11 @@ public class SecurityMetricsControllerAdvancedTests
 
         // Assert
         var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(500);
+        objectResult.StatusCode.Should().Be(503);
         
         var health = objectResult.Value.Should().BeOfType<SecurityMonitoringHealth>().Subject;
-        health.Status.Should().Be("Unhealthy");
-        health.Details.Should().Be("Error checking security monitoring health");
+        health.Status.Should().Be("Degraded");
+        health.Details.Should().Be("Security metrics service temporarily unavailable");
     }
 
     #endregion

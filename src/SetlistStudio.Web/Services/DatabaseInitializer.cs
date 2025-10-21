@@ -26,9 +26,22 @@ public static class DatabaseInitializer
             
             logger.LogInformation("Database initialization completed successfully");
         }
+        catch (InvalidOperationException ex)
+        {
+            await LogDatabaseErrorDetailsAsync(context, logger, ex);
+            logger.LogError(ex, "Database configuration or state is invalid");
+            throw;
+        }
+        catch (TimeoutException ex)
+        {
+            await LogDatabaseErrorDetailsAsync(context, logger, ex);
+            logger.LogError(ex, "Database operation timed out during initialization");
+            throw;
+        }
         catch (Exception ex)
         {
             await LogDatabaseErrorDetailsAsync(context, logger, ex);
+            logger.LogError(ex, "Unexpected error during database initialization");
             throw;
         }
     }
@@ -123,9 +136,17 @@ public static class DatabaseInitializer
             
             await LogDatabaseFileDetailsAsync(connectionString, logger);
         }
+        catch (InvalidOperationException innerEx)
+        {
+            logger.LogError(innerEx, "Database connection configuration invalid");
+        }
+        catch (UnauthorizedAccessException innerEx)
+        {
+            logger.LogError(innerEx, "Insufficient permissions to access database file information");
+        }
         catch (Exception innerEx)
         {
-            logger.LogError(innerEx, "Failed to get database file information");
+            logger.LogError(innerEx, "Unexpected error getting database file information");
         }
     }
 

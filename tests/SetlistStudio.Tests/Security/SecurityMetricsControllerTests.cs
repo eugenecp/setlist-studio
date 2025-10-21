@@ -1027,12 +1027,12 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
         // Assert
         var statusCodeResult = result.Result as ObjectResult;
         statusCodeResult.Should().NotBeNull();
-        statusCodeResult!.StatusCode.Should().Be(500);
+        statusCodeResult!.StatusCode.Should().Be(503);
         
         var health = statusCodeResult.Value as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;
         health.Should().NotBeNull();
-        health!.Status.Should().Be("Unhealthy");
-        health.Details.Should().Be("Error checking security monitoring health");
+        health!.Status.Should().Be("Degraded");
+        health.Details.Should().Be("Security metrics service temporarily unavailable");
 
         _output.WriteLine("✓ Service exception returns unhealthy status");
     }
@@ -1180,8 +1180,8 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
         // Assert
         var statusCodeResult = result as ObjectResult;
         statusCodeResult.Should().NotBeNull();
-        statusCodeResult!.StatusCode.Should().Be(500);
-        statusCodeResult.Value.Should().Be("Error recording security event");
+        statusCodeResult!.StatusCode.Should().Be(503);
+        statusCodeResult.Value.Should().Be("Security event recording temporarily unavailable");
 
         _output.WriteLine("✓ Service exception properly handled with 500 status");
     }

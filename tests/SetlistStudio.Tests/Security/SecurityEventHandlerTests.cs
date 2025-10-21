@@ -412,7 +412,7 @@ public class SecurityEventHandlerTests
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log authentication success event")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Unexpected error logging authentication success event")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -527,12 +527,12 @@ public class SecurityEventHandlerTests
         var exception = Record.Exception(() => _securityEventHandler.OnLoginSuccess(_httpContext, user));
         exception.Should().BeNull("Exception should be handled gracefully");
 
-        // Verify error was logged
+        // Verify error was logged with specific message for InvalidOperationException
         _mockLogger.Verify(
             x => x.Log(
-                LogLevel.Error,
+                LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log authentication success event")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event logging service temporarily unavailable")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

@@ -50,9 +50,20 @@ public class SecurityMetricsController : ControllerBase
             var snapshot = _securityMetricsService.GetMetricsSnapshot();
             return Ok(snapshot);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to security metrics by user {UserId}", 
+                User.Identity?.Name ?? "Unknown");
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Security metrics service unavailable");
+            return StatusCode(503, "Security metrics service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving security metrics snapshot");
+            _logger.LogError(ex, "Unexpected error retrieving security metrics snapshot");
             return StatusCode(500, "Error retrieving security metrics");
         }
     }
@@ -95,9 +106,19 @@ public class SecurityMetricsController : ControllerBase
             var metrics = _securityMetricsService.GetDetailedMetrics(startTime, endTime);
             return Ok(metrics);
         }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.LogWarning(ex, "Invalid date range for security metrics");
+            return BadRequest("Invalid date range specified");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Security metrics service unavailable");
+            return StatusCode(503, "Security metrics service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving detailed security metrics");
+            _logger.LogError(ex, "Unexpected error retrieving detailed security metrics");
             return StatusCode(500, "Error retrieving detailed security metrics");
         }
     }
@@ -130,9 +151,19 @@ public class SecurityMetricsController : ControllerBase
             var metrics = _securityMetricsService.GetMetricsForPeriod(timeSpan);
             return Ok(metrics);
         }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.LogWarning(ex, "Invalid period value {Period} for security metrics", period);
+            return BadRequest("Invalid period specified");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Security metrics service unavailable for period {Period}", period);
+            return StatusCode(503, "Security metrics service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving security metrics for period {Period}", period);
+            _logger.LogError(ex, "Unexpected error retrieving security metrics for period {Period}", period);
             return StatusCode(500, "Error retrieving security metrics for period");
         }
     }
@@ -205,9 +236,29 @@ public class SecurityMetricsController : ControllerBase
 
             return Ok(dashboard);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to security dashboard by user {UserId}", User.Identity?.Name ?? "Unknown");
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid argument in security dashboard request");
+            return BadRequest("Invalid request parameters");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Security metrics service unavailable");
+            return StatusCode(503, "Security metrics service temporarily unavailable");
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Timeout retrieving security dashboard data");
+            return StatusCode(504, "Request timeout - please try again");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving security dashboard");
+            _logger.LogError(ex, "Unexpected error retrieving security dashboard");
             return StatusCode(500, "Error retrieving security dashboard");
         }
     }
@@ -241,9 +292,29 @@ public class SecurityMetricsController : ControllerBase
 
             return Ok(health);
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Security metrics service temporarily unavailable");
+            return StatusCode(503, new SecurityMonitoringHealth
+            {
+                Status = "Degraded",
+                Timestamp = DateTime.UtcNow,
+                Details = "Security metrics service temporarily unavailable"
+            });
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Timeout checking security monitoring health");
+            return StatusCode(504, new SecurityMonitoringHealth
+            {
+                Status = "Timeout",
+                Timestamp = DateTime.UtcNow,
+                Details = "Health check timeout - monitoring service may be overloaded"
+            });
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking security monitoring health");
+            _logger.LogError(ex, "Unexpected error checking security monitoring health");
             return StatusCode(500, new SecurityMonitoringHealth
             {
                 Status = "Unhealthy",
@@ -292,9 +363,24 @@ public class SecurityMetricsController : ControllerBase
 
             return Created("", new { Message = "Security event recorded successfully" });
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid security event data provided");
+            return BadRequest("Invalid event data provided");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized attempt to record security event by user {UserId}", User.Identity?.Name ?? "Unknown");
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Security event recording service unavailable");
+            return StatusCode(503, "Security event recording temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error recording manual security event");
+            _logger.LogError(ex, "Unexpected error recording manual security event");
             return StatusCode(500, "Error recording security event");
         }
     }

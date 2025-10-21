@@ -487,9 +487,19 @@ public class SecurityMetricsService : ISecurityMetricsService
                 await Task.Delay(TimeSpan.FromHours(1)); // Run cleanup every hour
                 ClearOldMetrics(TimeSpan.FromDays(7)); // Keep 7 days of metrics
             }
+            catch (OperationCanceledException)
+            {
+                // Expected when service is shutting down
+                _logger.LogInformation("Security metrics cleanup cancelled");
+                break;
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Metrics storage temporarily unavailable during cleanup");
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during security metrics cleanup");
+                _logger.LogError(ex, "Unexpected error during security metrics cleanup");
             }
         }
     }

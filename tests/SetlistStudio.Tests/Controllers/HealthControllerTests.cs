@@ -113,14 +113,14 @@ public class HealthControllerTests : IDisposable
         // Should still return "Healthy" for service, but database should show error
         statusProperty!.GetValue(healthStatus).Should().Be("Healthy");
         databaseProperty!.GetValue(healthStatus).Should().NotBe("Connected");
-        databaseProperty!.GetValue(healthStatus)?.ToString().Should().Be("Database connection failed");
+        databaseProperty!.GetValue(healthStatus)?.ToString().Should().Be("Database configuration error");
 
         // Verify warning was logged
         _mockLogger.Verify(
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database health check failed")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database configuration invalid during health check")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

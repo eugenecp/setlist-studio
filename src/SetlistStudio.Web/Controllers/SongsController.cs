@@ -35,10 +35,28 @@ public class SongsController : ControllerBase
             var (songs, totalCount) = await _songService.GetSongsAsync(userId);
             return Ok(new { songs, totalCount });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Unauthorized access to songs for user {UserId}", sanitizedUserId);
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Invalid argument while retrieving songs for user {UserId}", sanitizedUserId);
+            return BadRequest(new { error = "Invalid request parameters" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Invalid operation while retrieving songs for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "Service temporarily unavailable" });
+        }
         catch (Exception ex)
         {
             var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
-            _logger.LogError(ex, "Error retrieving songs for user {UserId}", sanitizedUserId);
+            _logger.LogError(ex, "Unexpected error retrieving songs for user {UserId}", sanitizedUserId);
             return StatusCode(500, new { error = "An error occurred while retrieving songs" });
         }
     }
@@ -64,10 +82,22 @@ public class SongsController : ControllerBase
             var (songs, totalCount) = await _songService.GetSongsAsync(userId, searchTerm: query);
             return Ok(new { songs, totalCount });
         }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Invalid search query for user {UserId}", sanitizedUserId);
+            return BadRequest(new { error = "Invalid search parameters" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Search service unavailable for user {UserId}", sanitizedUserId);
+            return StatusCode(503, new { error = "Search service temporarily unavailable" });
+        }
         catch (Exception ex)
         {
             var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
-            _logger.LogError(ex, "Error searching songs for user {UserId}", sanitizedUserId);
+            _logger.LogError(ex, "Unexpected error searching songs for user {UserId}", sanitizedUserId);
             return StatusCode(500, new { error = "An error occurred while searching songs" });
         }
     }
@@ -99,10 +129,25 @@ public class SongsController : ControllerBase
             var createdSong = await _songService.CreateSongAsync(song);
             return CreatedAtAction(nameof(GetSongs), new { id = createdSong.Id }, createdSong);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid song data provided");
+            return BadRequest(new { error = "Invalid song data provided" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized song creation attempt");
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Song service unavailable");
+            return StatusCode(503, new { error = "Song service temporarily unavailable" });
+        }
         catch (Exception ex)
         {
             // Log the actual exception for debugging but don't expose details to client
-            _logger.LogError(ex, "Error creating song for user");
+            _logger.LogError(ex, "Unexpected error creating song for user");
             return StatusCode(500, new { error = "An error occurred while creating the song" });
         }
     }

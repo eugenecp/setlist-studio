@@ -39,9 +39,19 @@ public class UsersController : ControllerBase
                 claims = User.Claims.Select(c => new { c.Type, c.Value }).ToArray()
             });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to user profile");
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation while retrieving user profile");
+            return StatusCode(503, "Service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving user profile");
+            _logger.LogError(ex, "Unexpected error retrieving user profile");
             return StatusCode(500, "Internal server error");
         }
     }

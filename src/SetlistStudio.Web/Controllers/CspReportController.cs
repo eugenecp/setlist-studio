@@ -75,9 +75,19 @@ public class CspReportController : ControllerBase
             _logger.LogWarning(ex, "Failed to parse CSP report JSON");
             return BadRequest("Invalid JSON format");
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid CSP report data received");
+            return BadRequest("Invalid report data");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "CSP reporting service unavailable");
+            return StatusCode(503, "CSP reporting service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing CSP violation report");
+            _logger.LogError(ex, "Unexpected error processing CSP violation report");
             return StatusCode(500);
         }
     }

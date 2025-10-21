@@ -44,9 +44,17 @@ public class SecurityEventHandler
             _logger.LogInformation("Authentication success logged for user {UserId}", 
                 SecureLoggingHelper.SanitizeUserId(user.Id));
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid argument provided to authentication success logging");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Security event logging service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to log authentication success event");
+            _logger.LogError(ex, "Unexpected error logging authentication success event");
         }
     }
 

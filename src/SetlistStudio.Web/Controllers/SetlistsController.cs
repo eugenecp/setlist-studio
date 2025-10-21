@@ -54,9 +54,24 @@ public class SetlistsController : ControllerBase
 
             return Ok(response);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to setlists");
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid argument for setlist retrieval");
+            return BadRequest("Invalid request parameters");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Service unavailable for setlist retrieval");
+            return StatusCode(503, "Service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving setlists");
+            _logger.LogError(ex, "Unexpected error retrieving setlists");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -98,9 +113,19 @@ public class SetlistsController : ControllerBase
 
             return Ok(response);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid search query for setlists");
+            return BadRequest("Invalid search parameters");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Search service unavailable for setlists");
+            return StatusCode(503, "Search service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching setlists");
+            _logger.LogError(ex, "Unexpected error searching setlists");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -151,9 +176,24 @@ public class SetlistsController : ControllerBase
 
             return CreatedAtAction(nameof(GetSetlist), new { id = createdSetlist.Id }, response);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid setlist data provided");
+            return BadRequest("Invalid setlist data");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized setlist creation attempt");
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Setlist service unavailable");
+            return StatusCode(503, "Service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating setlist");
+            _logger.LogError(ex, "Unexpected error creating setlist");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -185,9 +225,24 @@ public class SetlistsController : ControllerBase
 
             return Ok(response);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid setlist ID {SetlistId}", id);
+            return BadRequest($"Invalid setlist ID: {id}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to setlist {SetlistId}", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Service unavailable for setlist {SetlistId}", id);
+            return StatusCode(503, "Service temporarily unavailable");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving setlist {SetlistId}", id);
+            _logger.LogError(ex, "Unexpected error retrieving setlist {SetlistId}", id);
             return StatusCode(500, "Internal server error");
         }
     }

@@ -38,9 +38,35 @@ public class SecurityEventMiddleware
             // Log successful authentication events after request completion
             await LogAuthenticationEvents(context, securityEventHandler, securityEventLogger);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access attempt detected for path {RequestPath}", requestPath);
+            await LogSecurityException(context, securityEventHandler, ex);
+            throw;
+        }
+        catch (SecurityException ex)
+        {
+            _logger.LogWarning(ex, "Security exception in middleware for path {RequestPath}", requestPath);
+            await LogSecurityException(context, securityEventHandler, ex);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation in security middleware for path {RequestPath}", requestPath);
+            if (IsSecurityRelatedException(ex))
+            {
+                await LogSecurityException(context, securityEventHandler, ex);
+            }
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument in security middleware for path {RequestPath}", requestPath);
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in security event middleware for path {RequestPath}", requestPath);
+            _logger.LogError(ex, "Unexpected error in security event middleware for path {RequestPath}", requestPath);
             
             // Log potential security-related exceptions
             if (IsSecurityRelatedException(ex))
@@ -230,9 +256,17 @@ public class SecurityEventMiddleware
                 }
             }
         }
+        catch (ArgumentNullException ex)
+        {
+            _logger.LogWarning(ex, "Null argument while checking form data patterns");
+        }
+        catch (InvalidCastException ex)
+        {
+            _logger.LogWarning(ex, "Invalid cast while processing form data");
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to check form data for suspicious patterns");
+            _logger.LogWarning(ex, "Unexpected error while checking form data for suspicious patterns");
         }
     }
 
