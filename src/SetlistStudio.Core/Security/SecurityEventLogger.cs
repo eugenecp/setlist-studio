@@ -64,16 +64,20 @@ public class SecurityEventLogger
     {
         var logLevel = MapSeverityToLogLevel(severity);
         
+        // First sanitize the message to remove sensitive data
+        var sanitizedMessage = SecureLoggingHelper.SanitizeMessage(message ?? string.Empty);
+        var sanitizedAdditionalData = SecureLoggingHelper.SanitizeMessage(TaintBarrier.BreakObjectTaint(additionalData ?? "null"));
+        
         // Use TaintBarrier to create completely safe log message
         var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
-            "Security Event: {0} | {1} | {2} | User: {3} | Resource: {4}({5}) | Data: {6}",
+            "SecurityEvent_{0} | {1} | {2} | User: {3} | Resource: {4}({5}) | Data: {6}",
             eventType.ToString(),
             severity.ToString(),
-            message,
+            sanitizedMessage ?? string.Empty,
             userId ?? "Unknown",
             resourceType ?? "Unknown",
             resourceId ?? "N/A",
-            TaintBarrier.BreakObjectTaint(additionalData ?? "null"));
+            sanitizedAdditionalData ?? string.Empty);
 
         _logger.Log(logLevel, safeLogMessage);
     }

@@ -178,7 +178,7 @@ jobs:
     # Step 11: Publish formatted test results (alternative method)
     # Uses specialized action for better test result visualization
     - name: 📋 Publish test results (Alternative)
-      uses: dorny/test-reporter@v1.9.1
+      uses: dorny/test-reporter@v1.10.0
       if: always() && github.event_name != 'pull_request' # Skip on PRs to avoid permission issues
       with:
         name: Test Results               # Display name for test report
@@ -255,7 +255,7 @@ jobs:
     # Step 14: Add comprehensive test summary comment to pull request
     # Provides immediate feedback on build and test status in PR discussion
     - name: 💬 Add test summary to PR
-      uses: marocchino/sticky-pull-request-comment@v2
+      uses: marocchino/sticky-pull-request-comment@v2.9.0
       if: github.event_name == 'pull_request' # Only on pull requests
       with:
         recreate: true                   # Replace existing comment
@@ -265,7 +265,7 @@ jobs:
     # Step 15: Add code coverage comment to pull request
     # Shows coverage metrics directly in PR for easy review
     - name: 💬 Add coverage comment to PR
-      uses: marocchino/sticky-pull-request-comment@v2
+      uses: marocchino/sticky-pull-request-comment@v2.9.0
       if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != '' # Only if coverage file exists
       with:
         recreate: false                  # Don't replace existing comments
@@ -289,7 +289,7 @@ jobs:
     # Step 2: Setup Docker Buildx for advanced build features
     # Enables multi-platform builds and advanced caching
     - name: 🐳 Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v3.7.1
     
     # Step 3: Install network utilities for container testing
     # Required for health checks and connectivity testing
@@ -301,7 +301,7 @@ jobs:
     # Step 4: Build Docker image with optimized settings
     # Creates containerized version of the application
     - name: 🏗️ Build Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6.9.0
       with:
         context: .                      # Build context (current directory)
         file: ./Dockerfile              # Dockerfile location
