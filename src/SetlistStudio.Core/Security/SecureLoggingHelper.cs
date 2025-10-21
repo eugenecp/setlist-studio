@@ -55,12 +55,14 @@ public static class SecureLoggingHelper
     /// <returns>A sanitized message safe for logging with no taint tracking</returns>
     public static string? SanitizeMessage(string? message)
     {
+        // Handle null input properly
         if (message == null)
+        {
             return null;
-            
-        if (string.IsNullOrEmpty(message))
-            return message;
+        }
 
+        // Always process through sanitization to prevent user-controlled bypass
+        // This addresses CWE-807: User-controlled bypass of sensitive method
         var sanitized = message;
 
         // Handle the specific edge case for space-only values first
@@ -116,10 +118,8 @@ public static class SecureLoggingHelper
     /// <returns>A sanitized string safe for logging</returns>
     public static string PreventLogInjection(string input)
     {
-        if (string.IsNullOrEmpty(input))
-            return input;
-
-        var sanitized = input;
+        // Always process through sanitization to prevent user-controlled bypass
+        var sanitized = input ?? string.Empty;
 
         // Apply log injection prevention patterns
         foreach (var pattern in LogInjectionPatterns)
@@ -298,20 +298,26 @@ public static class SecureLoggingHelper
     /// <returns>A sanitized user ID safe for logging</returns>
     public static string? SanitizeUserId(string? userId)
     {
-        if (string.IsNullOrEmpty(userId))
-            return userId;
+        // Handle null input properly
+        if (userId == null)
+        {
+            return null;
+        }
+
+        // Always process through sanitization to prevent user-controlled bypass
+        var safeUserId = userId;
 
         // If it looks like an email, mask the domain part
-        if (userId.Contains('@'))
+        if (safeUserId.Contains('@'))
         {
-            var parts = userId.Split('@');
+            var parts = safeUserId.Split('@');
             if (parts.Length == 2)
             {
-                return $"{parts[0]}@[DOMAIN]";
+                return TaintBarrier.BreakTaint($"{parts[0]}@[DOMAIN]");
             }
         }
 
-        // For GUIDs or other identifiers, return as-is (they're not sensitive)
-        return userId;
+        // For GUIDs or other identifiers, return as-is but break taint
+        return TaintBarrier.BreakTaint(safeUserId);
     }
 }

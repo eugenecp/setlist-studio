@@ -379,7 +379,8 @@ public class SecureLoggingHelperTests
         var result = SecureLoggingHelper.SanitizeMessage(input);
 
         // Assert
-        var redactedCount = result.Split("[REDACTED]").Length - 1;
+        result.Should().NotBeNull();
+        var redactedCount = result!.Split("[REDACTED]").Length - 1;
         redactedCount.Should().BeGreaterThan(1, "Multiple sensitive patterns should be redacted");
     }
 

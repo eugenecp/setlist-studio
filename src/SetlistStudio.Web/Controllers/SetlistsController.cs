@@ -5,6 +5,7 @@ using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Models;
+using SetlistStudio.Web.Security;
 using System.ComponentModel.DataAnnotations;
 
 namespace SetlistStudio.Web.Controllers;
@@ -16,6 +17,7 @@ namespace SetlistStudio.Web.Controllers;
 [Route("api/[controller]")]
 [Authorize] // Require authentication for all endpoints
 [EnableRateLimiting("ApiPolicy")]
+[InputSanitization]
 public class SetlistsController : ControllerBase
 {
     private readonly ISetlistService _setlistService;
@@ -80,7 +82,7 @@ public class SetlistsController : ControllerBase
             }
 
             var userId = User.Identity?.Name ?? "anonymous";
-            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
             var sanitizedSearchQuery = SecureLoggingHelper.SanitizeMessage(query);
             _logger.LogInformation("Searching setlists for user {UserId} with query '{Query}' (page {Page})", sanitizedUserId, sanitizedSearchQuery, page);
 
@@ -124,8 +126,8 @@ public class SetlistsController : ControllerBase
             }
 
             var userId = User.Identity?.Name ?? "anonymous";
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
             var sanitizedName = SecureLoggingHelper.SanitizeMessage(request.Name);
-            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogInformation("Creating setlist '{Name}' for user {UserId}", sanitizedName, sanitizedUserId);
 
             var setlist = new Setlist

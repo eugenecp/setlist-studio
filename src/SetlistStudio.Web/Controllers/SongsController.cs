@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
+using SetlistStudio.Web.Security;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
@@ -12,6 +14,7 @@ namespace SetlistStudio.Web.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [EnableRateLimiting("ApiPolicy")]
+[InputSanitization]
 public class SongsController : ControllerBase
 {
     private readonly ISongService _songService;
@@ -28,14 +31,14 @@ public class SongsController : ControllerBase
     {
         try
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.Identity?.Name ?? "anonymous";
+            var userId = SecureUserContext.GetSanitizedUserId(User);
             var (songs, totalCount) = await _songService.GetSongsAsync(userId);
             return Ok(new { songs, totalCount });
         }
         catch (Exception ex)
         {
-            // Log the actual exception for debugging but don't expose details to client
-            _logger.LogError(ex, "Error retrieving songs for user");
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error retrieving songs for user {UserId}", sanitizedUserId);
             return StatusCode(500, new { error = "An error occurred while retrieving songs" });
         }
     }
@@ -57,14 +60,14 @@ public class SongsController : ControllerBase
 
         try
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.Identity?.Name ?? "anonymous";
+            var userId = SecureUserContext.GetSanitizedUserId(User);
             var (songs, totalCount) = await _songService.GetSongsAsync(userId, searchTerm: query);
             return Ok(new { songs, totalCount });
         }
         catch (Exception ex)
         {
-            // Log the actual exception for debugging but don't expose details to client
-            _logger.LogError(ex, "Error searching songs for user");
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error searching songs for user {UserId}", sanitizedUserId);
             return StatusCode(500, new { error = "An error occurred while searching songs" });
         }
     }
@@ -79,7 +82,7 @@ public class SongsController : ControllerBase
 
         try
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.Identity?.Name ?? "anonymous";
+            var userId = SecureUserContext.GetSanitizedUserId(User);
             var song = new Song
             {
                 Title = request.Title,
@@ -125,23 +128,28 @@ public class CreateSongRequest
 {
     [Required]
     [StringLength(200)]
+    [SafeString(MaxLength = 200, AllowEmpty = false)]
     public string Title { get; set; } = string.Empty;
 
     [Required]
     [StringLength(100)]
+    [SafeString(MaxLength = 100, AllowEmpty = false)]
     public string Artist { get; set; } = string.Empty;
 
-    [Range(40, 250, ErrorMessage = "BPM must be between 40 and 250")]
+    [SafeBpm(MinBpm = 40, MaxBpm = 250)]
     public int? Bpm { get; set; }
 
     [StringLength(10)]
+    [MusicalKey]
     public string? Key { get; set; }
 
     [StringLength(50)]
+    [SafeString(MaxLength = 50, AllowEmpty = true)]
     public string? Genre { get; set; }
 
     public TimeSpan? Duration { get; set; }
 
     [StringLength(1000)]
+    [SafeString(MaxLength = 1000, AllowEmpty = true)]
     public string? Notes { get; set; }
 }

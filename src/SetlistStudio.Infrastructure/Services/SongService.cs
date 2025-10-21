@@ -68,14 +68,16 @@ public class SongService : ISongService
                 .Take(pageSize)
                 .ToListAsync();
 
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogInformation("Retrieved {Count} songs for user {UserId} (page {Page})", 
-                songs.Count, userId, pageNumber);
+                songs.Count, sanitizedUserId, pageNumber);
 
             return (songs, totalCount);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving songs for user {UserId}", userId);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error retrieving songs for user {UserId}", sanitizedUserId);
             throw;
         }
     }
@@ -89,14 +91,16 @@ public class SongService : ISongService
 
             if (song != null)
             {
-                _logger.LogInformation("Retrieved song {SongId} for user {UserId}", songId, userId);
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogInformation("Retrieved song {SongId} for user {UserId}", songId, sanitizedUserId);
             }
 
             return song;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving song {SongId} for user {UserId}", songId, userId);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error retrieving song {SongId} for user {UserId}", songId, sanitizedUserId);
             throw;
         }
     }
@@ -163,7 +167,8 @@ public class SongService : ISongService
 
             if (existingSong == null)
             {
-                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", song.Id, userId);
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", song.Id, sanitizedUserId);
                 return null;
             }
 
@@ -227,7 +232,8 @@ public class SongService : ISongService
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Updated song {SongId} for user {UserId}", song.Id, userId);
+            var sanitizedUserIdForLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogInformation("Updated song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog);
 
             // Log audit trail for song update
             await _auditLogService.LogAuditAsync(
@@ -242,7 +248,8 @@ public class SongService : ISongService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating song {SongId} for user {UserId}", song.Id, userId);
+            var sanitizedUserIdForLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error updating song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog2);
             throw;
         }
     }
@@ -256,7 +263,8 @@ public class SongService : ISongService
 
             if (song == null)
             {
-                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", songId, userId);
+                var sanitizedUserIdForDeleteLog = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", songId, sanitizedUserIdForDeleteLog);
                 return false;
             }
 
@@ -279,8 +287,10 @@ public class SongService : ISongService
             _context.Songs.Remove(song);
             await _context.SaveChangesAsync();
 
+            var sanitizedUserIdForDeleteLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
             _logger.LogInformation("Deleted song {SongId} '{Title}' for user {UserId}", 
-                songId, song.Title, userId);
+                songId, sanitizedTitle, sanitizedUserIdForDeleteLog2);
 
             // Log audit trail for song deletion
             await _auditLogService.LogAuditAsync(
@@ -295,7 +305,8 @@ public class SongService : ISongService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting song {SongId} for user {UserId}", songId, userId);
+            var sanitizedUserIdForDeleteLog3 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error deleting song {SongId} for user {UserId}", songId, sanitizedUserIdForDeleteLog3);
             throw;
         }
     }
@@ -315,7 +326,8 @@ public class SongService : ISongService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving genres for user {UserId}", userId);
+            var sanitizedUserIdForGenreLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error retrieving genres for user {UserId}", sanitizedUserIdForGenreLog);
             throw;
         }
     }
@@ -342,7 +354,8 @@ public class SongService : ISongService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving tags for user {UserId}", userId);
+            var sanitizedUserIdForTagLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error retrieving tags for user {UserId}", sanitizedUserIdForTagLog);
             throw;
         }
     }
