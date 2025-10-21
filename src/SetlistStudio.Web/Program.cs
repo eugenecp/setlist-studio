@@ -59,6 +59,13 @@ try
         var keyVaultName = builder.Configuration["KeyVault:VaultName"];
         if (!string.IsNullOrEmpty(keyVaultName))
         {
+            // Validate Key Vault name to prevent URL injection
+            if (!System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$"))
+            {
+                Log.Warning("Invalid Azure Key Vault name format: {KeyVaultName}", keyVaultName);
+                throw new InvalidOperationException("Invalid Azure Key Vault name format");
+            }
+            
             try
             {
                 var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
@@ -525,7 +532,7 @@ try
         var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
         var cspPolicyBuilder = new StringBuilder();
         cspPolicyBuilder.Append("default-src 'self'; ");
-        cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline' 'unsafe-eval'; "); // Blazor requires unsafe-inline/eval
+        cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; "); // Blazor Server requires unsafe-inline for SignalR
         cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; "); // MudBlazor requires unsafe-inline
         cspPolicyBuilder.Append("img-src 'self' data: https:; ");
         cspPolicyBuilder.Append("font-src 'self'; ");

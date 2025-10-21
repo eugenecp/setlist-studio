@@ -210,9 +210,11 @@ public class SecurityHeadersTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.GetAsync("/");
         var cspHeader = response.Headers.GetValues("Content-Security-Policy").First();
 
-        // Assert - Blazor requires certain unsafe directives
-        cspHeader.Should().Contain("script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-            "Blazor requires unsafe-inline and unsafe-eval for proper operation");
+        // Assert - Blazor Server requires unsafe-inline but NOT unsafe-eval (security improvement)
+        cspHeader.Should().Contain("script-src 'self' 'unsafe-inline'",
+            "Blazor Server requires unsafe-inline for SignalR operation");
+        cspHeader.Should().NotContain("unsafe-eval",
+            "unsafe-eval should be removed for better security");
         cspHeader.Should().Contain("style-src 'self' 'unsafe-inline'",
             "MudBlazor requires unsafe-inline styles");
     }

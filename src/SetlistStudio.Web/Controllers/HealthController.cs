@@ -70,7 +70,7 @@ public class HealthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Database health check failed");
-            return $"Error: {ex.Message}";
+            return "Database connection failed";
         }
     }
 }
