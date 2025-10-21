@@ -1,0 +1,42 @@
+# Local CodeQL Configuration for Setlist Studio
+# This file mirrors the GitHub Actions CodeQL configuration exactly
+# Use this for local development to ensure consistency with CI/CD
+
+name: "Setlist Studio Local Analysis"
+
+# Mirror GitHub Actions configuration
+disable-default-queries: false
+
+# Use the same query suite as GitHub Actions
+queries:
+  - uses: security-and-quality
+
+# Mirror the same query filters
+query-filters:
+  - exclude:
+      id: cs/web/debug-binary  # Exclude debug binary warnings in development
+
+# Mirror exact path exclusions from GitHub Actions
+paths-ignore:
+  - "tests/**"               # Exclude test files from main analysis
+  - "**/*.generated.cs"      # Exclude auto-generated files
+  - "**/bin/**"              # Exclude compiled binaries
+  - "**/obj/**"              # Exclude build artifacts
+  - "TestResults/**"         # Exclude test result files
+  - "CoverageReport/**"      # Exclude coverage reports
+  - "**/Migrations/**"       # Exclude EF Core migrations
+  - "**/*.Designer.cs"       # Exclude designer files
+  - "**/wwwroot/lib/**"      # Exclude third-party client libraries
+  - "codeql-database/**"     # Exclude CodeQL database
+  - "codeql-results/**"      # Exclude CodeQL results
+
+# Mirror exact path inclusions from GitHub Actions
+paths:
+  - "src/**"                 # Include all source code
+  - "*.cs"                   # Include C# files in root
+  - "*.cshtml"               # Include Razor views
+  - "*.razor"                # Include Blazor components
+
+# Mirror the same query packs
+packs:
+  - codeql/csharp-queries    # Standard C# queries

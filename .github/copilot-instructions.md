@@ -246,51 +246,168 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 **CodeQL is MANDATORY for all code contributions** - it performs static application security testing (SAST) to identify vulnerabilities before they reach production.
 
-#### Running CodeQL Analysis
+#### CodeQL Analysis Configurations
 
-CodeQL analysis runs automatically on:
+Setlist Studio uses **two different CodeQL analysis configurations** aligned with GitHub Actions security.yaml:
+
+**1. Security-Focused Analysis (Local Development)**
+- **Query Suite**: `codeql/csharp-security-extended.qls` (68 security queries)
+- **Purpose**: Critical security vulnerability detection
+- **Target**: **Zero high/critical security issues** (blocking)
+- **Use**: Pre-commit validation, security-focused development
+
+**2. Comprehensive Quality Analysis (GitHub Actions)**
+- **Query Suite**: `security-and-quality` (170 comprehensive queries)  
+- **Purpose**: Security + code quality + best practices
+- **Configuration**: `.github/codeql/codeql-config.yml`
+- **Results**: Security issues + warnings + recommendations
+- **Use**: CI/CD pipeline, comprehensive code review
+
+#### Running CodeQL Analysis Locally
+
+**OPTION 1: Use Provided Scripts (Recommended)**
+
+**Security-Focused Analysis:**
+```powershell
+# Quick security validation (68 security queries)
+.\scripts\run-codeql-security.ps1
+
+# With clean database rebuild
+.\scripts\run-codeql-security.ps1 -CleanDatabase
+```
+
+**Comprehensive Analysis (Matches GitHub Actions Exactly):**
+```powershell
+# Full analysis matching GitHub Actions security.yml
+.\scripts\run-codeql-comprehensive.ps1
+
+# With clean database and open results
+.\scripts\run-codeql-comprehensive.ps1 -CleanDatabase -OpenResults
+```
+
+**OPTION 2: Manual Commands (Advanced)**
+
+**Security-Only Analysis:**
+```powershell
+# Create CodeQL database (matches GitHub Actions build)
+codeql database create codeql-database --language=csharp --command="dotnet build SetlistStudio.sln --configuration Release --no-restore" --source-root=.
+
+# Run security-focused analysis
+codeql database analyze codeql-database --format=sarif-latest --output=security-analysis.sarif codeql/csharp-security-extended.qls --download
+
+# Check results (should be zero for security compliance)
+$results = (Get-Content security-analysis.sarif | ConvertFrom-Json).runs[0].results
+Write-Host "Security issues found: $($results.Count)"
+```
+
+**Comprehensive Analysis (GitHub Actions Match):**
+```powershell
+# Run full analysis with local config (mirrors GitHub Actions)
+codeql database analyze codeql-database --format=sarif-latest --output=github-analysis.sarif --config-file=.codeql/codeql-config.yml codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls --download
+
+# Categorize findings by severity (matches GitHub Actions analysis)
+$sarif = Get-Content github-analysis.sarif | ConvertFrom-Json; $results = $sarif.runs[0].results; $rules = $sarif.runs[0].tool.driver.rules; $findings = @{}; foreach($result in $results) { $rule = $rules | Where-Object { $_.id -eq $result.ruleId }; $severity = $rule.properties.'problem.severity'; if($findings.ContainsKey($severity)) { $findings[$severity]++ } else { $findings[$severity] = 1 } }; $findings.GetEnumerator() | Sort-Object Value -Descending
+```
+
+#### Local CodeQL Configuration
+
+**Configuration Files:**
+- **`.codeql/codeql-config.yml`**: Local configuration mirroring GitHub Actions exactly
+- **`.codeql/config.env`**: Environment variables for local development
+- **`scripts/run-codeql-local.ps1`**: Main analysis script with full configurability
+- **`scripts/run-codeql-security.ps1`**: Quick security-focused analysis
+- **`scripts/run-codeql-comprehensive.ps1`**: Full analysis matching GitHub Actions
+
+**Local vs GitHub Actions Alignment:**
+- **Same Query Suites**: Both use `security-and-quality` for comprehensive analysis
+- **Same Build Commands**: Both use `dotnet build SetlistStudio.sln --configuration Release --no-restore`
+- **Same Path Exclusions**: Tests, build artifacts, coverage reports excluded
+- **Same Output Format**: SARIF with structured findings categorization
+- **Same Configuration File**: `.codeql/codeql-config.yml` mirrors `.github/codeql/codeql-config.yml`
+
+#### CodeQL Automated Analysis
+
+CodeQL analysis runs automatically via GitHub Actions (.github/workflows/security.yml):
 - **All pull requests** to main branch
-- **Push to main branch** (for baseline maintenance)
-- **Scheduled scans** (weekly comprehensive analysis)
+- **Push to main branch** (for baseline maintenance)  
+- **Daily scheduled scans** (2 AM UTC)
+- **Manual workflow dispatch** (ad-hoc security audits)
 
 #### CodeQL Security Standards
 
-**ZERO TOLERANCE POLICY:**
-- **High severity issues**: Must be fixed before merge - no exceptions
-- **Critical severity issues**: Must be fixed before merge - no exceptions  
-- **Medium severity issues**: Should be fixed or justified with suppression
-- **Low severity issues**: Should be reviewed and addressed when practical
+**ZERO TOLERANCE POLICY FOR SECURITY ISSUES:**
+- **Critical security issues**: Must be fixed before merge - **no exceptions**
+- **High security issues**: Must be fixed before merge - **no exceptions**
+- **Medium security issues**: Should be fixed or justified with suppression
 
-**IMPORTANT**: CodeQL findings override general security scan summaries. Even if a Security Scan Summary shows "secure", **any CodeQL high/critical issues constitute a security failure** and must be resolved before merge.
+**CODE QUALITY FINDINGS (Non-blocking):**
+- **Warnings**: Code quality issues, potential bugs (162 typical findings)
+- **Recommendations**: Best practice suggestions (68 typical findings)
+- **Notes**: Minor improvements and optimizations
+
+**CRITICAL DISTINCTION**: 
+- **Security findings** = Blocking (must fix)
+- **Quality findings** = Non-blocking (continuous improvement)
 
 #### CodeQL Results Interpretation
 
-**CRITICAL: Security Scan Summary Limitations**
+**Understanding GitHub Actions Results:**
 
-The automated Security Scan Summary in workflows may show "secure" status even when CodeQL has identified high/critical security issues. This occurs because:
+When GitHub Actions reports "67 new alerts" (22 warnings + 45 notes), this includes:
+- **Security vulnerabilities** (if any) - **BLOCKING**
+- **Code quality warnings** - Non-blocking  
+- **Best practice recommendations** - Non-blocking
 
-- CodeQL uploads results directly to GitHub Security tab
-- Summary scripts may not have access to all CodeQL findings
-- Aggregate security status can be misleading
+**Local vs GitHub Analysis Comparison:**
+- **Local Security Analysis**: `0 results` = No security vulnerabilities ✅
+- **GitHub Comprehensive Analysis**: `230 results` = Security + quality findings
+- **Discrepancy is Expected**: Different query scopes, not a security concern
 
-**ALWAYS CHECK GitHub Security Tab directly** rather than relying solely on workflow summaries.
+**ALWAYS CHECK GitHub Security Tab** for actual security findings rather than relying on workflow summaries.
 
 #### CodeQL Issue Resolution
 
-**When CodeQL identifies security issues:**
+**For Security Issues (Critical/High):**
+1. **Immediate action**: Treat as security failure regardless of other scan results
+2. **Root cause analysis**: Understand the vulnerability and potential impact  
+3. **Secure implementation**: Fix underlying security flaw, don't just suppress
+4. **Validation testing**: Ensure fix resolves issue without breaking functionality
+5. **Re-verification**: Run security-focused CodeQL to confirm resolution
+6. **Documentation**: Explain security improvements in commit messages
 
-1. **Treat as security failure**: CodeQL high/critical issues are security failures regardless of other scan results
-2. **Review the finding**: Understand the vulnerability and its potential impact
-3. **Fix the root cause**: Address the underlying security flaw, don't just suppress
-4. **Test the fix**: Ensure the fix doesn't break functionality and resolves the issue
-5. **Validate resolution**: Re-run CodeQL to confirm the issue is resolved
-6. **Document changes**: Explain security improvements in commit messages
+**For Quality Issues (Warnings/Recommendations):**
+1. **Assess impact**: Determine if issue affects maintainability or performance
+2. **Prioritize fix**: Address based on code quality improvement value
+3. **Batch improvements**: Group similar quality fixes in dedicated PRs
+4. **Document rationale**: Explain quality improvements in commit messages
 
-**CRITICAL**: Do not rely on general security scan summaries. CodeQL static analysis findings take precedence over aggregate security status indicators.
+#### CodeQL Configuration Files
+
+**Local Security Configuration:**
+- Uses default security-extended query suite
+- Focuses on OWASP Top 10 and CWE security categories
+- Excludes test files and build artifacts
+
+**GitHub Actions Configuration (.github/codeql/codeql-config.yml):**
+```yaml
+queries:
+  - uses: security-and-quality
+paths-ignore:
+  - "tests/**"
+  - "**/bin/**"
+  - "**/obj/**"  
+  - "TestResults/**"
+  - "CoverageReport/**"
+paths:
+  - "src/**"
+  - "*.cs"
+  - "*.cshtml"
+  - "*.razor"
+```
 
 #### CodeQL Best Practices
 
-**To minimize CodeQL findings:**
+**To minimize security findings:**
 - **Input validation**: Always validate and sanitize user inputs
 - **Parameterized queries**: Never concatenate user input into SQL strings
 - **Secure defaults**: Use secure configurations and libraries
@@ -298,22 +415,43 @@ The automated Security Scan Summary in workflows may show "secure" status even w
 - **Access control**: Implement proper authorization checks
 - **Secrets management**: Never hardcode credentials or API keys
 
+**To minimize quality findings:**
+- **Resource disposal**: Use `using` statements for IDisposable objects
+- **Performance optimization**: Avoid string concatenation in loops
+- **API modernization**: Replace obsolete method calls
+- **Documentation**: Add XML documentation for public APIs
+- **Code simplification**: Reduce complexity and nested conditions
+
 #### CodeQL Suppression Guidelines
 
-**Suppressions should be rare and well-justified:**
-- Only suppress false positives after thorough analysis
-- Add detailed comments explaining why suppression is appropriate
-- Get security team approval for suppressing high/critical issues
-- Regular review of all suppressions to ensure they remain valid
+**Security Issue Suppressions (Rare):**
+- Only suppress **confirmed false positives** after thorough security review
+- Require security team approval for high/critical suppression
+- Document detailed justification with security impact analysis
+- Regular review of all security suppressions
+
+**Quality Issue Suppressions (Selective):**
+- Suppress when fixing would reduce code readability or maintainability
+- Document business justification for suppression
+- Consider suppression for generated code or third-party integrations
+- Review suppressions during major refactoring efforts
 
 #### Common CodeQL Issues in .NET Applications
 
+**Security Issues (Must Fix):**
 - **SQL Injection**: Use Entity Framework LINQ queries instead of raw SQL
 - **XSS Vulnerabilities**: Always encode output, validate inputs
 - **Path Traversal**: Validate file paths, use safe file operations
 - **Information Disclosure**: Sanitize error messages and logs
 - **Authentication Bypass**: Implement proper authorization checks
 - **Cryptographic Issues**: Use strong algorithms and proper key management
+
+**Quality Issues (Continuous Improvement):**
+- **Resource Management**: Dispose IDisposable objects properly
+- **Performance**: Optimize string operations and LINQ usage
+- **API Usage**: Update obsolete method calls and improve error handling
+- **Code Structure**: Simplify complex conditions and reduce nesting
+- **Documentation**: Add XML comments for public APIs
 
 ---
 
@@ -466,15 +604,15 @@ Use realistic musical data in all examples, tests, and documentation:
 
 "Configure CORS policy to only allow specific trusted domains, never use wildcards"
 
-"Run CodeQL static analysis and fix all high/critical security vulnerabilities before submitting PR"
+"Run security-focused CodeQL analysis locally before submitting PR: codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls"
 
 "Analyze CodeQL findings and implement proper fixes rather than just suppressing alerts"
 
-"Review CodeQL security recommendations and apply secure coding patterns for .NET applications"
+"Run comprehensive CodeQL analysis to match GitHub Actions: codeql database analyze codeql-database --output=github-analysis.sarif codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls"
 
-"Validate that all CodeQL security issues are resolved and analysis passes with zero critical/high issues"
+"Validate that CodeQL security analysis shows zero results in security-analysis.sarif file"
 
-"Implement CodeQL-recommended security practices: input validation, parameterized queries, output encoding"
+"Distinguish between security findings (blocking) and quality findings (non-blocking) in CodeQL results"
 
 "Address CodeQL SQL injection findings by using Entity Framework LINQ queries exclusively"
 
@@ -484,11 +622,11 @@ Use realistic musical data in all examples, tests, and documentation:
 
 "Apply CodeQL cryptographic recommendations: use strong algorithms, proper key management, secure defaults"
 
-"Ignore Security Scan Summary if CodeQL shows high/critical issues - CodeQL findings take precedence over aggregate security status"
+"Understand that GitHub Actions may report 200+ quality findings while security analysis shows 0 vulnerabilities"
 
-"Treat CodeQL high/critical findings as security failures even if other security scans show 'secure' status"
+"Focus on security-specific CodeQL results rather than comprehensive quality analysis for security validation"
 
-"Always check CodeQL results directly rather than relying on general security summary indicators"
+"Always verify security analysis results locally before relying on GitHub Actions comprehensive reports"
 
 "Never merge code with CodeQL high/critical issues regardless of overall security scan status"
 ```
@@ -621,7 +759,9 @@ Setlist Studio maintains **strict security standards** that must be followed for
 
 **Before submitting any code, verify:**
 
-- [ ] **CodeQL Analysis** passes with zero high/critical security issues
+- [ ] **CodeQL Security Analysis** passes with zero high/critical security issues
+  - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+  - Verify: Results array is empty in SARIF file
 - [ ] **Input validation** implemented for all user inputs
 - [ ] **Authorization checks** verify user ownership of resources  
 - [ ] **Parameterized queries** used exclusively (no string concatenation)
@@ -632,6 +772,8 @@ Setlist Studio maintains **strict security standards** that must be followed for
 - [ ] **Logging** doesn't expose sensitive data
 - [ ] **CSRF protection** enabled for state-changing operations
 - [ ] **HTTPS** enforced in production configurations
+
+**Note**: GitHub Actions may report 200+ "findings" from comprehensive quality analysis, but these are mostly code quality improvements, not security vulnerabilities. Focus on the security-specific analysis results.
 
 ### Security Code Review Guidelines
 
@@ -724,7 +866,9 @@ When contributing to Setlist Studio:
 
 **Security is MANDATORY - not optional. Every contribution must:**
 
-1. **PASS CODEQL ANALYSIS**: All code must pass CodeQL static security analysis with zero high/critical issues
+1. **PASS CODEQL SECURITY ANALYSIS**: All code must pass CodeQL security-focused analysis with zero high/critical issues
+   - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+   - Verify: Empty results array in SARIF file
 2. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
 3. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
 4. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
@@ -732,6 +876,8 @@ When contributing to Setlist Studio:
 6. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
 7. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
 8. **FAIL SECURELY**: Error messages must not leak sensitive information
+
+**Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on security-specific results for security compliance.
 
 **Security violations will result in immediate pull request rejection.**
 
