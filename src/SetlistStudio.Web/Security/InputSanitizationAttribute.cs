@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using SetlistStudio.Core.Security;
+using SetlistStudio.Core.Validation;
 using System.Reflection;
 
 namespace SetlistStudio.Web.Security
@@ -58,7 +59,8 @@ namespace SetlistStudio.Web.Security
             // Handle primitive types and strings
             if (type == typeof(string))
             {
-                return SecureLoggingHelper.SanitizeMessage((string)obj) ?? string.Empty;
+                var sanitizer = new SanitizedStringAttribute { AllowHtml = false, AllowSpecialCharacters = true };
+                return sanitizer.SanitizeInput((string)obj);
             }
 
             // Handle value types (int, bool, etc.)
@@ -67,7 +69,28 @@ namespace SetlistStudio.Web.Security
                 return obj;
             }
 
-            // Handle collections
+            // Handle dictionaries specially to preserve type
+            if (obj is System.Collections.IDictionary dictionary)
+            {
+                var keys = new List<object>();
+                foreach (var key in dictionary.Keys)
+                {
+                    keys.Add(key);
+                }
+
+                foreach (var key in keys)
+                {
+                    var value = dictionary[key];
+                    if (value != null)
+                    {
+                        var sanitizedValue = SanitizeObject(value);
+                        dictionary[key] = sanitizedValue;
+                    }
+                }
+                return obj;
+            }
+
+            // Handle other collections
             if (obj is System.Collections.IEnumerable enumerable && !(obj is string))
             {
                 var list = new List<object>();
