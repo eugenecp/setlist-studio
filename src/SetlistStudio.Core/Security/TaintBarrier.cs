@@ -79,8 +79,11 @@ namespace SetlistStudio.Core.Security
             if (string.IsNullOrEmpty(input))
                 return string.Empty;
 
-            // Comprehensive sanitization for all known injection vectors
-            var sanitized = input
+            // First sanitize XSS and malicious content
+            var sanitized = SanitizeXssAndMaliciousContent(input);
+
+            // Then sanitize for logging injection
+            sanitized = sanitized
                 // Remove CRLF injection attempts
                 .Replace("\r", "\\r")
                 .Replace("\n", "\\n")
@@ -118,6 +121,50 @@ namespace SetlistStudio.Core.Security
             }
 
             return result.ToString();
+        }
+
+        /// <summary>
+        /// Sanitizes XSS and malicious content from input strings.
+        /// </summary>
+        /// <param name="input">Input to sanitize</param>
+        /// <returns>Sanitized string with XSS content removed</returns>
+        private static string SanitizeXssAndMaliciousContent(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return string.Empty;
+
+            var sanitized = input;
+
+            // Remove script tags and content
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"<script[^>]*>.*?</script>", "[SANITIZED]", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            // Remove javascript: protocols
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"javascript:", "[SANITIZED]", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // Remove alert function calls
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"alert\s*\(", "[SANITIZED](", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // Remove event handlers
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"<.*?on\w+\s*=.*?>", "[SANITIZED]", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // Remove path traversal attempts 
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"\.\.[\\/]", "[SANITIZED]");
+            
+            // Also sanitize common sensitive file names
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, 
+                @"\b(passwd|shadow|hosts|config|\.htaccess|web\.config)\b", "[SENSITIVE_FILE]", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            return sanitized;
         }
 
         /// <summary>

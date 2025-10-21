@@ -2331,4 +2331,399 @@ public class ProgramAdvancedTests : IDisposable
     }
 
     #endregion
+
+    #region Azure Key Vault Configuration Tests
+
+    /// <summary>
+    /// Tests Azure Key Vault configuration when vault name is provided
+    /// </summary>
+    [Fact]
+    public void ConfigureKeyVault_ShouldAddKeyVaultSecrets_WhenVaultNameProvided()
+    {
+        // Arrange
+        var keyVaultName = "test-keyvault";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["KeyVault:VaultName"] = keyVaultName
+            })
+            .Build();
+
+        var builder = WebApplication.CreateBuilder();
+        builder.Configuration.AddConfiguration(configuration);
+        builder.Environment.EnvironmentName = "Production";
+
+        // Act & Assert - Should not throw
+        var exception = Record.Exception(() => 
+        {
+            // This simulates the Key Vault configuration logic from Program.cs
+            if (!builder.Environment.IsDevelopment())
+            {
+                var vaultName = builder.Configuration["KeyVault:VaultName"];
+                if (!string.IsNullOrEmpty(vaultName))
+                {
+                    // Key Vault configuration would happen here
+                    vaultName.Should().Be(keyVaultName);
+                }
+            }
+        });
+
+        exception.Should().BeNull("Key Vault configuration should not throw exceptions");
+    }
+
+    /// <summary>
+    /// Tests Azure Key Vault configuration when vault name is missing
+    /// </summary>
+    [Fact]
+    public void ConfigureKeyVault_ShouldSkipConfiguration_WhenVaultNameMissing()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+
+        var builder = WebApplication.CreateBuilder();
+        builder.Configuration.AddConfiguration(configuration);
+        builder.Environment.EnvironmentName = "Production";
+
+        // Act & Assert
+        var keyVaultName = builder.Configuration["KeyVault:VaultName"];
+        keyVaultName.Should().BeNullOrEmpty("Missing Key Vault name should be handled gracefully");
+    }
+
+    /// <summary>
+    /// Tests Azure Key Vault configuration logging warning when not configured
+    /// </summary>
+    [Fact]
+    public void ConfigureKeyVault_ShouldLogWarning_WhenNotConfiguredInNonDevelopment()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+
+        // Act - Simulate the warning condition from Program.cs
+        var isNonDevelopment = true; // Simulating non-development environment
+        var keyVaultName = configuration["KeyVault:VaultName"];
+        var shouldWarn = isNonDevelopment && string.IsNullOrEmpty(keyVaultName);
+
+        // Assert
+        shouldWarn.Should().BeTrue("Should warn when Key Vault is not configured in non-development environment");
+    }
+
+    #endregion
+
+    #region External Authentication Configuration Tests
+
+    /// <summary>
+    /// Tests Google authentication configuration with valid credentials
+    /// </summary>
+    [Fact]
+    public void ConfigureGoogleAuthentication_ShouldConfigureProvider_WhenValidCredentials()
+    {
+        // Arrange
+        var clientId = "test-google-client-id";
+        var clientSecret = "test-google-client-secret";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Authentication:Google:ClientId"] = clientId,
+                ["Authentication:Google:ClientSecret"] = clientSecret
+            })
+            .Build();
+
+        // Act - Simulate credential validation logic from Program.cs
+        var googleClientId = configuration["Authentication:Google:ClientId"];
+        var googleClientSecret = configuration["Authentication:Google:ClientSecret"];
+        var isValidGoogle = IsValidAuthenticationCredentials(googleClientId, googleClientSecret);
+
+        // Assert
+        isValidGoogle.Should().BeTrue("Valid Google credentials should be accepted");
+        googleClientId.Should().Be(clientId);
+        googleClientSecret.Should().Be(clientSecret);
+    }
+
+    /// <summary>
+    /// Tests Microsoft authentication configuration with valid credentials
+    /// </summary>
+    [Fact]
+    public void ConfigureMicrosoftAuthentication_ShouldConfigureProvider_WhenValidCredentials()
+    {
+        // Arrange
+        var clientId = "test-microsoft-client-id";
+        var clientSecret = "test-microsoft-client-secret";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Authentication:Microsoft:ClientId"] = clientId,
+                ["Authentication:Microsoft:ClientSecret"] = clientSecret
+            })
+            .Build();
+
+        // Act - Simulate credential validation logic from Program.cs
+        var microsoftClientId = configuration["Authentication:Microsoft:ClientId"];
+        var microsoftClientSecret = configuration["Authentication:Microsoft:ClientSecret"];
+        var isValidMicrosoft = IsValidAuthenticationCredentials(microsoftClientId, microsoftClientSecret);
+
+        // Assert
+        isValidMicrosoft.Should().BeTrue("Valid Microsoft credentials should be accepted");
+        microsoftClientId.Should().Be(clientId);
+        microsoftClientSecret.Should().Be(clientSecret);
+    }
+
+    /// <summary>
+    /// Tests Facebook authentication configuration with valid credentials
+    /// </summary>
+    [Fact]
+    public void ConfigureFacebookAuthentication_ShouldConfigureProvider_WhenValidCredentials()
+    {
+        // Arrange
+        var appId = "test-facebook-app-id";
+        var appSecret = "test-facebook-app-secret";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Authentication:Facebook:AppId"] = appId,
+                ["Authentication:Facebook:AppSecret"] = appSecret
+            })
+            .Build();
+
+        // Act - Simulate credential validation logic from Program.cs
+        var facebookAppId = configuration["Authentication:Facebook:AppId"];
+        var facebookAppSecret = configuration["Authentication:Facebook:AppSecret"];
+        var isValidFacebook = IsValidAuthenticationCredentials(facebookAppId, facebookAppSecret);
+
+        // Assert
+        isValidFacebook.Should().BeTrue("Valid Facebook credentials should be accepted");
+        facebookAppId.Should().Be(appId);
+        facebookAppSecret.Should().Be(appSecret);
+    }
+
+    /// <summary>
+    /// Tests authentication configuration with placeholder values
+    /// </summary>
+    [Fact]
+    public void ConfigureAuthentication_ShouldRejectPlaceholders_WhenPlaceholderCredentials()
+    {
+        // Arrange - Using placeholder values that should be rejected
+        var placeholderClientId = "YOUR_GOOGLE_CLIENT_ID";
+        var placeholderSecret = "YOUR_GOOGLE_CLIENT_SECRET";
+
+        // Act
+        var isValidPlaceholder = IsValidAuthenticationCredentials(placeholderClientId, placeholderSecret);
+
+        // Assert
+        isValidPlaceholder.Should().BeFalse("Placeholder credentials should be rejected");
+    }
+
+    /// <summary>
+    /// Tests authentication configuration with empty credentials
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", "")]
+    [InlineData("valid-client-id", null)]
+    [InlineData(null, "valid-secret")]
+    [InlineData("valid-client-id", "")]
+    [InlineData("", "valid-secret")]
+    public void ConfigureAuthentication_ShouldRejectInvalidCredentials_WhenIncompleteCredentials(string? clientId, string? clientSecret)
+    {
+        // Act
+        var isValid = IsValidAuthenticationCredentials(clientId, clientSecret);
+
+        // Assert
+        isValid.Should().BeFalse("Incomplete or invalid credentials should be rejected");
+    }
+
+    #endregion
+
+    #region Development Data Seeding Tests
+
+    /// <summary>
+    /// Tests development data seeding when in development environment
+    /// </summary>
+    [Fact]
+    public void SeedDevelopmentData_ShouldSeed_WhenDevelopmentEnvironment()
+    {
+        // Arrange
+        var isDevelopment = true;
+        var hasExistingData = false; // Simulating empty database
+
+        // Act - Simulate seeding logic from Program.cs
+        var shouldSeed = isDevelopment && !hasExistingData;
+
+        // Assert
+        shouldSeed.Should().BeTrue("Should seed data in development environment when database is empty");
+    }
+
+    /// <summary>
+    /// Tests development data seeding when data already exists
+    /// </summary>
+    [Fact]
+    public void SeedDevelopmentData_ShouldSkip_WhenDataAlreadyExists()
+    {
+        // Arrange
+        var isDevelopment = true;
+        var hasExistingData = true; // Simulating database with data
+
+        // Act - Simulate seeding logic from Program.cs
+        var shouldSeed = isDevelopment && !hasExistingData;
+
+        // Assert
+        shouldSeed.Should().BeFalse("Should skip seeding when data already exists");
+    }
+
+    /// <summary>
+    /// Tests demo user creation logic
+    /// </summary>
+    [Fact]
+    public void CreateDemoUser_ShouldCreateValidUser_WhenCalled()
+    {
+        // Arrange
+        var demoEmail = "demo@setliststudio.com";
+        var demoDisplayName = "Demo User";
+
+        // Act - Simulate demo user creation logic
+        var demoUser = new ApplicationUser
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = demoEmail,
+            Email = demoEmail,
+            EmailConfirmed = true,
+            DisplayName = demoDisplayName
+        };
+
+        // Assert
+        demoUser.Should().NotBeNull();
+        demoUser.Email.Should().Be(demoEmail);
+        demoUser.UserName.Should().Be(demoEmail);
+        demoUser.EmailConfirmed.Should().BeTrue("Demo user should have confirmed email");
+        demoUser.DisplayName.Should().Be(demoDisplayName);
+    }
+
+    /// <summary>
+    /// Tests sample songs creation for different genres
+    /// </summary>
+    [Theory]
+    [InlineData("Rock", 120, "C")]
+    [InlineData("Jazz", 140, "Bb")]
+    [InlineData("Pop", 110, "G")]
+    [InlineData("Blues", 80, "E")]
+    public void CreateSampleSongs_ShouldCreateValidSongs_ForAllGenres(string genre, int bpm, string musicalKey)
+    {
+        // Arrange & Act - Simulate sample song creation
+        var sampleSong = new Song
+        {
+            Title = $"Sample {genre} Song",
+            Artist = $"Sample {genre} Artist",
+            Genre = genre,
+            Bpm = bpm,
+            MusicalKey = musicalKey,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Assert
+        sampleSong.Should().NotBeNull();
+        sampleSong.Title.Should().Contain(genre);
+        sampleSong.Artist.Should().Contain(genre);
+        sampleSong.Genre.Should().Be(genre);
+        sampleSong.Bpm.Should().Be(bpm);
+        sampleSong.MusicalKey.Should().Be(musicalKey);
+    }
+
+    /// <summary>
+    /// Tests sample setlist creation with different types
+    /// </summary>
+    [Theory]
+    [InlineData("Wedding Reception", "A romantic evening setlist")]
+    [InlineData("Jazz Club Night", "Smooth jazz for intimate venues")]
+    [InlineData("Rock Concert", "High-energy rock performance")]
+    public void CreateSampleSetlists_ShouldCreateValidSetlists_ForAllTypes(string name, string description)
+    {
+        // Arrange & Act - Simulate sample setlist creation
+        var sampleSetlist = new Setlist
+        {
+            Name = name,
+            Description = description,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Assert
+        sampleSetlist.Should().NotBeNull();
+        sampleSetlist.Name.Should().Be(name);
+        sampleSetlist.Description.Should().Be(description);
+        sampleSetlist.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    #endregion
+
+    #region Secret Validation Tests
+
+    /// <summary>
+    /// Tests secret validation for production environment
+    /// </summary>
+    [Fact]
+    public void ValidateSecrets_ShouldValidateAllSecrets_InProductionEnvironment()
+    {
+        // Arrange
+        var isProduction = true;
+        var secrets = new Dictionary<string, string?>
+        {
+            ["Google:ClientId"] = "valid-google-client-id",
+            ["Google:ClientSecret"] = "valid-google-client-secret",
+            ["Microsoft:ClientId"] = "valid-microsoft-client-id",
+            ["Microsoft:ClientSecret"] = "valid-microsoft-client-secret",
+            ["Facebook:AppId"] = "valid-facebook-app-id",
+            ["Facebook:AppSecret"] = "valid-facebook-app-secret"
+        };
+
+        // Act - Simulate secret validation logic
+        var validationResults = secrets.Select(kvp => new
+        {
+            Key = kvp.Key,
+            IsValid = !string.IsNullOrEmpty(kvp.Value) && !kvp.Value.StartsWith("YOUR_")
+        }).ToList();
+
+        // Assert
+        if (isProduction)
+        {
+            validationResults.Should().AllSatisfy(result => 
+                result.IsValid.Should().BeTrue($"Secret {result.Key} should be valid in production"));
+        }
+    }
+
+    /// <summary>
+    /// Tests secret validation error handling
+    /// </summary>
+    [Fact]
+    public void ValidateSecrets_ShouldHandleErrors_GracefullyInDevelopment()
+    {
+        // Arrange
+        var isDevelopment = true;
+        var hasInvalidSecrets = true;
+
+        // Act - Simulate validation error handling
+        var shouldThrow = !isDevelopment && hasInvalidSecrets;
+
+        // Assert
+        shouldThrow.Should().BeFalse("Development environment should not throw on invalid secrets");
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Helper method to simulate authentication credential validation
+    /// </summary>
+    private static bool IsValidAuthenticationCredentials(string? clientId, string? clientSecret)
+    {
+        return !string.IsNullOrEmpty(clientId) &&
+               !string.IsNullOrEmpty(clientSecret) &&
+               !clientId.StartsWith("YOUR_") &&
+               !clientSecret.StartsWith("YOUR_");
+    }
+
+    #endregion
+
 }

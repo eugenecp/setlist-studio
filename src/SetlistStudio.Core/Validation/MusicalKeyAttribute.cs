@@ -36,15 +36,22 @@ public class MusicalKeyAttribute : ValidationAttribute
 
     public override bool IsValid(object? value)
     {
-        // Null or empty values are considered valid (use [Required] for mandatory validation)
-        if (value == null || (value is string str && string.IsNullOrWhiteSpace(str)))
+        // Null values are considered valid (use [Required] for mandatory validation)
+        if (value == null)
         {
             return true;
         }
 
+        // Handle non-string values
         if (value is not string keyValue)
         {
             return false;
+        }
+
+        // Empty or whitespace-only strings are considered valid (use [Required] for mandatory validation)
+        if (string.IsNullOrWhiteSpace(keyValue))
+        {
+            return true;
         }
 
         // Remove whitespace and validate format first
@@ -58,6 +65,8 @@ public class MusicalKeyAttribute : ValidationAttribute
         // Check against valid keys list (case-insensitive)
         return ValidKeys.Contains(keyValue, StringComparer.OrdinalIgnoreCase);
     }
+
+
 
     public override string FormatErrorMessage(string name)
     {

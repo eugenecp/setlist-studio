@@ -502,4 +502,288 @@ public class SecurityEventHandlerTests
                 It.IsAny<object>()),
             Times.Once);
     }
+
+    /// <summary>
+    /// Tests exception handling in OnLoginSuccess method.
+    /// </summary>
+    [Fact]
+    public void OnLoginSuccess_ShouldHandleSecurityEventLoggerException()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogAuthenticationSuccess(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Throws(new InvalidOperationException("Test exception"));
+
+        // Act & Assert - Should not throw
+        var exception = Record.Exception(() => _securityEventHandler.OnLoginSuccess(_httpContext, user));
+        exception.Should().BeNull("Exception should be handled gracefully");
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log authentication success event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnSuspiciousActivity method with HttpContext.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_WithHttpContext_ShouldHandleSecurityEventLoggerException()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+        var userId = "user123";
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogSuspiciousActivity(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SecurityEventSeverity>(), It.IsAny<object>()))
+            .Throws(new InvalidOperationException("Test exception"));
+
+        // Act & Assert - Should not throw
+        var exception = Record.Exception(() => _securityEventHandler.OnSuspiciousActivity(_httpContext, activityType, description, userId));
+        exception.Should().BeNull("Exception should be handled gracefully");
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log suspicious activity event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnSuspiciousActivity method with pre-sanitized data.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_WithPreSanitizedData_ShouldHandleSecurityEventLoggerException()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+        var userId = "user123";
+        var sanitizedUserAgent = "Clean-User-Agent";
+        var sanitizedIpAddress = "192.168.1.100";
+        var sanitizedRequestPath = "/api/test";
+        var sanitizedRequestMethod = "POST";
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogSuspiciousActivity(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SecurityEventSeverity>(), It.IsAny<object>()))
+            .Throws(new InvalidOperationException("Test exception"));
+
+        // Act & Assert - Should not throw
+        var exception = Record.Exception(() => _securityEventHandler.OnSuspiciousActivity(
+            activityType, description, userId, SecurityEventSeverity.High,
+            sanitizedUserAgent, sanitizedIpAddress, sanitizedRequestPath, sanitizedRequestMethod));
+        exception.Should().BeNull("Exception should be handled gracefully");
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log suspicious activity event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that OnSuspiciousActivity with pre-sanitized data handles all optional parameters.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_WithPreSanitizedData_ShouldHandleAllOptionalParameters()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(
+            activityType, 
+            description,
+            userId: null,
+            severity: SecurityEventSeverity.Medium,
+            sanitizedUserAgent: null,
+            sanitizedIpAddress: null,
+            sanitizedRequestPath: null,
+            sanitizedRequestMethod: null);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSuspiciousActivity(
+                activityType,
+                description,
+                null,
+                SecurityEventSeverity.Medium,
+                It.IsAny<object>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that OnSuspiciousActivity with pre-sanitized data uses provided values.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_WithPreSanitizedData_ShouldUseProvidedValues()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+        var userId = "user123";
+        var sanitizedUserAgent = "Custom-User-Agent";
+        var sanitizedIpAddress = "10.0.0.1";
+        var sanitizedRequestPath = "/custom/path";
+        var sanitizedRequestMethod = "PUT";
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(
+            activityType, 
+            description,
+            userId,
+            SecurityEventSeverity.High,
+            sanitizedUserAgent,
+            sanitizedIpAddress,
+            sanitizedRequestPath,
+            sanitizedRequestMethod);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSuspiciousActivity(
+                activityType,
+                description,
+                userId,
+                SecurityEventSeverity.High,
+                It.IsAny<object>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that GetAuthenticationMethod handles null HttpContext identity properly.
+    /// </summary>
+    [Fact]
+    public void OnLoginSuccess_ShouldHandleNullIdentity()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+
+        _httpContext.User = new ClaimsPrincipal(); // No identity set
+
+        // Act
+        _securityEventHandler.OnLoginSuccess(_httpContext, user);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogAuthenticationSuccess(
+                user.Id,
+                "Unknown", // Should default to Unknown when no identity
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that GetClientIpAddress handles proxy headers correctly.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_ShouldExtractIpFromProxyHeaders()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+        
+        _httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.1, 198.51.100.1";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.1");
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(_httpContext, activityType, description);
+
+        // Assert - Should use X-Forwarded-For header value
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSuspiciousActivity(
+                activityType,
+                description,
+                It.IsAny<string>(),
+                It.IsAny<SecurityEventSeverity>(),
+                It.IsAny<object>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that OnAccountLockout method coverage gaps are handled.
+    /// </summary>
+    [Fact]
+    public void OnAccountLockout_AdditionalCoverage_ShouldLogSecurityEvent()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+        var lockoutEnd = DateTimeOffset.UtcNow.AddMinutes(15);
+        var attemptCount = 5;
+
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        // Act
+        _securityEventHandler.OnAccountLockout(_httpContext, user, lockoutEnd, attemptCount);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogAccountLockout(
+                user.Id,
+                It.Is<TimeSpan>(t => t.TotalMinutes > 14 && t.TotalMinutes < 16), // Approximately 15 minutes
+                attemptCount,
+                "192.168.1.100"),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests that OnLogout method coverage gaps are handled.
+    /// </summary>
+    [Fact]
+    public void OnLogout_AdditionalCoverage_ShouldLogSecurityEvent()
+    {
+        // Arrange
+        var userId = "user123";
+        
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        // Act
+        _securityEventHandler.OnLogout(_httpContext, userId);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSecurityEvent(
+                SecurityEventType.Authentication,
+                SecurityEventSeverity.Low,
+                "User logged out successfully",
+                userId,
+                "Authentication",
+                null,
+                It.IsAny<object>()),
+            Times.Once);
+    }
 }

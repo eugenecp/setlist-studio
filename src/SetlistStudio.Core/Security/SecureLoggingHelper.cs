@@ -40,6 +40,18 @@ public static class SecureLoggingHelper
         new(@"(\r\n|\r|\n).*?(INFO|WARN|ERROR|DEBUG|TRACE|FATAL)", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Log level injection
     };
 
+    // XSS and malicious content patterns for sanitization
+    public static readonly Regex[] XssPatterns = 
+    {
+        new(@"<script[^>]*>.*?</script>", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline, TimeSpan.FromMilliseconds(100)), // Script tags
+        new(@"<.*?javascript:.*?>", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // JavaScript URLs
+        new(@"<.*?on\w+\s*=.*?>", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Event handlers
+        new(@"\.\.[\\/]", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Path traversal
+        new(@"<.*?script.*?>", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Script tag variations
+        new(@"javascript:", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // JavaScript protocol
+        new(@"alert\s*\(", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)), // Alert function calls
+    };
+
     // Fields that should be completely redacted
     private static readonly string[] SensitiveFields =
     {
@@ -99,6 +111,9 @@ public static class SecureLoggingHelper
             }
         }
 
+        // Apply XSS and malicious content sanitization
+        sanitized = SanitizeXssContent(sanitized);
+
         // Apply log injection prevention
         sanitized = PreventLogInjection(sanitized);
 
@@ -143,6 +158,42 @@ public static class SecureLoggingHelper
         if (sanitized.Length > 1000)
         {
             sanitized = sanitized.Substring(0, 997) + "...";
+        }
+
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Sanitizes XSS and malicious content from user input.
+    /// This method addresses XSS prevention and malicious content filtering.
+    /// </summary>
+    /// <param name="input">The input to sanitize</param>
+    /// <returns>A sanitized string with XSS content removed</returns>
+    public static string SanitizeXssContent(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return string.Empty;
+        }
+
+        var sanitized = input;
+
+        // Apply XSS sanitization patterns
+        foreach (var pattern in XssPatterns)
+        {
+            try
+            {
+                sanitized = pattern.Replace(sanitized, match =>
+                {
+                    // Replace with safe placeholder
+                    return "[SANITIZED]";
+                });
+            }
+            catch
+            {
+                // If regex fails, continue with other patterns
+                continue;
+            }
         }
 
         return sanitized;

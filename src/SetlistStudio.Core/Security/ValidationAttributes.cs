@@ -138,12 +138,26 @@ namespace SetlistStudio.Core.Security
 
         protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
         {
-            if (value == null || string.IsNullOrEmpty(value as string))
+            // Null values are considered valid (use [Required] for mandatory validation)
+            if (value == null)
             {
-                return ValidationResult.Success; // Allow null/empty
+                return ValidationResult.Success;
             }
 
-            var keyValue = (string)value;
+            // Handle non-string values
+            if (value is not string keyValue)
+            {
+                return new ValidationResult($"Value is not a valid musical key. Valid keys are: {string.Join(", ", ValidKeys)}");
+            }
+
+            // Empty or whitespace-only strings are considered valid (use [Required] for mandatory validation)
+            if (string.IsNullOrWhiteSpace(keyValue))
+            {
+                return ValidationResult.Success;
+            }
+
+            // Remove whitespace and validate
+            keyValue = keyValue.Trim();
 
             if (ValidKeys.Contains(keyValue))
             {

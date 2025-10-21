@@ -99,6 +99,13 @@ namespace SetlistStudio.Web.Security
             }
 
             var userAgent = context.Request.Headers.UserAgent.ToString();
+            
+            // Handle empty or whitespace user agent
+            if (string.IsNullOrWhiteSpace(userAgent))
+            {
+                return "Unknown";
+            }
+            
             return SecureLoggingHelper.SanitizeMessage(userAgent) ?? "Unknown";
         }
 
