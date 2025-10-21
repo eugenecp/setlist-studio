@@ -380,15 +380,25 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
     [InlineData("/elmah.axd")]
     public async Task SensitiveEndpoints_ShouldBeProtectedOrNonExistent(string endpoint)
     {
-        // Act
-        var response = await _client.GetAsync(endpoint);
+        // Arrange - Create client that doesn't follow redirects to properly test authorization
+        var clientOptions = new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        };
+        
+        using var client = _factory.CreateClient(clientOptions);
 
-        // Assert - Sensitive endpoints should either not exist or require authentication
+        // Act
+        var response = await client.GetAsync(endpoint);
+
+        // Assert - Sensitive endpoints should either not exist, require authentication, or redirect to login
         response.StatusCode.Should().BeOneOf(
             HttpStatusCode.NotFound,
             HttpStatusCode.Unauthorized,
-            HttpStatusCode.Forbidden);
-        // Sensitive endpoints should not be publicly accessible
+            HttpStatusCode.Forbidden,
+            HttpStatusCode.Redirect,
+            HttpStatusCode.Found); // 302 redirect to login page is also acceptable
+        // Sensitive endpoints should not be publicly accessible with direct 200 OK
     }
 
     [Fact]

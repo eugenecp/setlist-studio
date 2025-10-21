@@ -224,7 +224,12 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
     [Fact]
     public async Task InvokeAsync_ShouldHandleUnauthorizedAccessException()
     {
-        // Arrange
+        // Arrange - Create client that doesn't follow redirects to properly test authorization
+        var clientOptions = new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        };
+        
         var client = _factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureTestServices(services =>
@@ -235,17 +240,19 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
                     options.PreserveExecutionContext = true;
                 });
             });
-        }).CreateClient();
+        }).CreateClient(clientOptions);
 
         // Act & Assert
         // Access a protected endpoint without authentication
         var response = await client.GetAsync("/admin");
         
-        // Should handle the exception gracefully
+        // Should handle the exception gracefully by redirecting or blocking access
         response.StatusCode.Should().BeOneOf(
             System.Net.HttpStatusCode.Unauthorized,
+            System.Net.HttpStatusCode.Forbidden,
+            System.Net.HttpStatusCode.NotFound,
             System.Net.HttpStatusCode.Redirect,
-            System.Net.HttpStatusCode.NotFound);
+            System.Net.HttpStatusCode.Found); // 302 redirect to login page is acceptable
     }
 
     [Fact]

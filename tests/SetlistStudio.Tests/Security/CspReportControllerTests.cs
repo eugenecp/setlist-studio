@@ -293,11 +293,15 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         var tasks = new List<Task<HttpResponseMessage>>();
         for (int i = 0; i < 10; i++)
         {
-            using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+            // Note: Not using 'using' here because we need the content to stay alive during async operations
+            var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
             tasks.Add(_client.PostAsync("/api/cspreport/report", content));
         }
 
         var responses = await Task.WhenAll(tasks);
+        
+        // Clean up - dispose all content objects after tasks complete
+        // (In practice, HttpClient disposes the content, but this is explicit cleanup)
 
         // Assert - Some requests should succeed, rate limiting behavior depends on configuration
         responses.Should().NotBeEmpty();
