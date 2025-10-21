@@ -128,7 +128,15 @@ public class DatabaseInitializerAdvancedTests
             // Cleanup
             if (File.Exists(tempDbPath))
             {
-                try { File.Delete(tempDbPath); } catch { }
+                try 
+                { 
+                    File.Delete(tempDbPath); 
+                } 
+                catch (Exception ex) 
+                { 
+                    // Ignore cleanup failures - test database file deletion is not critical
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete test database: {ex.Message}");
+                }
             }
         }
     }
@@ -444,7 +452,11 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) 
+                { 
+                    // Ignore file deletion failures - test cleanup is not critical
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}");
+                }
             }
         }
     }
@@ -513,7 +525,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -585,7 +597,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempFilePath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -619,7 +631,7 @@ public class DatabaseInitializerAdvancedTests
             {
                 File.Delete(nonExistentPath);
             }
-            catch (IOException) { }
+            catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
         }
     }
 
@@ -718,7 +730,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -823,7 +835,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -849,11 +861,7 @@ public class DatabaseInitializerAdvancedTests
     {
         if (!File.Exists(filePath)) return;
         
-        // Force garbage collection to help close any remaining handles
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        
-        // Retry cleanup to handle file locks
+        // Retry cleanup to handle file locks with exponential backoff
         for (int i = 0; i < 5; i++)
         {
             try
@@ -865,10 +873,6 @@ public class DatabaseInitializerAdvancedTests
             {
                 // Wait progressively longer and retry if file is locked
                 await Task.Delay((i + 1) * 200);
-                
-                // Force garbage collection again after the delay
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
             }
             catch (UnauthorizedAccessException) when (i < 4)
             {

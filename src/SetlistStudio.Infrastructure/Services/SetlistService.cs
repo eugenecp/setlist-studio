@@ -318,8 +318,9 @@ public class SetlistService : ISetlistService
     {
         if (!position.HasValue) return;
 
+        var positionValue = position.Value;
         var songsToShift = await _context.SetlistSongs
-            .Where(ss => ss.SetlistId == setlistId && ss.Position >= position.Value)
+            .Where(ss => ss.SetlistId == setlistId && ss.Position >= positionValue)
             .ToListAsync();
 
         foreach (var songToShift in songsToShift)
