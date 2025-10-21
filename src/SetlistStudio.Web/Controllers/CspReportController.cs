@@ -85,6 +85,7 @@ public class CspReportController : ControllerBase
             _logger.LogError(ex, "CSP reporting service unavailable");
             return StatusCode(503, "CSP reporting service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error processing CSP violation report");

@@ -73,7 +73,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized IP address safe for logging</returns>
         public static string GetSanitizedClientIp(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "unknown";
             }
@@ -93,7 +93,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized user agent string safe for logging</returns>
         public static string GetSanitizedUserAgent(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "Unknown";
             }
@@ -116,7 +116,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized request path safe for logging</returns>
         public static string GetSanitizedRequestPath(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "/unknown";
             }

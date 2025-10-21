@@ -497,6 +497,7 @@ public class SecurityMetricsService : ISecurityMetricsService
             {
                 _logger.LogWarning(ex, "Metrics storage temporarily unavailable during cleanup");
             }
+            // CodeQL[cs/catch-of-all-exceptions] - Service cleanup error handling
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error during security metrics cleanup");

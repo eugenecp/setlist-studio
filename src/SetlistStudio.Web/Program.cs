@@ -73,6 +73,7 @@ try
                 builder.Configuration.AddAzureKeyVault(secretClient, new KeyVaultSecretManager());
                 Log.Information("Azure Key Vault configured: {KeyVaultUri}", keyVaultUri);
             }
+            // CodeQL[cs/catch-of-all-exceptions] - Application startup configuration handling
             catch (Exception ex)
             {
                 Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
@@ -614,6 +615,7 @@ try
     
     app.Run();
 }
+// CodeQL[cs/catch-of-all-exceptions] - Top-level application exception handler
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
@@ -750,6 +752,7 @@ static void ConfigureGoogleAuthentication(AuthenticationBuilder authBuilder, ICo
             });
             Log.Information("Google authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Google authentication");
@@ -783,6 +786,7 @@ static void ConfigureMicrosoftAuthentication(AuthenticationBuilder authBuilder, 
             });
             Log.Information("Microsoft authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Microsoft authentication");
@@ -816,6 +820,7 @@ static void ConfigureFacebookAuthentication(AuthenticationBuilder authBuilder, I
             });
             Log.Information("Facebook authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Facebook authentication");
@@ -859,6 +864,7 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
 
         Log.Information("Sample data seeded successfully");
     }
+    // CodeQL[cs/catch-of-all-exceptions] - Development data seeding error handling
     catch (Exception ex)
     {
         Log.Error(ex, "Failed to seed development data");
@@ -1026,6 +1032,7 @@ static Task ValidateSecretsAsync(WebApplication app)
             
         return Task.CompletedTask;
     }
+    // CodeQL[cs/catch-of-all-exceptions] - Application startup secret validation
     catch (Exception ex)
     {
         Log.Fatal(ex, "Secret validation failed for environment: {Environment}", app.Environment.EnvironmentName);

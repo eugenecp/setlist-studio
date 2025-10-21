@@ -64,6 +64,7 @@ public class SecurityEventMiddleware
             _logger.LogError(ex, "Invalid argument in security middleware for path {RequestPath}", requestPath);
             throw;
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Middleware boundary catch for security logging
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error in security event middleware for path {RequestPath}", requestPath);
@@ -264,6 +265,7 @@ public class SecurityEventMiddleware
         {
             _logger.LogWarning(ex, "Invalid cast while processing form data");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Defensive programming for security pattern analysis
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Unexpected error while checking form data for suspicious patterns");

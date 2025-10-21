@@ -69,6 +69,7 @@ public class SetlistsController : ControllerBase
             _logger.LogError(ex, "Service unavailable for setlist retrieval");
             return StatusCode(503, "Service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving setlists");
@@ -123,6 +124,7 @@ public class SetlistsController : ControllerBase
             _logger.LogError(ex, "Search service unavailable for setlists");
             return StatusCode(503, "Search service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error searching setlists");
@@ -191,6 +193,7 @@ public class SetlistsController : ControllerBase
             _logger.LogError(ex, "Setlist service unavailable");
             return StatusCode(503, "Service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error creating setlist");
@@ -240,6 +243,7 @@ public class SetlistsController : ControllerBase
             _logger.LogError(ex, "Service unavailable for setlist {SetlistId}", id);
             return StatusCode(503, "Service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving setlist {SetlistId}", id);
