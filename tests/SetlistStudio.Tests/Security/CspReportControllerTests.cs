@@ -54,7 +54,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(violation);
-        var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);
@@ -67,7 +67,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
     public async Task Report_WithNullReport_ShouldReturn400BadRequest()
     {
         // Arrange
-        var content = new StringContent("null", Encoding.UTF8, "application/csp-report");
+        using var content = new StringContent("null", Encoding.UTF8, "application/csp-report");
 
         // Act
         var response = await _client.PostAsync("/api/cspreport/report", content);

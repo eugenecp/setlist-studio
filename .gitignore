@@ -459,5 +459,6 @@ codeql-database/
 **/codeql-database/
 *.sarif
 *-results.sarif
-*-results.csv
+*-results*.csv
 codeql-results/
+

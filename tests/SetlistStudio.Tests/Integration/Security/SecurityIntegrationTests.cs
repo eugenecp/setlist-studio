@@ -162,7 +162,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         foreach (var maliciousInput in maliciousInputs)
         {
             // Act - Try to submit malicious input to various endpoints
-            var formData = new FormUrlEncodedContent(new[]
+            using var formData = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("Title", maliciousInput),
                 new KeyValuePair<string, string>("Artist", "Test Artist"),
@@ -255,7 +255,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         foreach (var xssPayload in xssPayloads)
         {
             // Act - Submit XSS payload through form input
-            var formData = new FormUrlEncodedContent(new[]
+            using var formData = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("Title", xssPayload),
                 new KeyValuePair<string, string>("Artist", "Test Artist")
@@ -287,17 +287,12 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var initialAuditCount = await context.AuditLogs.CountAsync();
 
         // Act - Perform various actions that should generate audit logs
-        var actions = new[]
-        {
-            () => _client.GetAsync("/api/health"),
-            () => _client.GetAsync("/Identity/Account/Login"),
-            () => _client.PostAsync("/api/songs", new StringContent("{}", Encoding.UTF8, "application/json"))
-        };
-
-        foreach (var action in actions)
-        {
-            await action();
-        }
+        // Test multiple endpoints for rate limiting
+        await _client.GetAsync("/api/health");
+        await _client.GetAsync("/Identity/Account/Login");
+        
+        using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        await _client.PostAsync("/api/songs", content);
 
         // Assert - Check if audit logs were created
         var finalAuditCount = await context.AuditLogs.CountAsync();

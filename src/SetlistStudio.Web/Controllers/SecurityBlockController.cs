@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SetlistStudio.Web.Controllers;
@@ -14,6 +15,7 @@ public class SecurityBlockController : Controller
     /// </summary>
     [HttpGet("admin")]
     [HttpGet("api/admin")]
+    [Authorize(Roles = "Admin")]
     public IActionResult Admin()
     {
         return NotFound();

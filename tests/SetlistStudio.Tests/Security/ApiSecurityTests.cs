@@ -88,7 +88,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(maliciousSong);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -165,7 +165,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(xssSong);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -204,7 +204,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(songData);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -246,7 +246,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
             foreach (var url in testUrls)
             {
                 // Arrange
-                var request = new HttpRequestMessage(method, url);
+                using var request = new HttpRequestMessage(method, url);
                 if (method == HttpMethod.Post || method == HttpMethod.Put)
                 {
                     request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
@@ -348,7 +348,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(invalidSong);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -381,7 +381,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(songWithInvalidBpm);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -429,7 +429,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
     public async Task API_ContentType_ShouldBeValidated()
     {
         // Arrange - Request with incorrect content type
-        var content = new StringContent("{\"test\": \"data\"}", Encoding.UTF8, "text/plain");
+        using var content = new StringContent("{\"test\": \"data\"}", Encoding.UTF8, "text/plain");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -505,7 +505,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
     public async Task API_WithMalformedJson_ShouldHandleGracefully()
     {
         // Arrange - Malformed JSON
-        var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/json");
+        using var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);
@@ -541,7 +541,7 @@ public class ApiSecurityTests : IClassFixture<TestWebApplicationFactory>
         };
 
         var json = JsonSerializer.Serialize(largePayload);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
         var response = await _client.PostAsync("/api/songs", content);

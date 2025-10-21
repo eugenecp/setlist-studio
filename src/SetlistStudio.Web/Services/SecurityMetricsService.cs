@@ -424,9 +424,9 @@ public class SecurityMetricsService : ISecurityMetricsService
         var highEvents = events.Count(e => e.Severity == "HIGH");
         var mediumEvents = events.Count(e => e.Severity == "MEDIUM");
 
-        baseScore -= criticalEvents * 10; // Critical events heavily impact score
-        baseScore -= highEvents * 5;     // High events moderately impact score
-        baseScore -= mediumEvents * 2;   // Medium events lightly impact score
+        baseScore -= criticalEvents * 10.0; // Critical events heavily impact score
+        baseScore -= highEvents * 5.0;     // High events moderately impact score
+        baseScore -= mediumEvents * 2.0;   // Medium events lightly impact score
 
         return Math.Max(0, Math.Min(100, baseScore));
     }
