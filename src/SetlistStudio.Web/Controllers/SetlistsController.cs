@@ -43,7 +43,7 @@ public class SetlistsController : ControllerBase
             _logger.LogInformation("Retrieving setlists for user {UserId} (page {Page})", userId, page);
 
             var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, pageNumber: page, pageSize: limit);
-            var response = setlists.Select(s => new SetlistResponse
+            var response = (setlists ?? Enumerable.Empty<SetlistStudio.Core.Entities.Setlist>()).Where(s => s != null).Select(s => new SetlistResponse
             {
                 Id = s.Id,
                 Name = s.Name,

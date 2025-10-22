@@ -24,9 +24,9 @@ public class AuditLogService : IAuditLogService
         IHttpContextAccessor httpContextAccessor,
         ILogger<AuditLogService> logger)
     {
-        _context = context;
-        _httpContextAccessor = httpContextAccessor;
-        _logger = logger;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc />
@@ -125,7 +125,7 @@ public class AuditLogService : IAuditLogService
                 .OrderByDescending(a => a.Timestamp)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToListAsync() ?? new List<AuditLog>();
         }
         catch (InvalidOperationException ex)
         {

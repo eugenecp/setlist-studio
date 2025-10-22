@@ -490,14 +490,12 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
             "Concurrent requests should not cause server errors");
 
         // Verify no session collision or security issues
-        foreach (var response in responses)
+        var responsesWithCookies = responses.Where(r => r.Headers.Contains("Set-Cookie"));
+        foreach (var response in responsesWithCookies)
         {
-            if (response.Headers.Contains("Set-Cookie"))
-            {
-                var cookies = response.Headers.GetValues("Set-Cookie");
-                cookies.Should().OnlyContain(c => !string.IsNullOrEmpty(c),
-                    "Session cookies should not be empty or corrupted");
-            }
+            var cookies = response.Headers.GetValues("Set-Cookie");
+            cookies.Should().OnlyContain(c => !string.IsNullOrEmpty(c),
+                "Session cookies should not be empty or corrupted");
         }
     }
 }

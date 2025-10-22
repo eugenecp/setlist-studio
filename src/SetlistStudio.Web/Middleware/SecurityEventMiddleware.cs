@@ -25,7 +25,6 @@ public class SecurityEventMiddleware
     {
         var startTime = DateTimeOffset.UtcNow;
         var requestPath = context.Request.Path.Value ?? string.Empty;
-        var requestMethod = context.Request.Method;
 
         try
         {
