@@ -466,6 +466,8 @@ paths:
 - **GitHub Actions**: Automated building, testing, and deployment
 - **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 80%+ coverage required before merge
 - **CodeQL Analysis**: Mandatory static security analysis on all pull requests - **CodeQL findings override general security summaries**
+- **CodeQL Code Generation Compliance**: All generated code must pass CodeQL static analysis without high/critical security vulnerabilities
+- **CodeQL Best Practices**: Generated code must follow CodeQL quality recommendations (null safety, LINQ usage, resource disposal)
 - **Code Review**: All changes require peer review and approval
 - **Zero Tolerance**: No failing tests, build warnings, or high/critical security issues allowed in any branch or pull request
 - **Security Priority**: CodeQL high/critical issues constitute security failures regardless of other scan status indicators
@@ -514,6 +516,146 @@ Use realistic musical data in all examples, tests, and documentation:
 - **Guitar-friendly**: E, A, D, G, C
 - **Vocal-friendly**: F, Bb, Eb, Ab
 - **Minor keys**: Am, Em, Bm, F#m, Cm
+
+---
+
+## CodeQL Code Generation Standards
+
+**MANDATORY: All generated code must pass CodeQL static analysis with zero high/critical security issues.**
+
+### Code Generation Requirements
+
+When generating any code (classes, methods, controllers, services, tests), **ALWAYS** ensure:
+
+#### 1. **Security-First Code Generation**
+- **Input Validation**: Every user input must be validated and sanitized
+- **Parameterized Queries**: Never concatenate user input into SQL strings - use Entity Framework LINQ exclusively
+- **Authorization Checks**: Every data access operation must verify user ownership
+- **Error Handling**: Never expose sensitive information in error messages or logs
+- **Resource Management**: Always use `using` statements for IDisposable objects
+
+#### 2. **Null Safety and Type Safety**
+- **Explicit Null Handling**: Use null-conditional operators (`?.`) and null-forgiving operators (`!`) appropriately
+- **Avoid `default()` Casts**: Use explicit nullable casts like `(HttpContext?)null` instead of `default(HttpContext)`
+- **Null Checks**: Add proper null checks before accessing potentially null variables
+- **Non-nullable References**: Leverage C# nullable reference types to prevent null reference exceptions
+
+#### 3. **LINQ and Performance Best Practices**
+- **Use LINQ Methods**: Replace foreach loops with appropriate LINQ methods (`.Select()`, `.Where()`, `.Any()`)
+- **Avoid Unnecessary Variables**: Don't create variables that are assigned but never used
+- **Efficient Queries**: Use `FirstOrDefaultAsync()` instead of `Where().FirstAsync()` when appropriate
+- **Resource Optimization**: Avoid string concatenation in loops, use `StringBuilder` or string interpolation
+
+#### 4. **Authentication and Authorization Patterns**
+```csharp
+// CORRECT: Always validate user ownership
+var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException();
+var userResource = await _service.GetByUserIdAsync(userId, resourceId);
+if (userResource == null) throw new ForbiddenException();
+
+// INCORRECT: Direct access without validation
+var resource = await _service.GetByIdAsync(resourceId); // Missing ownership check
+```
+
+#### 5. **Input Validation Patterns**
+```csharp
+// CORRECT: Comprehensive validation
+[SafeBpm(40, 250)]
+public int Bpm { get; set; }
+
+if (string.IsNullOrWhiteSpace(userInput) || userInput.Length > 500)
+    throw new ValidationException("Invalid input");
+
+var sanitized = SecureLoggingHelper.SanitizeMessage(userInput);
+
+// INCORRECT: No validation
+public int Bpm { get; set; } // Missing validation attribute
+var query = $"SELECT * FROM Songs WHERE Name = '{userInput}'"; // SQL injection risk
+```
+
+#### 6. **Error Handling Patterns**
+```csharp
+// CORRECT: Secure error handling
+try 
+{
+    // Operation
+}
+catch (UnauthorizedAccessException)
+{
+    _logger.LogWarning("Unauthorized access attempt by user {UserId}", userId);
+    return Forbid();
+}
+catch (Exception ex)
+{
+    _logger.LogError(ex, "Operation failed for user {UserId}", userId);
+    return Problem("An error occurred processing your request");
+}
+
+// INCORRECT: Information leakage
+catch (Exception ex)
+{
+    return BadRequest(ex.Message); // Exposes internal details
+}
+```
+
+#### 7. **Resource Management Patterns**
+```csharp
+// CORRECT: Proper disposal
+using var scope = _serviceProvider.CreateScope();
+await using var stream = File.OpenRead(path);
+
+// CORRECT: Explicit disposal in tests
+_mockHttpContextAccessor.Setup(x => x.HttpContext).Returns((HttpContext?)null);
+
+// INCORRECT: Resource leaks
+var stream = File.OpenRead(path); // Missing using statement
+```
+
+### CodeQL Quality Standards
+
+#### **Common CodeQL Issues to Avoid:**
+
+1. **Dereferenced variable may be null**
+   - Use null-conditional operators: `user?.Name`
+   - Add null-forgiving operators after null checks: `result!.Message`
+   - Validate parameters: `name ?? throw new ArgumentNullException(nameof(name))`
+
+2. **Useless assignment to local variable**
+   - Remove unused variables
+   - Use discard pattern `_` only when appropriate
+   - Assign and use variables in the same scope
+
+3. **Useless upcast**
+   - Use explicit nullable casts: `(Type?)null` instead of `default(Type)`
+   - Let compiler handle implicit conversions
+
+4. **Missed opportunity to use LINQ**
+   - Replace `foreach` + `Add()` with `.Select()`
+   - Replace `foreach` + `if` with `.Where()`
+   - Use `Any()` instead of `Count() > 0`
+
+### Pre-Generation Checklist
+
+**Before generating any code, ensure:**
+- [ ] Input validation is implemented for all user inputs
+- [ ] Authorization checks verify user ownership of resources
+- [ ] Error handling doesn't leak sensitive information
+- [ ] Resource disposal is handled with `using` statements
+- [ ] Null safety is addressed with appropriate operators
+- [ ] LINQ methods are used instead of manual loops where appropriate
+- [ ] No hardcoded secrets or connection strings
+- [ ] Logging doesn't expose sensitive data
+
+### CodeQL Validation Commands
+
+**Always validate generated code with:**
+```bash
+# Security-focused analysis (zero issues required)
+codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls
+
+# Quality analysis for comprehensive review
+codeql database analyze codeql-database --output=quality-analysis.sarif codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls
+```
 
 ---
 
@@ -577,6 +719,20 @@ Use realistic musical data in all examples, tests, and documentation:
 "Implement comprehensive input validation with regex patterns for musical keys and numeric ranges"
 
 "Add anti-forgery token validation to all state-changing API endpoints"
+
+"Generate code that passes CodeQL static analysis with zero high/critical security issues"
+
+"Use null-conditional operators and null-forgiving operators appropriately to prevent null reference exceptions"
+
+"Replace default() casts with explicit nullable casts like (HttpContext?)null to avoid useless upcast warnings"
+
+"Implement proper resource disposal with using statements for all IDisposable objects"
+
+"Use LINQ methods instead of foreach loops where appropriate - replace foreach + Add() with .Select()"
+
+"Avoid creating variables that are assigned but never used - remove unnecessary variable assignments"
+
+"Validate all user inputs and use parameterized queries exclusively to prevent SQL injection"
 
 "Configure secure session cookies with HttpOnly, Secure, and SameSite attributes"
 
@@ -805,16 +961,17 @@ When contributing to Setlist Studio:
 1. **Read the codebase**: Familiarize yourself with existing patterns and conventions
 2. **Follow the principles**: Keep reliability, scalability, **security**, maintainability, and delight in mind
 3. **Security first**: Always implement security requirements (validation, authorization, secure headers, rate limiting) before adding functionality
-4. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
-5. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-6. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 80%+ line and branch coverage
-7. **Organize tests strategically**: 
+4. **CodeQL compliance**: Generate code that passes CodeQL static analysis with zero high/critical security issues and follows best practices (null safety, LINQ usage, resource disposal)
+5. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
+6. **Use realistic examples**: When creating tests or documentation, use authentic musical data
+7. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 80%+ line and branch coverage
+8. **Organize tests strategically**: 
    - Add core functionality tests to base test files (e.g., `SetlistServiceTests.cs`)
    - Create advanced test files for edge cases, error handling, and coverage gaps when base files exceed ~1,400 lines
    - Use the `{SourceClass}AdvancedTests.cs` naming pattern for specialized testing scenarios
-8. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
-9. **Security validation**: Complete the security checklist before submitting any pull request
-10. **Document your work**: Add clear comments and update documentation as needed
+9. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
+10. **Security validation**: Complete the security checklist before submitting any pull request
+11. **Document your work**: Add clear comments and update documentation as needed
 
 ### Quick Start Checklist
 
@@ -832,6 +989,16 @@ When contributing to Setlist Studio:
 - [ ] Configure security headers and rate limiting
 - [ ] Use parameterized queries exclusively
 - [ ] Store secrets in environment variables or Key Vault
+
+**CodeQL Compliance:**
+- [ ] Generate code using null-conditional operators (`?.`) and null-forgiving operators (`!`) appropriately
+- [ ] Use explicit nullable casts like `(HttpContext?)null` instead of `default(HttpContext)`
+- [ ] Implement proper resource disposal with `using` statements for IDisposable objects
+- [ ] Replace foreach loops with LINQ methods (`.Select()`, `.Where()`, `.Any()`) where appropriate
+- [ ] Avoid creating variables that are assigned but never used
+- [ ] Ensure all user inputs are validated and use parameterized queries exclusively
+- [ ] Run local CodeQL security analysis: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+- [ ] Verify zero high/critical security issues in CodeQL results
 
 **Testing & Quality:**
 - [ ] Write tests first (TDD approach recommended)
@@ -880,6 +1047,27 @@ When contributing to Setlist Studio:
 **Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on security-specific results for security compliance.
 
 **Security violations will result in immediate pull request rejection.**
+
+---
+
+## CODEQL ENFORCEMENT REMINDER
+
+**CodeQL compliance is MANDATORY - not optional. Every code contribution must:**
+
+1. **PASS CODEQL SECURITY ANALYSIS**: All code must pass CodeQL security-focused analysis with zero high/critical issues
+   - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+   - Verify: Empty results array in SARIF file
+2. **USE NULL SAFETY**: Implement proper null handling with `?.`, `!`, and explicit nullable casts
+3. **OPTIMIZE WITH LINQ**: Replace foreach loops with LINQ methods where appropriate
+4. **DISPOSE RESOURCES**: Use `using` statements for all IDisposable objects
+5. **VALIDATE INPUTS**: All user inputs must be validated and sanitized
+6. **AVOID USELESS ASSIGNMENTS**: Don't create variables that are assigned but never used
+7. **FOLLOW PATTERNS**: Use established security and quality patterns consistently
+8. **VERIFY LOCALLY**: Run CodeQL analysis before submitting pull requests
+
+**Note**: GitHub Actions may report 200+ "findings" from comprehensive quality analysis, but these are mostly code quality improvements, not security vulnerabilities. Focus on the security-specific analysis results.
+
+**CodeQL violations will result in immediate pull request rejection.**
 
 ---
 

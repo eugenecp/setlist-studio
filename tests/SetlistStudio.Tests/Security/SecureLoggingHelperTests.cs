@@ -310,7 +310,7 @@ public class SecureLoggingHelperTests
         var sanitizedData = result["AdditionalData"] as Dictionary<string, object?>;
         sanitizedData.Should().NotBeNull();
         sanitizedData!["Password"].Should().Be("[REDACTED]");
-        sanitizedData["Username"].Should().Be("testuser");
+        sanitizedData!["Username"].Should().Be("testuser");
     }
 
     /// <summary>

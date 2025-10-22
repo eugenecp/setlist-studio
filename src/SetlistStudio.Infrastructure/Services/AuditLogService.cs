@@ -116,10 +116,7 @@ public class AuditLogService : IAuditLogService
                 query = query.Where(a => a.Timestamp >= startDate.Value);
 
             if (endDate.HasValue && endDate.Value != default(DateTime))
-            {
-                var endDateValue = endDate.Value;
-                query = query.Where(a => a.Timestamp <= endDateValue);
-            }
+                query = query.Where(a => a.Timestamp <= endDate.Value);
 
             return await query
                 .OrderByDescending(a => a.Timestamp)

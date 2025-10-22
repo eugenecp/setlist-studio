@@ -45,7 +45,7 @@ public class SetlistsController : ControllerBase
             var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, pageNumber: page, pageSize: limit);
             var response = (setlists ?? Enumerable.Empty<SetlistStudio.Core.Entities.Setlist>()).Where(s => s != null).Select(s => new SetlistResponse
             {
-                Id = s.Id,
+                Id = s!.Id,
                 Name = s.Name,
                 Description = s.Description,
                 CreatedDate = s.CreatedAt,
@@ -102,7 +102,7 @@ public class SetlistsController : ControllerBase
             var sanitizedSearchQuery = SecureLoggingHelper.SanitizeMessage(query);
             _logger.LogInformation("Searching setlists for user {UserId} with query '{Query}' (page {Page})", sanitizedUserId, sanitizedSearchQuery, page);
 
-            var (setlists, _) = await _setlistService.GetSetlistsAsync(userId, searchTerm: query, pageNumber: page, pageSize: limit);
+            var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, searchTerm: query, pageNumber: page, pageSize: limit);
             var response = setlists.Select(s => new SetlistResponse
             {
                 Id = s.Id,

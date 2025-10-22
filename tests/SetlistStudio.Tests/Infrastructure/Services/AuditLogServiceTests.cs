@@ -115,7 +115,7 @@ public class AuditLogServiceTests : IDisposable
         var userId = "user-456";
         var changes = new { Title = "Billie Jean" };
 
-        _mockHttpContextAccessor.Setup(x => x.HttpContext).Returns(default(HttpContext));
+        _mockHttpContextAccessor.Setup(x => x.HttpContext).Returns((HttpContext?)null);
 
         // Act
         await _service.LogAuditAsync(action, EntityType, EntityId, userId, changes);
@@ -809,7 +809,7 @@ public class AuditLogServiceTests : IDisposable
         // Setup the HttpContext with session - ensure all required properties are mocked
         _mockHttpContext.Setup(x => x.Session).Returns(mockSession.Object);
         _mockHttpContext.Setup(x => x.Request).Returns(_mockHttpRequest.Object);
-        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns(default(System.Net.IPAddress));
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns((System.Net.IPAddress?)null);
         _mockHttpRequest.Setup(x => x.Headers).Returns(_mockHeaders.Object);
         _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(string.Empty);
         _mockHeaders.Setup(h => h["X-Real-IP"]).Returns(string.Empty);
@@ -836,7 +836,7 @@ public class AuditLogServiceTests : IDisposable
     {
         // Arrange - setup HttpContext without session
         _mockHttpContext.Setup(x => x.Request).Returns(_mockHttpRequest.Object);
-        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns(default(System.Net.IPAddress));
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress).Returns((System.Net.IPAddress?)null);
         _mockHttpRequest.Setup(x => x.Headers).Returns(_mockHeaders.Object);
         _mockHeaders.Setup(h => h["User-Agent"]).Returns("Test Browser");
         _mockHttpContextAccessor.Setup(x => x.HttpContext).Returns(_mockHttpContext.Object);
