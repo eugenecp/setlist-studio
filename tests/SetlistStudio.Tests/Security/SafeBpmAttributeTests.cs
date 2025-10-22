@@ -67,7 +67,7 @@ public class SafeBpmAttributeTests
         // Assert
         result.Should().NotBe(ValidationResult.Success, $"BPM {bpm} should be invalid outside range 40-250");
         result.Should().NotBeNull("Validation result should not be null");
-        result?.ErrorMessage.Should().Contain("BPM must be between 40 and 250");
+        result!.ErrorMessage.Should().Contain("BPM must be between 40 and 250");
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public class SafeBpmAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success, $"Value {value} of type {value.GetType()} should be invalid");
-        result?.ErrorMessage.Should().Contain("BPM must be a number");
+        result!.ErrorMessage.Should().Contain("BPM must be a number");
     }
 
     #endregion
