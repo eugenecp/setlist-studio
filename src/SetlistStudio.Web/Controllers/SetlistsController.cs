@@ -102,7 +102,7 @@ public class SetlistsController : ControllerBase
             var sanitizedSearchQuery = SecureLoggingHelper.SanitizeMessage(query);
             _logger.LogInformation("Searching setlists for user {UserId} with query '{Query}' (page {Page})", sanitizedUserId, sanitizedSearchQuery, page);
 
-            var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, searchTerm: query, pageNumber: page, pageSize: limit);
+            var (setlists, _) = await _setlistService.GetSetlistsAsync(userId, searchTerm: query, pageNumber: page, pageSize: limit);
             var response = setlists.Select(s => new SetlistResponse
             {
                 Id = s.Id,
