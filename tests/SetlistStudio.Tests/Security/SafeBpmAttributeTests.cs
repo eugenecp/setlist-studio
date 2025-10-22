@@ -102,10 +102,12 @@ public class SafeBpmAttributeTests
 
         // Act & Assert - Invalid values
         var belowMinResult = customAttribute.GetValidationResult(59, _validationContext);
+        belowMinResult.Should().NotBeNull();
         belowMinResult.Should().NotBe(ValidationResult.Success);
         belowMinResult?.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
 
         var aboveMaxResult = customAttribute.GetValidationResult(141, _validationContext);
+        aboveMaxResult.Should().NotBeNull();
         aboveMaxResult.Should().NotBe(ValidationResult.Success);
         aboveMaxResult?.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
     }
