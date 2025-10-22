@@ -18,7 +18,7 @@ namespace SetlistStudio.Web.Security
             var parametersToSanitize = context.ActionArguments.Where(p => p.Value != null).ToList();
             foreach (var parameter in parametersToSanitize)
             {
-                var sanitizedValue = SanitizeObject(parameter.Value);
+                var sanitizedValue = SanitizeObject(parameter.Value!);
                 context.ActionArguments[parameter.Key] = sanitizedValue;
             }
 

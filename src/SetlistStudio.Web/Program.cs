@@ -404,7 +404,7 @@ try
         // Global rate limiter - applies to all endpoints unless overridden
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                partitionKey: GetSafePartitionKey(httpContext),
                 factory: partition => new FixedWindowRateLimiterOptions
                 {
                     AutoReplenishment = true,
@@ -450,8 +450,7 @@ try
             
             // Log rate limit violation for security monitoring
             var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
-            var userIdentifier = context.HttpContext.User.Identity?.Name ?? 
-                               context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+            var userIdentifier = GetSafePartitionKey(context.HttpContext);
             
             logger?.LogWarning("Rate limit exceeded for user/IP: {UserIdentifier} on endpoint: {Endpoint}", 
                 userIdentifier, context.HttpContext.Request.Path);
@@ -1038,6 +1037,23 @@ static Task ValidateSecretsAsync(WebApplication app)
         Log.Fatal(ex, "Secret validation failed for environment: {Environment}", app.Environment.EnvironmentName);
         throw;
     }
+}
+
+/// <summary>
+/// Gets a safe partition key for rate limiting, avoiding null reference issues
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>A safe partition key string</returns>
+static string GetSafePartitionKey(HttpContext httpContext)
+{
+    var userIdentity = httpContext.User?.Identity;
+    if (userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name))
+    {
+        return userIdentity.Name;
+    }
+    
+    var remoteIp = httpContext.Connection?.RemoteIpAddress?.ToString();
+    return remoteIp ?? "anonymous";
 }
 
 // Make Program class accessible for testing

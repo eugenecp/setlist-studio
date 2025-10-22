@@ -26,6 +26,11 @@ namespace SetlistStudio.Web.Security
             var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                 ?? user.Identity?.Name 
                 ?? "anonymous";
+            
+            if (user.Identity is not null)
+            {
+                userId = userId ?? user.Identity.Name ?? "anonymous";
+            }
 
             // Immediately sanitize the user ID to break taint chains
             return SecureLoggingHelper.SanitizeUserId(userId) ?? "anonymous";
@@ -43,7 +48,11 @@ namespace SetlistStudio.Web.Security
                 return "Anonymous User";
             }
 
-            var userName = user.Identity?.Name ?? "Unknown User";
+            var userName = "Unknown User";
+            if (user.Identity is not null)
+            {
+                userName = user.Identity.Name ?? "Unknown User";
+            }
             return SecureLoggingHelper.SanitizeMessage(userName) ?? "Unknown User";
         }
 

@@ -238,11 +238,11 @@ public class SecurityMetricsService : ISecurityMetricsService
 
         return new DetailedSecurityMetrics
         {
-            StartTime = startTime.Value,
-            EndTime = endTime.Value,
+            StartTime = startTime ?? DateTime.UtcNow.AddHours(-24),
+            EndTime = endTime ?? DateTime.UtcNow,
             TotalEventsInPeriod = filteredEvents.Length,
             Events = filteredEvents,
-            EventsByHour = GetEventsByHour(filteredEvents, startTime.Value, endTime.Value),
+            EventsByHour = GetEventsByHour(filteredEvents, startTime ?? DateTime.UtcNow.AddHours(-24), endTime ?? DateTime.UtcNow),
             EventsBySeverity = GetEventsBySeverity(filteredEvents),
             EventsByType = GetEventsByType(filteredEvents),
             TopAttackingIPs = GetTopAttackingIPs(filteredEvents, 10),
