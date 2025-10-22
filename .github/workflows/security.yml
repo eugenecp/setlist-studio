@@ -507,8 +507,8 @@ jobs:
       uses: marocchino/sticky-pull-request-comment@v2
       if: github.event_name == 'pull_request' && always() # Only on PRs, always run
       with:
-        recreate: false                  # Don't replace existing comments
-        header: security-report          # Unique identifier to distinguish from coverage comments
+        recreate: true                   # Replace existing security comment
+        header: security-report          # Unique identifier to distinguish from other comments
         path: security-summary.md        # Path to security summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         

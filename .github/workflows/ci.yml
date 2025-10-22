@@ -269,9 +269,9 @@ jobs:
       uses: marocchino/sticky-pull-request-comment@v2
       if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != '' # Only if coverage file exists
       with:
-        recreate: false                  # Don't replace existing comments
-        header: coverage-report           # Unique identifier to distinguish from security comments
-        path: code-coverage-results.md   # Path to coverage results file
+        recreate: true                   # Replace existing coverage comment
+        header: coverage-report          # Unique identifier to distinguish from other comments
+        path: code-coverage-results.md  # Path to coverage results file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 2: Docker Image Build and Container Testing
@@ -484,12 +484,18 @@ jobs:
         # Add your actual deployment commands here
     
     - name: 💬 Add deployment comment to PR
-      uses: actions/github-script@v7
+      uses: marocchino/sticky-pull-request-comment@v2
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '🚀 Preview deployment available at: https://preview-pr-${{ github.event.number }}.setlist-studio.dev'
-          })
+        recreate: true                   # Replace existing deployment comment
+        header: deployment-preview       # Unique identifier for deployment comments
+        message: |
+          ## 🚀 Preview Deployment Ready
+          
+          **Preview URL:** https://preview-pr-${{ github.event.number }}.setlist-studio.dev
+          
+          **Branch:** `${{ github.head_ref }}`
+          **Commit:** `${{ github.sha }}`
+          
+          ---
+          *Deployment updated automatically on each push*
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

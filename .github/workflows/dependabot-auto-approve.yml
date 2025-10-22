@@ -41,16 +41,16 @@ jobs:
     
     - name: 📝 Add comment with update details
       if: steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'
-      run: |
-        gh pr comment "$PR_URL" --body "🤖 **Dependabot Auto-Approval**
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        recreate: true                   # Replace existing dependabot comment
+        header: dependabot-auto-approval # Unique identifier for dependabot comments
+        message: |
+          ## 🤖 Dependabot Auto-Approval
 
-        - **Package**: ${{ steps.metadata.outputs.dependency-names }}
-        - **Update Type**: ${{ steps.metadata.outputs.update-type }}
-        - **Old Version**: ${{ steps.metadata.outputs.old-version }}
-        - **New Version**: ${{ steps.metadata.outputs.new-version }}
-        - **Status**: ✅ Auto-approved
+          - **Package**: ${{ steps.metadata.outputs.dependency-names }}
+          - **Update Type**: ${{ steps.metadata.outputs.update-type }}
+          - **Status**: ✅ Auto-approved
 
-        This update has been automatically approved because it's a safe ${{ steps.metadata.outputs.update-type }} update. The CI pipeline will run to ensure everything still works correctly."
-      env:
-        PR_URL: ${{ github.event.pull_request.html_url }}
+          This update has been automatically approved because it's a safe ${{ steps.metadata.outputs.update-type }} update. The CI pipeline will run to ensure everything still works correctly.
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
