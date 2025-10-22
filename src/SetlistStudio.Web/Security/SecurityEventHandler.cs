@@ -257,7 +257,7 @@ public class SecurityEventHandler
     /// <returns>The authentication method name</returns>
     private static string GetAuthenticationMethod(HttpContext context)
     {
-        var authenticationType = context.User.Identity?.AuthenticationType;
+        var authenticationType = context.User?.Identity?.AuthenticationType;
         
         return authenticationType switch
         {

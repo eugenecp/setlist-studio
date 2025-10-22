@@ -244,7 +244,7 @@ public class AuditLogService : IAuditLogService
             auditLog.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
 
             // Extract session ID if available
-            if (httpContext.Session != null)
+            if (httpContext.Session is not null)
             {
                 auditLog.SessionId = httpContext.Session.Id;
             }
@@ -252,7 +252,11 @@ public class AuditLogService : IAuditLogService
             // Enhance user ID from claims if not already set
             if (string.IsNullOrEmpty(auditLog.UserId) && httpContext.User?.Identity?.IsAuthenticated == true)
             {
-                auditLog.UserId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
+                var user = httpContext.User;
+                if (user is not null)
+                {
+                    auditLog.UserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
+                }
             }
         }
         catch (ArgumentException ex)

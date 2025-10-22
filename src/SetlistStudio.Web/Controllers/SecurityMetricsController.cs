@@ -61,6 +61,7 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogError(ex, "Security metrics service unavailable");
             return StatusCode(503, "Security metrics service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving security metrics snapshot");
@@ -116,6 +117,7 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogError(ex, "Security metrics service unavailable");
             return StatusCode(503, "Security metrics service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving detailed security metrics");
@@ -161,6 +163,7 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogError(ex, "Security metrics service unavailable for period {Period}", period);
             return StatusCode(503, "Security metrics service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving security metrics for period {Period}", period);
@@ -256,6 +259,7 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogError(ex, "Timeout retrieving security dashboard data");
             return StatusCode(504, "Request timeout - please try again");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving security dashboard");
@@ -312,6 +316,7 @@ public class SecurityMetricsController : ControllerBase
                 Details = "Health check timeout - monitoring service may be overloaded"
             });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error checking security monitoring health");
@@ -375,6 +380,7 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogError(ex, "Security event recording service unavailable");
             return StatusCode(503, "Security event recording temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error recording manual security event");

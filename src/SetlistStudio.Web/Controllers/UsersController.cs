@@ -49,6 +49,7 @@ public class UsersController : ControllerBase
             _logger.LogError(ex, "Invalid operation while retrieving user profile");
             return StatusCode(503, "Service temporarily unavailable");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving user profile");

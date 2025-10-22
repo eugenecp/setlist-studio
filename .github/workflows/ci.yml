@@ -374,16 +374,10 @@ jobs:
         
         # Test application health endpoint
         echo "Testing health endpoint..."
-        # Get current container logs before testing
-        echo "Current container logs:"
-        docker logs test-container
         
         # Wait for application to fully initialize
         echo "Giving application more time to start..."
         sleep 10
-        
-        echo "Container logs after additional wait:"
-        docker logs test-container
         
         # Try multiple connection attempts as the app might take time to start
         for i in {1..8}; do
@@ -420,19 +414,21 @@ jobs:
           else
             echo "❌ Health check failed on attempt $i (HTTP $health_response)"
             
-            # More detailed diagnostics
-            echo "  📊 Container status:"
-            docker exec test-container ps aux | head -10 || echo "    Cannot exec into container"
-            
-            echo "  🔍 Network connectivity:"
-            docker exec test-container netstat -tuln | grep :5000 || echo "    Cannot check network status"
-            
-            echo "  📋 Latest logs:"
-            docker logs --tail 20 test-container
-            
-            # Test basic connectivity
-            echo "  🌐 Testing connectivity:"
-            nc -z localhost 8080 && echo "    Port 8080 is open" || echo "    Port 8080 is closed"
+            # Only show detailed diagnostics on later attempts to reduce noise
+            if [ $i -ge 4 ]; then
+              echo "  📊 Container status:"
+              docker exec test-container ps aux | head -5 || echo "    Cannot exec into container"
+              
+              echo "  🔍 Network connectivity:"
+              docker exec test-container netstat -tuln | grep :5000 || echo "    Cannot check network status"
+              
+              echo "  📋 Latest logs (last 10 lines):"
+              docker logs --tail 10 test-container
+              
+              # Test basic connectivity
+              echo "  🌐 Testing connectivity:"
+              nc -z localhost 8080 && echo "    Port 8080 is open" || echo "    Port 8080 is closed"
+            fi
             
             if [ $i -lt 8 ]; then
               echo "Retrying in 15 seconds..."
@@ -447,29 +443,18 @@ jobs:
             echo "Container status:"
             docker ps -a --filter name=test-container
             echo ""
-            echo "Full container logs:"
-            docker logs test-container
+            echo "Recent container logs (last 50 lines):"
+            docker logs --tail 50 test-container
             echo ""
             echo "Container processes:"
-            docker exec test-container ps aux || echo "Cannot exec into container"
+            docker exec test-container ps aux | head -5 || echo "Cannot exec into container"
             echo ""
-            echo "Network information:"
+            echo "Network and connectivity:"
             docker port test-container || echo "Cannot get port information"
+            nc -z localhost 8080 && echo "Port 8080 is accessible" || echo "Port 8080 is not accessible"
             echo ""
-            echo "Environment variables:"
-            docker exec test-container env | grep -E "(ASPNET|DOTNET)" || echo "Cannot get environment"
-            echo ""
-            echo "Database directory:"
-            docker exec test-container ls -la /app/data/ || echo "Cannot check database directory"
-            echo ""
-            echo "Application files:"
-            docker exec test-container ls -la /app/ | head -10 || echo "Cannot list app files"
-            echo ""
-            echo "Testing connectivity:"
-            curl -v -m 10 http://localhost:8080/api/status || echo "Cannot connect to health endpoint"
-            echo ""
-            echo "Testing main app:"
-            curl -v -m 10 http://localhost:8080/ || echo "Cannot connect to base URL"
+            echo "Environment check:"
+            docker exec test-container env | grep -E "(ASPNET|DOTNET)" | head -5 || echo "Cannot get environment"
             echo ""
             docker stop test-container || true
             exit 1

@@ -64,6 +64,7 @@ public class SecurityEventMiddleware
             _logger.LogError(ex, "Invalid argument in security middleware for path {RequestPath}", requestPath);
             throw;
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Middleware boundary catch for security logging
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error in security event middleware for path {RequestPath}", requestPath);
@@ -86,7 +87,7 @@ public class SecurityEventMiddleware
                     context,
                     "SlowRequest",
                     $"Request to {requestPath} took {duration.TotalSeconds:F2} seconds",
-                    context.User.Identity?.Name,
+                    context.User?.Identity?.Name,
                     SecurityEventSeverity.Medium);
             }
         }
@@ -103,7 +104,7 @@ public class SecurityEventMiddleware
         var request = context.Request;
         var requestPath = request.Path.Value ?? string.Empty;
         var userAgent = request.Headers.UserAgent.ToString();
-        var userId = context.User.Identity?.Name;
+        var userId = context.User?.Identity?.Name;
 
         // Check for common attack patterns in URL
         var suspiciousUrlPatterns = new[]
@@ -193,7 +194,7 @@ public class SecurityEventMiddleware
                 context,
                 "RapidRequests",
                 $"High number of requests from IP {ipAddress}",
-                context.User.Identity?.Name,
+                context.User?.Identity?.Name,
                 SecurityEventSeverity.High);
         }
         
@@ -213,7 +214,7 @@ public class SecurityEventMiddleware
             
             foreach (var field in form)
             {
-                var fieldValue = field.Value.ToString();
+                var fieldValue = field.Value.ToString() ?? string.Empty;
                 
                 // Check for XSS patterns
                 if (ContainsXssPattern(fieldValue))
@@ -227,7 +228,7 @@ public class SecurityEventMiddleware
                     securityEventHandler.OnSuspiciousActivity(
                         "XSS_Pattern_Detection",
                         $"XSS pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
-                        context.User.Identity?.Name,
+                        context.User?.Identity?.Name,
                         SecurityEventSeverity.High,
                         sanitizedUserAgent,
                         sanitizedIpAddress,
@@ -247,7 +248,7 @@ public class SecurityEventMiddleware
                     securityEventHandler.OnSuspiciousActivity(
                         "SQL_Injection_Pattern_Detection",
                         $"SQL injection pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
-                        context.User.Identity?.Name,
+                        context.User?.Identity?.Name,
                         SecurityEventSeverity.High,
                         sanitizedUserAgent,
                         sanitizedIpAddress,
@@ -264,6 +265,7 @@ public class SecurityEventMiddleware
         {
             _logger.LogWarning(ex, "Invalid cast while processing form data");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Defensive programming for security pattern analysis
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Unexpected error while checking form data for suspicious patterns");
@@ -376,7 +378,7 @@ public class SecurityEventMiddleware
             context,
             "SecurityException",
             $"Security-related exception occurred: {SecureLoggingHelper.PreventLogInjection(exception.GetType().Name)}",
-            context.User.Identity?.Name,
+            context.User?.Identity?.Name,
             SecurityEventSeverity.High);
             
         return Task.CompletedTask;

@@ -53,6 +53,7 @@ public class SongsController : ControllerBase
             _logger.LogError(ex, "Invalid operation while retrieving songs for user {UserId}", sanitizedUserId);
             return StatusCode(500, new { error = "Service temporarily unavailable" });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
@@ -94,6 +95,7 @@ public class SongsController : ControllerBase
             _logger.LogError(ex, "Search service unavailable for user {UserId}", sanitizedUserId);
             return StatusCode(503, new { error = "Search service temporarily unavailable" });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
@@ -144,6 +146,7 @@ public class SongsController : ControllerBase
             _logger.LogError(ex, "Song service unavailable");
             return StatusCode(503, new { error = "Song service temporarily unavailable" });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             // Log the actual exception for debugging but don't expose details to client

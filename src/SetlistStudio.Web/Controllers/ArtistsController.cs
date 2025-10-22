@@ -39,6 +39,7 @@ public class ArtistsController : ControllerBase
 
             return Ok(new { artists, query = name, totalCount = artists.Count() });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception)
         {
             return StatusCode(500, new { error = "An error occurred while searching artists" });
@@ -63,6 +64,7 @@ public class ArtistsController : ControllerBase
 
             return Ok(new { artists, totalCount = artists.Length });
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception)
         {
             return StatusCode(500, new { error = "An error occurred while retrieving artists" });

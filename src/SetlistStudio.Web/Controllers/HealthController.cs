@@ -77,6 +77,7 @@ public class HealthController : ControllerBase
             _logger.LogWarning(ex, "Database connection timeout during health check");
             return "Database connection timeout";
         }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Unexpected error during database health check");

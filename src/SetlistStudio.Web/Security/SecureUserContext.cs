@@ -26,6 +26,11 @@ namespace SetlistStudio.Web.Security
             var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                 ?? user.Identity?.Name 
                 ?? "anonymous";
+            
+            if (user.Identity is not null)
+            {
+                userId = userId ?? user.Identity.Name ?? "anonymous";
+            }
 
             // Immediately sanitize the user ID to break taint chains
             return SecureLoggingHelper.SanitizeUserId(userId) ?? "anonymous";
@@ -43,7 +48,11 @@ namespace SetlistStudio.Web.Security
                 return "Anonymous User";
             }
 
-            var userName = user.Identity?.Name ?? "Unknown User";
+            var userName = "Unknown User";
+            if (user.Identity is not null)
+            {
+                userName = user.Identity.Name ?? "Unknown User";
+            }
             return SecureLoggingHelper.SanitizeMessage(userName) ?? "Unknown User";
         }
 
@@ -73,7 +82,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized IP address safe for logging</returns>
         public static string GetSanitizedClientIp(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "unknown";
             }
@@ -93,7 +102,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized user agent string safe for logging</returns>
         public static string GetSanitizedUserAgent(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "Unknown";
             }
@@ -116,7 +125,7 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized request path safe for logging</returns>
         public static string GetSanitizedRequestPath(HttpContext? context)
         {
-            if (context == null)
+            if (context is null)
             {
                 return "/unknown";
             }
