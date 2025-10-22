@@ -415,7 +415,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
             }
         };
         
-        var responses = await Task.WhenAll(attackRequests.Select(async request => await request()));
+        var responses = await Task.WhenAll(attackRequests.Select(request => request()));
 
         // Assert
         foreach (var response in responses)
@@ -429,7 +429,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
                 System.Net.HttpStatusCode.Redirect);
         }
         
-        _output.WriteLine($"Completed comprehensive attack scenario with {responses.Count} requests");
+        _output.WriteLine($"Completed comprehensive attack scenario with {responses.Length} requests");
     }
 
     [Fact]

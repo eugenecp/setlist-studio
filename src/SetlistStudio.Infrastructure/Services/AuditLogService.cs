@@ -113,13 +113,13 @@ public class AuditLogService : IAuditLogService
                 query = query.Where(a => a != null && a.EntityType == tableName);
 
             if (startDate.HasValue && startDate.Value != default(DateTime))
-                query = query.Where(a => a != null && a.Timestamp >= startDate.Value);
+                query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
 
             if (endDate.HasValue && endDate.Value != default(DateTime))
-                query = query.Where(a => a != null && a.Timestamp <= endDate.Value);
+                query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
 
             return await query
-                .OrderByDescending(a => a != null ? a.Timestamp : DateTime.MinValue)
+                .OrderByDescending(a => a!.Timestamp)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync() ?? new List<AuditLog>();

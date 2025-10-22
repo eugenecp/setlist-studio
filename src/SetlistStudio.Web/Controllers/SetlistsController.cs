@@ -47,11 +47,11 @@ public class SetlistsController : ControllerBase
                 .Where(s => s != null)
                 .Select(s => new SetlistResponse
                 {
-                    Id = s.Id,
-                    Name = s.Name,
-                    Description = s.Description,
-                    CreatedDate = s.CreatedAt,
-                    SongCount = s.SetlistSongs?.Count ?? 0
+                    Id = s!.Id,
+                    Name = s!.Name,
+                    Description = s!.Description,
+                    CreatedDate = s!.CreatedAt,
+                    SongCount = s!.SetlistSongs?.Count ?? 0
                 });
 
             return Ok(response);
