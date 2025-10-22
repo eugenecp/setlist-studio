@@ -393,24 +393,29 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
         client.DefaultRequestHeaders.Add("X-Forwarded-For", "192.168.1.666");
 
         // Act - Multiple attack vectors
-        var responses = new List<HttpResponseMessage>();
-        
-        // 1. URL injection attempt
-        responses.Add(await client.GetAsync("/songs?id=1' union select * from users--"));
-        
-        // 2. XSS attempt via query
-        responses.Add(await client.GetAsync("/search?q=<script>alert('xss')</script>"));
-        
-        // 3. Path traversal attempt
-        responses.Add(await client.GetAsync("/../../../etc/passwd"));
-        
-        // 4. Form-based attack
-        var formData = new FormUrlEncodedContent(new[]
+        var attackRequests = new Func<Task<HttpResponseMessage>>[]
         {
-            new KeyValuePair<string, string>("Title", "<script>alert('xss')</script>"),
-            new KeyValuePair<string, string>("Artist", "'; drop table songs; --")
-        });
-        responses.Add(await client.PostAsync("/Songs/Create", formData));
+            // 1. URL injection attempt
+            () => client.GetAsync("/songs?id=1' union select * from users--"),
+            
+            // 2. XSS attempt via query
+            () => client.GetAsync("/search?q=<script>alert('xss')</script>"),
+            
+            // 3. Path traversal attempt
+            () => client.GetAsync("/../../../etc/passwd"),
+            
+            // 4. Form-based attack
+            async () => {
+                var formData = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("Title", "<script>alert('xss')</script>"),
+                    new KeyValuePair<string, string>("Artist", "'; drop table songs; --")
+                });
+                return await client.PostAsync("/Songs/Create", formData);
+            }
+        };
+        
+        var responses = await Task.WhenAll(attackRequests.Select(async request => await request()));
 
         // Assert
         foreach (var response in responses)
@@ -435,13 +440,10 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
         const int requestCount = 50;
 
         // Act - Simulate high volume of requests
-        var tasks = new List<Task<HttpResponseMessage>>();
-        for (int i = 0; i < requestCount; i++)
-        {
-            tasks.Add(client.GetAsync($"/api/songs?page={i}"));
-        }
-
-        var responses = await Task.WhenAll(tasks);
+        var responses = await Task.WhenAll(
+            Enumerable.Range(0, requestCount)
+                .Select(i => client.GetAsync($"/api/songs?page={i}"))
+        );
 
         // Assert
         responses.Should().HaveCount(requestCount);

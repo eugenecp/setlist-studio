@@ -1294,13 +1294,10 @@ public class ProgramTests : IDisposable
         var client = factory.CreateClient();
 
         // Act - Verify rate limiting uses fixed window (requests are allowed within window)
-        var tasks = new List<Task<HttpResponseMessage>>();
-        for (int i = 0; i < 5; i++)
-        {
-            tasks.Add(client.GetAsync("/api/status"));
-        }
-        
-        var responses = await Task.WhenAll(tasks);
+        var responses = await Task.WhenAll(
+            Enumerable.Range(0, 5)
+                .Select(_ => client.GetAsync("/api/status"))
+        );
 
         // Assert - All requests within limit should succeed
         responses.Should().AllSatisfy(response => 

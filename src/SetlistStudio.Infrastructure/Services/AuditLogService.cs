@@ -104,22 +104,22 @@ public class AuditLogService : IAuditLogService
             var query = _context.AuditLogs.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(userId))
-                query = query.Where(a => a.UserId == userId);
+                query = query.Where(a => a != null && a.UserId == userId);
 
             if (!string.IsNullOrWhiteSpace(action))
-                query = query.Where(a => a.Action == action);
+                query = query.Where(a => a != null && a.Action == action);
 
             if (!string.IsNullOrWhiteSpace(tableName))
-                query = query.Where(a => a.EntityType == tableName);
+                query = query.Where(a => a != null && a.EntityType == tableName);
 
             if (startDate.HasValue && startDate.Value != default(DateTime))
-                query = query.Where(a => a.Timestamp >= startDate.Value);
+                query = query.Where(a => a != null && a.Timestamp >= startDate.Value);
 
             if (endDate.HasValue && endDate.Value != default(DateTime))
-                query = query.Where(a => a.Timestamp <= endDate.Value);
+                query = query.Where(a => a != null && a.Timestamp <= endDate.Value);
 
             return await query
-                .OrderByDescending(a => a.Timestamp)
+                .OrderByDescending(a => a != null ? a.Timestamp : DateTime.MinValue)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync() ?? new List<AuditLog>();
@@ -148,8 +148,8 @@ public class AuditLogService : IAuditLogService
         try
         {
             return await _context.AuditLogs
-                .Where(a => a.EntityType == tableName && a.EntityId == recordId)
-                .OrderByDescending(a => a.Timestamp)
+                .Where(a => a != null && a.EntityType == tableName && a.EntityId == recordId)
+                .OrderByDescending(a => a != null ? a.Timestamp : DateTime.MinValue)
                 .ToListAsync();
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
@@ -173,8 +173,8 @@ public class AuditLogService : IAuditLogService
         try
         {
             return await _context.AuditLogs
-                .Where(a => a.CorrelationId == correlationId)
-                .OrderBy(a => a.Timestamp)
+                .Where(a => a != null && a.CorrelationId == correlationId)
+                .OrderBy(a => a != null ? a.Timestamp : DateTime.MinValue)
                 .ToListAsync();
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
@@ -195,7 +195,7 @@ public class AuditLogService : IAuditLogService
         try
         {
             var oldLogs = await _context.AuditLogs
-                .Where(a => a.Timestamp < cutoffDate)
+                .Where(a => a != null && a.Timestamp < cutoffDate)
                 .ToListAsync();
 
             if (oldLogs.Any())

@@ -66,7 +66,8 @@ public class SafeBpmAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success, $"BPM {bpm} should be invalid outside range 40-250");
-        result!.ErrorMessage.Should().Contain("BPM must be between 40 and 250");
+        result.Should().NotBeNull("Validation result should not be null");
+        result?.ErrorMessage.Should().Contain("BPM must be between 40 and 250");
     }
 
     [Theory]
@@ -82,7 +83,7 @@ public class SafeBpmAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success, $"Value {value} of type {value.GetType()} should be invalid");
-        result!.ErrorMessage.Should().Contain("BPM must be a number");
+        result?.ErrorMessage.Should().Contain("BPM must be a number");
     }
 
     #endregion
@@ -104,12 +105,12 @@ public class SafeBpmAttributeTests
         var belowMinResult = customAttribute.GetValidationResult(59, _validationContext);
         belowMinResult.Should().NotBeNull();
         belowMinResult.Should().NotBe(ValidationResult.Success);
-        belowMinResult!.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
+        belowMinResult?.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
 
         var aboveMaxResult = customAttribute.GetValidationResult(141, _validationContext);
         aboveMaxResult.Should().NotBeNull();
         aboveMaxResult.Should().NotBe(ValidationResult.Success);
-        aboveMaxResult!.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
+        aboveMaxResult?.ErrorMessage.Should().Contain("BPM must be between 60 and 140");
     }
 
     [Fact]

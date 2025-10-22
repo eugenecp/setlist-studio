@@ -43,14 +43,16 @@ public class SetlistsController : ControllerBase
             _logger.LogInformation("Retrieving setlists for user {UserId} (page {Page})", userId, page);
 
             var (setlists, totalCount) = await _setlistService.GetSetlistsAsync(userId, pageNumber: page, pageSize: limit);
-            var response = (setlists ?? Enumerable.Empty<SetlistStudio.Core.Entities.Setlist>()).Where(s => s != null).Select(s => new SetlistResponse
-            {
-                Id = s!.Id,
-                Name = s.Name,
-                Description = s.Description,
-                CreatedDate = s.CreatedAt,
-                SongCount = s.SetlistSongs?.Count ?? 0
-            });
+            var response = (setlists ?? Enumerable.Empty<SetlistStudio.Core.Entities.Setlist>())
+                .Where(s => s != null)
+                .Select(s => new SetlistResponse
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    Description = s.Description,
+                    CreatedDate = s.CreatedAt,
+                    SongCount = s.SetlistSongs?.Count ?? 0
+                });
 
             return Ok(response);
         }
