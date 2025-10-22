@@ -291,17 +291,22 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
 
         // Act - Send multiple requests rapidly
         var tasks = new List<Task<HttpResponseMessage>>();
+        var contentObjects = new List<StringContent>();
+        
         for (int i = 0; i < 10; i++)
         {
-            // Note: Not using 'using' here because we need the content to stay alive during async operations
             var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
+            contentObjects.Add(content);
             tasks.Add(_client.PostAsync("/api/cspreport/report", content));
         }
 
         var responses = await Task.WhenAll(tasks);
         
         // Clean up - dispose all content objects after tasks complete
-        // (In practice, HttpClient disposes the content, but this is explicit cleanup)
+        foreach (var content in contentObjects)
+        {
+            content.Dispose();
+        }
 
         // Assert - Some requests should succeed, rate limiting behavior depends on configuration
         responses.Should().NotBeEmpty();
@@ -519,7 +524,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         var json = JsonSerializer.Serialize(violation);
         using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
             Content = content
         };
@@ -549,7 +554,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         var json = JsonSerializer.Serialize(violation);
         using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
             Content = content
         };
@@ -579,7 +584,7 @@ public class CspReportControllerTests : IClassFixture<TestWebApplicationFactory>
         var json = JsonSerializer.Serialize(violation);
         using var content = new StringContent(json, Encoding.UTF8, "application/csp-report");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/cspreport/report")
         {
             Content = content
         };

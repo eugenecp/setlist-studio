@@ -229,21 +229,6 @@ public class SongService : ISongService
                 throw new ArgumentException(errorBuilder.ToString());
             }
 
-            // Capture old values for audit logging
-            var oldValues = new 
-            { 
-                existingSong.Title, 
-                existingSong.Artist, 
-                existingSong.Album, 
-                existingSong.Genre, 
-                existingSong.Bpm, 
-                existingSong.MusicalKey,
-                existingSong.DurationSeconds,
-                existingSong.Notes,
-                existingSong.Tags,
-                existingSong.DifficultyRating
-            };
-
             // Update properties
             existingSong.Title = song.Title;
             existingSong.Artist = song.Artist;

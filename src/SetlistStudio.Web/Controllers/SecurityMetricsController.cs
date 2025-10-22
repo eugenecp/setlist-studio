@@ -343,9 +343,6 @@ public class SecurityMetricsController : ControllerBase
                 return BadRequest("Event type is required");
             }
 
-            var ipAddress = GetClientIpAddress();
-            var userAgent = Request.Headers.UserAgent.ToString();
-
             var sanitizedEventType = SecureLoggingHelper.PreventLogInjection(request.EventType);
             var sanitizedSeverity = SecureLoggingHelper.PreventLogInjection(request.Severity ?? "MEDIUM");
             var sanitizedDetails = SecureLoggingHelper.PreventLogInjection(request.Details ?? $"Manual event recorded by {User.Identity?.Name}");
