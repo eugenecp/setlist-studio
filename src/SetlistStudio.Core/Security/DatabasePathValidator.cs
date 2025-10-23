@@ -150,7 +150,7 @@ public static class DatabasePathValidator
                 Directory.CreateDirectory(dataDirectory);
             }
             
-            return Path.Combine(dataDirectory, DefaultDatabaseFilename);
+            return Path.Join(dataDirectory, DefaultDatabaseFilename);
         }
     }
     
