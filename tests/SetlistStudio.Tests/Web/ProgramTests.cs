@@ -1512,8 +1512,11 @@ public class ProgramTests : IDisposable
             // Act
             var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert - Should use default production path
-            result.Should().Be("Data Source=setliststudio.db");
+            // Assert - Should use secure absolute path in Data subdirectory
+            var baseDirectory = AppContext.BaseDirectory;
+            var dataDirectory = Path.Combine(baseDirectory, "Data");
+            var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
+            result.Should().Be(expectedPath);
         }
         finally
         {
@@ -1571,15 +1574,15 @@ public class ProgramTests : IDisposable
 
     [Theory]
     [InlineData("Development", "true", "Data Source=/app/data/setliststudio.db")]
-    [InlineData("Development", "false", "Data Source=setliststudio.db")]
+    [InlineData("Development", "false", "Data Source={DataDirectory}/setliststudio.db")]
     [InlineData("Production", "true", "Data Source=/app/data/setliststudio.db")]
-    [InlineData("Production", "false", "Data Source=setliststudio.db")]
+    [InlineData("Production", "false", "Data Source={DataDirectory}/setliststudio.db")]
     [InlineData("Staging", "true", "Data Source=/app/data/setliststudio.db")]
-    [InlineData("Staging", "false", "Data Source=setliststudio.db")]
+    [InlineData("Staging", "false", "Data Source={DataDirectory}/setliststudio.db")]
     [InlineData(null, "true", "Data Source=/app/data/setliststudio.db")]
-    [InlineData(null, "false", "Data Source=setliststudio.db")]
+    [InlineData(null, "false", "Data Source={DataDirectory}/setliststudio.db")]
     [InlineData("", "true", "Data Source=/app/data/setliststudio.db")]
-    [InlineData("", "false", "Data Source=setliststudio.db")]
+    [InlineData("", "false", "Data Source={DataDirectory}/setliststudio.db")]
     public void Program_ShouldSelectCorrectDatabasePath_ForAllEnvironmentContainerCombinations(
         string? environment, string container, string expectedPath)
     {
@@ -1597,8 +1600,17 @@ public class ProgramTests : IDisposable
             // Act
             var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert
-            result.Should().Be(expectedPath);
+            // Assert - Replace placeholder with actual data directory for non-container environments
+            var finalExpectedPath = expectedPath;
+            if (expectedPath.Contains("{DataDirectory}"))
+            {
+                var baseDirectory = AppContext.BaseDirectory;
+                var dataDirectory = Path.Combine(baseDirectory, "Data");
+                var expectedFilePath = Path.Combine(dataDirectory, "setliststudio.db");
+                finalExpectedPath = $"Data Source={expectedFilePath}";
+            }
+            
+            result.Should().Be(finalExpectedPath);
         }
         finally
         {
@@ -1841,8 +1853,11 @@ public class ProgramTests : IDisposable
             // Act
             var result = GetDatabaseConnectionStringViaReflection(configuration);
 
-            // Assert
-            result.Should().Be("Data Source=setliststudio.db");
+            // Assert - Should use secure absolute path in Data subdirectory
+            var baseDirectory = AppContext.BaseDirectory;
+            var dataDirectory = Path.Combine(baseDirectory, "Data");
+            var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
+            result.Should().Be(expectedPath);
         }
         finally
         {
