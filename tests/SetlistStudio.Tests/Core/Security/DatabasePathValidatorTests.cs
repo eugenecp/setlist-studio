@@ -278,7 +278,7 @@ public class DatabasePathValidatorTests
     public void ValidateDatabaseDirectory_ValidPath_ReturnsTrue()
     {
         // Arrange
-        var tempPath = Path.Combine(Path.GetTempPath(), "test.db");
+        var tempPath = Path.Join(Path.GetTempPath(), "test.db");
 
         // Act
         var result = DatabasePathValidator.ValidateDatabaseDirectory(tempPath);
