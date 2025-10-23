@@ -50,16 +50,10 @@ public static class DatabasePathValidator
     {
         string databasePath;
         
-        if (!string.IsNullOrEmpty(customPath))
-        {
-            // Validate and sanitize custom path
-            databasePath = ValidateAndSanitizePath(customPath);
-        }
-        else
-        {
-            // Use secure default paths
-            databasePath = GetSecureDefaultPath(isContainerized);
-        }
+        // Validate and sanitize custom path if provided, otherwise use secure default paths
+        databasePath = !string.IsNullOrEmpty(customPath)
+            ? ValidateAndSanitizePath(customPath) // Validate and sanitize custom path
+            : GetSecureDefaultPath(isContainerized); // Use secure default paths
         
         return $"Data Source={databasePath}";
     }
