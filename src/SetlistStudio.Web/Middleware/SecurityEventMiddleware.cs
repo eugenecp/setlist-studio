@@ -128,15 +128,16 @@ public class SecurityEventMiddleware
                 SecurityEventSeverity.High);
         }
 
-        // Check for suspicious user agents
-        if (string.IsNullOrEmpty(userAgent) || IsSuspiciousUserAgent(userAgent))
+        // Check for suspicious user agents with context-aware validation
+        var userAgentRisk = AssessUserAgentRisk(userAgent, requestPath);
+        if (userAgentRisk.IsSuspicious)
         {
             securityEventHandler.OnSuspiciousActivity(
                 context,
-                "SuspiciousUserAgent",
-                $"Suspicious or missing user agent: {userAgent}",
+                userAgentRisk.EventType,
+                userAgentRisk.Message,
                 userId,
-                SecurityEventSeverity.Medium);
+                userAgentRisk.Severity);
         }
 
         // Check for rapid requests from same IP (basic rate limiting detection)
@@ -150,25 +151,215 @@ public class SecurityEventMiddleware
     }
 
     /// <summary>
-    /// Checks if the user agent indicates a potentially malicious bot or scanner.
+    /// Assesses the risk level of a user agent string with context-aware validation.
+    /// Provides graduated response based on legitimacy and request context.
     /// </summary>
     /// <param name="userAgent">The user agent string</param>
-    /// <returns>True if the user agent looks suspicious</returns>
-    private static bool IsSuspiciousUserAgent(string userAgent)
+    /// <param name="requestPath">The request path for context</param>
+    /// <returns>Risk assessment with event details</returns>
+    private static UserAgentRiskAssessment AssessUserAgentRisk(string userAgent, string requestPath)
     {
+        // Handle missing User-Agent with context awareness
         if (string.IsNullOrWhiteSpace(userAgent))
-            return true;
-
-        var suspiciousAgents = new[]
         {
-            "sqlmap", "nmap", "nikto", "dirb", "gobuster", "dirbuster",
-            "burp", "zap", "masscan", "nessus", "openvas", "w3af",
-            "whatweb", "httprint", "curl/7", "wget/", "python-requests",
-            "bot", "crawler", "spider", "scraper"
+            // Allow missing User-Agent for health checks and monitoring endpoints
+            if (IsHealthCheckOrMonitoringEndpoint(requestPath))
+            {
+                return UserAgentRiskAssessment.Safe();
+            }
+
+            // Allow missing User-Agent for test environments (low severity)
+            return new UserAgentRiskAssessment
+            {
+                IsSuspicious = true,
+                EventType = "MissingUserAgent",
+                Message = "Missing User-Agent header - potential automation",
+                Severity = SecurityEventSeverity.Low // Reduced from Medium
+            };
+        }
+
+        // Check for legitimate testing and monitoring tools (whitelist)
+        if (IsLegitimateTestingTool(userAgent))
+        {
+            return UserAgentRiskAssessment.Safe();
+        }
+
+        // Check for legitimate search engine bots (whitelist)
+        if (IsLegitimateSearchBot(userAgent))
+        {
+            return UserAgentRiskAssessment.Safe();
+        }
+
+        // Check for security scanning tools (high risk)
+        if (IsSecurityScanningTool(userAgent))
+        {
+            return new UserAgentRiskAssessment
+            {
+                IsSuspicious = true,
+                EventType = "SecurityScannerUserAgent",
+                Message = $"Security scanner detected: {SecureLoggingHelper.PreventLogInjection(userAgent)}",
+                Severity = SecurityEventSeverity.High
+            };
+        }
+
+        // Check for suspicious automation tools
+        if (IsSuspiciousAutomationTool(userAgent))
+        {
+            return new UserAgentRiskAssessment
+            {
+                IsSuspicious = true,
+                EventType = "SuspiciousAutomationUserAgent",
+                Message = $"Suspicious automation tool detected: {SecureLoggingHelper.PreventLogInjection(userAgent)}",
+                Severity = SecurityEventSeverity.Medium
+            };
+        }
+
+        return UserAgentRiskAssessment.Safe();
+    }
+
+    /// <summary>
+    /// Checks if the request path is for health checks or monitoring endpoints.
+    /// </summary>
+    /// <param name="requestPath">The request path</param>
+    /// <returns>True if path is for health checks or monitoring</returns>
+    private static bool IsHealthCheckOrMonitoringEndpoint(string requestPath)
+    {
+        var healthCheckPaths = new[]
+        {
+            "/health", "/healthcheck", "/ping", "/status", "/ready", "/alive",
+            "/metrics", "/monitoring", "/probe", "/check"
         };
 
-        return suspiciousAgents.Any(agent => 
-            userAgent.Contains(agent, StringComparison.OrdinalIgnoreCase));
+        return healthCheckPaths.Any(path => 
+            requestPath.StartsWith(path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks if the user agent represents a legitimate testing tool or framework.
+    /// </summary>
+    /// <param name="userAgent">The user agent string</param>
+    /// <returns>True if user agent is from a legitimate testing tool</returns>
+    private static bool IsLegitimateTestingTool(string userAgent)
+    {
+        var legitimateTestingTools = new[]
+        {
+            // .NET testing frameworks
+            "Microsoft.AspNetCore.TestHost",
+            "xunit",
+            "nunit",
+            "mstest",
+            
+            // Common development tools
+            "Postman",
+            "Insomnia",
+            "RestClient",
+            "HTTPie",
+            
+            // Load testing tools
+            "k6/",
+            "Apache-HttpClient",
+            "JMeter",
+            
+            // CI/CD systems
+            "GitHub-Actions",
+            "Azure DevOps",
+            "Jenkins",
+            "TeamCity"
+        };
+
+        return legitimateTestingTools.Any(tool => 
+            userAgent.Contains(tool, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks if the user agent represents a legitimate search engine bot.
+    /// </summary>
+    /// <param name="userAgent">The user agent string</param>
+    /// <returns>True if user agent is from a legitimate search engine</returns>
+    private static bool IsLegitimateSearchBot(string userAgent)
+    {
+        var legitimateSearchBots = new[]
+        {
+            "Googlebot",
+            "Bingbot",
+            "Slurp", // Yahoo
+            "DuckDuckBot",
+            "Baiduspider",
+            "YandexBot",
+            "facebookexternalhit",
+            "Twitterbot",
+            "LinkedInBot",
+            "WhatsApp",
+            "Applebot"
+        };
+
+        return legitimateSearchBots.Any(bot => 
+            userAgent.Contains(bot, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks if the user agent represents a security scanning tool.
+    /// </summary>
+    /// <param name="userAgent">The user agent string</param>
+    /// <returns>True if user agent is from a security scanner</returns>
+    private static bool IsSecurityScanningTool(string userAgent)
+    {
+        var securityScanners = new[]
+        {
+            "sqlmap", "nmap", "nikto", "dirb", "gobuster", "dirbuster",
+            "burp", "zap", "owasp", "masscan", "nessus", "openvas", "w3af",
+            "whatweb", "httprint", "skipfish", "wpscan", "nuclei",
+            "acunetix", "netsparker", "appscan", "veracode"
+        };
+
+        return securityScanners.Any(scanner => 
+            userAgent.Contains(scanner, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks if the user agent represents a potentially suspicious automation tool.
+    /// </summary>
+    /// <param name="userAgent">The user agent string</param>
+    /// <returns>True if user agent might be from suspicious automation</returns>
+    private static bool IsSuspiciousAutomationTool(string userAgent)
+    {
+        // Only flag specific suspicious patterns, not all automation
+        var suspiciousPatterns = new[]
+        {
+            // Generic/basic scrapers (not whitelisted ones)
+            "python-urllib",
+            "java/",
+            "go-http-client",
+            
+            // Suspicious curl/wget patterns (very basic versions)
+            "curl/7.0", "curl/7.1", "curl/7.2", // Very old versions
+            "wget/1.0", "wget/1.1", // Very old versions
+            
+            // Generic scraping indicators
+            "scraper", "harvester", "collector"
+        };
+
+        return suspiciousPatterns.Any(pattern => 
+            userAgent.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Represents the result of a User-Agent risk assessment.
+    /// </summary>
+    private class UserAgentRiskAssessment
+    {
+        public bool IsSuspicious { get; set; }
+        public string EventType { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public SecurityEventSeverity Severity { get; set; }
+
+        public static UserAgentRiskAssessment Safe() => new()
+        {
+            IsSuspicious = false,
+            EventType = string.Empty,
+            Message = string.Empty,
+            Severity = SecurityEventSeverity.Low
+        };
     }
 
     /// <summary>

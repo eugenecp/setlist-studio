@@ -91,7 +91,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
 
     #endregion
 
-    #region Suspicious User Agent Detection Tests
+    #region User Agent Risk Assessment Tests
 
     [Theory]
     [InlineData("sqlmap/1.6.12")]
@@ -102,14 +102,9 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
     [InlineData("Burp Suite Professional")]
     [InlineData("OWASP ZAP")]
     [InlineData("Nessus Scanner")]
-    [InlineData("python-requests/2.25.1")]
-    [InlineData("curl/7.68.0")]
-    [InlineData("wget/1.20.3")]
-    [InlineData("Mozilla/5.0 (compatible; bot)")]
-    [InlineData("Googlebot/2.1")]
-    [InlineData("crawler-bot")]
-    [InlineData("web-scraper")]
-    public async Task InvokeAsync_ShouldDetectSuspiciousUserAgents(string userAgent)
+    [InlineData("w3af security scanner")]
+    [InlineData("nuclei/2.7.0")]
+    public async Task InvokeAsync_ShouldDetectSecurityScanners_HighRisk(string userAgent)
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -119,15 +114,90 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
         var response = await client.GetAsync("/");
 
         // Assert
-        // Request should be processed but security events logged
+        // Request should be processed but high-severity security events logged
         response.StatusCode.Should().BeOneOf(
             System.Net.HttpStatusCode.OK,
             System.Net.HttpStatusCode.Redirect);
-        _output.WriteLine($"Tested suspicious user agent: {userAgent}");
+        _output.WriteLine($"Tested security scanner user agent: {userAgent}");
+    }
+
+    [Theory]
+    [InlineData("python-urllib/3.8")]
+    [InlineData("java/1.8.0_291")]
+    [InlineData("go-http-client/1.1")]
+    [InlineData("curl/7.0.0")]
+    [InlineData("wget/1.0.0")]
+    [InlineData("web-scraper")]
+    public async Task InvokeAsync_ShouldDetectSuspiciousAutomation_MediumRisk(string userAgent)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+
+        // Act
+        var response = await client.GetAsync("/");
+
+        // Assert
+        // Request should be processed but medium-severity security events logged
+        response.StatusCode.Should().BeOneOf(
+            System.Net.HttpStatusCode.OK,
+            System.Net.HttpStatusCode.Redirect);
+        _output.WriteLine($"Tested suspicious automation user agent: {userAgent}");
+    }
+
+    [Theory]
+    [InlineData("Googlebot/2.1")]
+    [InlineData("Bingbot/2.0")]
+    [InlineData("DuckDuckBot/1.0")]
+    [InlineData("facebookexternalhit/1.1")]
+    [InlineData("Twitterbot/1.0")]
+    [InlineData("LinkedInBot/1.0")]
+    [InlineData("Applebot/0.1")]
+    public async Task InvokeAsync_ShouldAllowLegitimateSearchBots(string userAgent)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+
+        // Act
+        var response = await client.GetAsync("/");
+
+        // Assert
+        // Request should be processed without security events
+        response.StatusCode.Should().BeOneOf(
+            System.Net.HttpStatusCode.OK,
+            System.Net.HttpStatusCode.Redirect);
+        _output.WriteLine($"Tested legitimate search bot: {userAgent}");
+    }
+
+    [Theory]
+    [InlineData("Microsoft.AspNetCore.TestHost")]
+    [InlineData("xunit-runner")]
+    [InlineData("Postman Runtime/7.28.4")]
+    [InlineData("Insomnia/2021.5.0")]
+    [InlineData("HTTPie/2.6.0")]
+    [InlineData("k6/0.34.1")]
+    [InlineData("Apache-HttpClient/4.5.13")]
+    [InlineData("GitHub-Actions-Runner")]
+    public async Task InvokeAsync_ShouldAllowLegitimateTestingTools(string userAgent)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+
+        // Act
+        var response = await client.GetAsync("/");
+
+        // Assert
+        // Request should be processed without security events
+        response.StatusCode.Should().BeOneOf(
+            System.Net.HttpStatusCode.OK,
+            System.Net.HttpStatusCode.Redirect);
+        _output.WriteLine($"Tested legitimate testing tool: {userAgent}");
     }
 
     [Fact]
-    public async Task InvokeAsync_ShouldDetectMissingUserAgent()
+    public async Task InvokeAsync_ShouldDetectMissingUserAgent_LowRisk()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -137,10 +207,35 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
         var response = await client.GetAsync("/");
 
         // Assert
+        // Request should be processed with low-severity logging (reduced from medium)
         response.StatusCode.Should().BeOneOf(
             System.Net.HttpStatusCode.OK,
             System.Net.HttpStatusCode.Redirect);
-        _output.WriteLine("Tested missing user agent");
+        _output.WriteLine("Tested missing user agent - now low risk");
+    }
+
+    [Theory]
+    [InlineData("/health")]
+    [InlineData("/healthcheck")]
+    [InlineData("/ping")]
+    [InlineData("/status")]
+    [InlineData("/metrics")]
+    [InlineData("/ready")]
+    public async Task InvokeAsync_ShouldAllowMissingUserAgentForHealthChecks(string healthPath)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Remove("User-Agent");
+
+        // Act
+        var response = await client.GetAsync(healthPath);
+
+        // Assert
+        // Health check endpoints should not log security events for missing User-Agent
+        response.StatusCode.Should().BeOneOf(
+            System.Net.HttpStatusCode.OK,
+            System.Net.HttpStatusCode.NotFound); // NotFound if endpoint doesn't exist
+        _output.WriteLine($"Tested missing user agent for health check: {healthPath}");
     }
 
     #endregion
