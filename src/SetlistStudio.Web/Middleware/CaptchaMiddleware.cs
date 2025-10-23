@@ -69,7 +69,7 @@ public class CaptchaMiddleware
                     
                     if (!isValidCaptcha)
                     {
-                        _logger.LogWarning("Invalid CAPTCHA response from IP {ClientIp}", clientIp);
+                        _logger.LogWarning("Invalid CAPTCHA response from IP {ClientIp}", SanitizeForLogging(clientIp));
                         await ReturnCaptchaChallenge(context, clientIp, "Invalid CAPTCHA. Please try again.");
                         return;
                     }
@@ -77,12 +77,12 @@ public class CaptchaMiddleware
                     // CAPTCHA passed - grant bypass for 30 minutes
                     _cache.Set(captchaBypassKey, true, TimeSpan.FromMinutes(30));
                     
-                    _logger.LogInformation("CAPTCHA challenge passed for IP {ClientIp}", clientIp);
+                    _logger.LogInformation("CAPTCHA challenge passed for IP {ClientIp}", SanitizeForLogging(clientIp));
                 }
                 catch (HttpRequestException ex)
                 {
                     // CAPTCHA service is unavailable - return too many requests
-                    _logger.LogError(ex, "CAPTCHA service unavailable for IP {ClientIp}", clientIp);
+                    _logger.LogError(ex, "CAPTCHA service unavailable for IP {ClientIp}", SanitizeForLogging(clientIp));
                     context.Response.StatusCode = 429;
                     await context.Response.WriteAsync("CAPTCHA service temporarily unavailable. Please try again later.");
                     return;
@@ -92,7 +92,7 @@ public class CaptchaMiddleware
         catch (Exception ex)
         {
             // Rate limiting service failed - continue without CAPTCHA check
-            _logger.LogError(ex, "Rate limiting service failed for IP {ClientIp}. Continuing without CAPTCHA.", clientIp);
+            _logger.LogError(ex, "Rate limiting service failed for IP {ClientIp}. Continuing without CAPTCHA.", SanitizeForLogging(clientIp));
         }
 
         await _next(context);
@@ -132,6 +132,16 @@ public class CaptchaMiddleware
         {
             return realIp;
         }
+    /// <summary>
+    /// Sanitizes a string for safe logging by removing newlines and carriage returns.
+    /// </summary>
+    private string SanitizeForLogging(string input)
+    {
+        if (input == null)
+            return null;
+        return input.Replace("\r", "").Replace("\n", "");
+    }
+
 
         return context.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
     }
