@@ -395,24 +395,32 @@ try
     })
     .SetApplicationName("SetlistStudio")
     .PersistKeysToFileSystem(new DirectoryInfo(
-        Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys"))))
+        Path.GetFullPath(Path.Join(builder.Environment.ContentRootPath, "DataProtection-Keys"))))
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
 
-    // Configure Rate Limiting - CRITICAL SECURITY ENHANCEMENT
+    // Configure Enhanced Rate Limiting - CRITICAL SECURITY ENHANCEMENT
+    builder.Services.AddSingleton<IEnhancedRateLimitingService, EnhancedRateLimitingService>();
+    
     builder.Services.AddRateLimiter(options =>
     {
         // Global rate limiter - applies to all endpoints unless overridden
+        // Uses enhanced partitioning for better security
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: GetSafePartitionKey(httpContext),
+        {
+            var rateLimitingService = httpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(httpContext).Result ?? GetSafePartitionKey(httpContext);
+            
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: partitionKey,
                 factory: partition => new FixedWindowRateLimiterOptions
                 {
                     AutoReplenishment = true,
                     PermitLimit = 1000, // 1000 requests per window
                     Window = TimeSpan.FromMinutes(1)
-                }));
+                });
+        });
 
-        // API endpoints - 100 requests per minute
+        // API endpoints - 100 requests per minute (unauthenticated), 200 for authenticated
         options.AddFixedWindowLimiter("ApiPolicy", options =>
         {
             options.PermitLimit = 100;
@@ -420,6 +428,16 @@ try
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
             options.QueueLimit = 10; // Allow 10 requests to queue
+        });
+
+        // Enhanced API policy for authenticated users
+        options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
+        {
+            options.PermitLimit = 200; // Higher limit for authenticated users
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 20;
         });
 
         // Authentication endpoints - 5 attempts per minute (prevent brute force)
@@ -432,6 +450,16 @@ try
             options.QueueLimit = 2; // Very limited queue for auth attempts
         });
 
+        // Authenticated users - higher limits
+        options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
+        {
+            options.PermitLimit = 2000; // Higher limit for authenticated users
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 50;
+        });
+
         // Strict policy for sensitive operations - 10 requests per minute
         options.AddFixedWindowLimiter("StrictPolicy", options =>
         {
@@ -442,20 +470,52 @@ try
             options.QueueLimit = 3;
         });
 
-        // Configure rejection response
+        // Sensitive operations - enhanced security
+        options.AddFixedWindowLimiter("SensitivePolicy", options =>
+        {
+            options.PermitLimit = 25;
+            options.Window = TimeSpan.FromMinutes(1);
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = 5;
+        });
+
+        // Configure rejection response with enhanced logging
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         options.OnRejected = async (context, token) =>
         {
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             
-            // Log rate limit violation for security monitoring
+            // Enhanced logging with security context
             var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
-            var userIdentifier = GetSafePartitionKey(context.HttpContext);
+            var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
             
-            logger?.LogWarning("Rate limit exceeded for user/IP: {UserIdentifier} on endpoint: {Endpoint}", 
-                userIdentifier, context.HttpContext.Request.Path);
+            logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
+                partitionKey, context.HttpContext.Request.Path, GetClientIpAddress(context.HttpContext));
 
-            await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+            // Record the violation for enhanced monitoring
+            if (rateLimitingService != null)
+            {
+                await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
+            }
+
+            // Return appropriate response based on request type
+            if (IsApiRequest(context.HttpContext))
+            {
+                context.HttpContext.Response.ContentType = "application/json";
+                var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    error = "rate_limit_exceeded",
+                    message = "Rate limit exceeded. Please try again later.",
+                    retry_after = 60
+                });
+                await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
+            }
+            else
+            {
+                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+            }
         };
     });
 
@@ -566,14 +626,26 @@ try
         await next();
     });
     
-    // Rate Limiting Headers Middleware - Add rate limit headers to responses
-    app.UseRateLimitHeaders();
+    // Rate Limiting Headers Middleware - Add rate limit headers to responses (disabled in test environment)
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseRateLimitHeaders();
+        
+        // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
+        app.UseRateLimiter();
+    }
     
-    // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
-    app.UseRateLimiter();
+    // CAPTCHA Middleware - Prevent automated attacks and rate limit bypass
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseCaptchaMiddleware();
+    }
     
     // Security Event Logging Middleware - Monitor and log security events (disabled in test environment)
-    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase))
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
     {
         app.UseMiddleware<SetlistStudio.Web.Middleware.SecurityEventMiddleware>();
     }
@@ -1090,6 +1162,35 @@ static string GetSafePartitionKey(HttpContext httpContext)
     
     var remoteIp = httpContext.Connection?.RemoteIpAddress?.ToString();
     return remoteIp ?? "anonymous";
+}
+
+static string GetClientIpAddress(HttpContext httpContext)
+{
+    // Try to get real IP from forwarded headers (for reverse proxy scenarios)
+    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedFor))
+    {
+        var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        return ips[0].Trim(); // First IP is the original client
+    }
+
+    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(realIp))
+    {
+        return realIp;
+    }
+
+    return httpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+}
+
+static bool IsApiRequest(HttpContext httpContext)
+{
+    var path = httpContext.Request.Path.Value?.ToLowerInvariant();
+    var acceptHeader = httpContext.Request.Headers.Accept.ToString();
+    
+    return path?.StartsWith("/api/") == true || 
+           acceptHeader.Contains("application/json") ||
+           httpContext.Request.Headers.ContainsKey("X-Requested-With");
 }
 
 // Make Program class accessible for testing

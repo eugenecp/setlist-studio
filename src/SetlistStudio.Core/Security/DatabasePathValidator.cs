@@ -148,7 +148,7 @@ public static class DatabasePathValidator
         else
         {
             // Local development - create secure data directory
-            var dataDirectory = Path.Combine(Directory.GetCurrentDirectory(), SecureLocalDataPath);
+            var dataDirectory = Path.Join(Directory.GetCurrentDirectory(), SecureLocalDataPath);
             
             // Ensure the data directory exists
             if (!Directory.Exists(dataDirectory))
@@ -156,7 +156,7 @@ public static class DatabasePathValidator
                 Directory.CreateDirectory(dataDirectory);
             }
             
-            return Path.Combine(dataDirectory, DefaultDatabaseFilename);
+            return Path.Join(dataDirectory, DefaultDatabaseFilename);
         }
     }
     
@@ -181,7 +181,7 @@ public static class DatabasePathValidator
             }
             
             // Test write permissions
-            var testFile = Path.Combine(directory, $"test_write_{Guid.NewGuid()}.tmp");
+            var testFile = Path.Join(directory, $"test_write_{Guid.NewGuid()}.tmp");
             File.WriteAllText(testFile, "test");
             File.Delete(testFile);
             

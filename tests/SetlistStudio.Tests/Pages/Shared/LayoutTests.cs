@@ -21,7 +21,7 @@ public class LayoutTests : IClassFixture<TestWebApplicationFactory>
     private static string FindProjectRoot()
     {
         var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "SetlistStudio.sln")))
+        while (directory != null && !File.Exists(Path.Join(directory.FullName, "SetlistStudio.sln")))
         {
             directory = directory.Parent;
         }
@@ -33,7 +33,7 @@ public class LayoutTests : IClassFixture<TestWebApplicationFactory>
     {
         // Arrange & Act
         var projectRoot = FindProjectRoot();
-        var layoutPath = Path.Combine(projectRoot, "src", "SetlistStudio.Web", "Pages", "Shared", "_Layout.cshtml");
+        var layoutPath = Path.Join(projectRoot, "src", "SetlistStudio.Web", "Pages", "Shared", "_Layout.cshtml");
         var layoutExists = File.Exists(layoutPath);
 
         // Assert
@@ -45,7 +45,7 @@ public class LayoutTests : IClassFixture<TestWebApplicationFactory>
     {
         // Arrange
         var projectRoot = FindProjectRoot();
-        var layoutPath = Path.Combine(projectRoot, "src", "SetlistStudio.Web", "Pages", "Shared", "_Layout.cshtml");
+        var layoutPath = Path.Join(projectRoot, "src", "SetlistStudio.Web", "Pages", "Shared", "_Layout.cshtml");
         
         // Act
         var exists = File.Exists(layoutPath);

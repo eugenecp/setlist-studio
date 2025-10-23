@@ -1514,7 +1514,7 @@ public class ProgramTests : IDisposable
 
             // Assert - Should use secure absolute path in Data subdirectory
             var baseDirectory = AppContext.BaseDirectory;
-            var dataDirectory = Path.Combine(baseDirectory, "Data");
+            var dataDirectory = Path.Join(baseDirectory, "Data");
             var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
             result.Should().Be(expectedPath);
         }
@@ -1605,8 +1605,8 @@ public class ProgramTests : IDisposable
             if (expectedPath.Contains("{DataDirectory}"))
             {
                 var baseDirectory = AppContext.BaseDirectory;
-                var dataDirectory = Path.Combine(baseDirectory, "Data");
-                var expectedFilePath = Path.Combine(dataDirectory, "setliststudio.db");
+                var dataDirectory = Path.Join(baseDirectory, "Data");
+                var expectedFilePath = Path.Join(dataDirectory, "setliststudio.db");
                 finalExpectedPath = $"Data Source={expectedFilePath}";
             }
             
@@ -1855,7 +1855,7 @@ public class ProgramTests : IDisposable
 
             // Assert - Should use secure absolute path in Data subdirectory
             var baseDirectory = AppContext.BaseDirectory;
-            var dataDirectory = Path.Combine(baseDirectory, "Data");
+            var dataDirectory = Path.Join(baseDirectory, "Data");
             var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
             result.Should().Be(expectedPath);
         }
@@ -2230,7 +2230,8 @@ public class ProgramTests : IDisposable
     public async Task Program_ShouldIncludeCSRFTokenInResponses_WhenRequestingAntiforgeryToken()
     {
         // Arrange
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
         using var client = factory.CreateClient();
 
         // Act - Request the main page which should include anti-forgery token
@@ -2257,7 +2258,8 @@ public class ProgramTests : IDisposable
     public async Task Program_ShouldSetSecureCookieAttributes_WhenCSRFTokenGenerated()
     {
         // Arrange
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
         using var client = factory.CreateClient();
 
         // Act
@@ -2301,7 +2303,8 @@ public class ProgramTests : IDisposable
     public async Task Program_ShouldGenerateValidAntiforgeryToken_WhenRequested()
     {
         // Arrange
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
         using var client = factory.CreateClient();
 
         // Act
@@ -2339,7 +2342,8 @@ public class ProgramTests : IDisposable
     public async Task Program_ShouldApplyCSRFProtection_ToBlazorApplication()
     {
         // Arrange
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
         using var client = factory.CreateClient();
 
         // Act - Access the Blazor application entry point

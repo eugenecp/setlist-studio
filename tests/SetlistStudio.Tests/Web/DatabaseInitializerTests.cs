@@ -311,7 +311,7 @@ public class DatabaseInitializerTests
         var services = new ServiceCollection();
         
         // Create a temporary database file to test file info logging
-        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_database_{Guid.NewGuid()}.db");
+        var tempDbPath = Path.Join(Path.GetTempPath(), $"test_database_{Guid.NewGuid()}.db");
         
         try
         {

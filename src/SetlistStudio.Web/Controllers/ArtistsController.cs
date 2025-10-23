@@ -2,13 +2,15 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
+using SetlistStudio.Web.Attributes;
 
 namespace SetlistStudio.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize] // Require authentication for all endpoints
-[EnableRateLimiting("ApiPolicy")]
+[EnableRateLimiting(RateLimitPolicies.AuthenticatedApi)] // Enhanced rate limiting for authenticated API calls
+[SecurityRateLimitConfig(EnableSecurityLogging = true, BlockSuspiciousUserAgents = true)]
 public class ArtistsController : ControllerBase
 {
     [HttpGet("search")]

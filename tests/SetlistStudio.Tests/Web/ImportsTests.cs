@@ -8,7 +8,7 @@ public class ImportsTests
     private static string FindProjectRoot()
     {
         var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "SetlistStudio.sln")))
+        while (directory != null && !File.Exists(Path.Join(directory.FullName, "SetlistStudio.sln")))
         {
             directory = directory.Parent;
         }
@@ -20,7 +20,7 @@ public class ImportsTests
     {
         // Arrange & Act
         var projectRoot = FindProjectRoot();
-        var importsPath = Path.Combine(projectRoot, "src", "SetlistStudio.Web", "_Imports.razor");
+        var importsPath = Path.Join(projectRoot, "src", "SetlistStudio.Web", "_Imports.razor");
         var importsExists = File.Exists(importsPath);
 
         // Assert
@@ -32,7 +32,7 @@ public class ImportsTests
     {
         // Arrange
         var projectRoot = FindProjectRoot();
-        var importsPath = Path.Combine(projectRoot, "src", "SetlistStudio.Web", "_Imports.razor");
+        var importsPath = Path.Join(projectRoot, "src", "SetlistStudio.Web", "_Imports.razor");
         
         // Act
         var exists = File.Exists(importsPath);

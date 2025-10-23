@@ -102,10 +102,10 @@ public class DatabaseInitializerAdvancedTests
         var services = new ServiceCollection();
         
         // Create a temporary file path that exists but will cause SQLite issues
-        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_invalid_{Guid.NewGuid()}.db");
+        var tempDbPath = Path.Join(Path.GetTempPath(), $"test_invalid_{Guid.NewGuid()}.db");
         
         // Create the directory path that doesn't exist to force a failure
-        var invalidPath = Path.Combine("Z:\\nonexistent-drive", "invalid-database.db");
+        var invalidPath = Path.Join("Z:\\nonexistent-drive", "invalid-database.db");
         
         try
         {
@@ -208,7 +208,7 @@ public class DatabaseInitializerAdvancedTests
         var services = new ServiceCollection();
         
         // Use invalid path that should cause creation to fail
-        var invalidPath = Path.Combine("Z:", "nonexistent", "invalid.db");
+        var invalidPath = Path.Join("Z:", "nonexistent", "invalid.db");
         services.AddDbContext<SetlistStudioDbContext>(options =>
         {
             options.UseSqlite($"Data Source={invalidPath}");
@@ -609,7 +609,7 @@ public class DatabaseInitializerAdvancedTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
-        var nonExistentPath = Path.Combine(Path.GetTempPath(), $"nonexistent_{Guid.NewGuid()}.db");
+        var nonExistentPath = Path.Join(Path.GetTempPath(), $"nonexistent_{Guid.NewGuid()}.db");
         
         services.AddDbContext<SetlistStudioDbContext>(options =>
         {
