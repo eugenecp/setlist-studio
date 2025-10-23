@@ -50,11 +50,12 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
         // Arrange
         var endpoints = new[] { "/", "/Identity/Account/Login", "/api/health" };
 
-        foreach (var endpoint in endpoints)
-        {
-            // Act
-            var response = await _client.GetAsync(endpoint);
+        // Act & Assert - Get all responses and validate security headers
+        var responses = await Task.WhenAll(endpoints.Select(async endpoint => 
+            await _client.GetAsync(endpoint)));
 
+        foreach (var response in responses)
+        {
             // Assert
             response.Headers.Should().ContainKey("X-Content-Type-Options");
             response.Headers.GetValues("X-Content-Type-Options").Should().Contain("nosniff");
@@ -258,28 +259,29 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
             "<div onclick=alert('xss')>Click me</div>"
         };
 
-        foreach (var xssPayload in xssPayloads)
+        // Act & Assert - Test all XSS payloads and validate responses
+        var responses = await Task.WhenAll(xssPayloads.Select(async xssPayload =>
         {
-            // Act - Submit XSS payload through form input
             using var formData = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("Title", xssPayload),
                 new KeyValuePair<string, string>("Artist", "Test Artist")
             });
 
-            var response = await _client.PostAsync("/Songs/Create", formData);
+            return await _client.PostAsync("/Songs/Create", formData);
+        }));
 
-            // Assert - Response should not contain executable XSS payload
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                
-                // Should not contain unescaped script tags or event handlers
-                content.Should().NotContain("<script>", "Script tags should be escaped or removed");
-                content.Should().NotContain("onerror=", "Event handlers should be escaped or removed");
-                content.Should().NotContain("onload=", "Event handlers should be escaped or removed");
-                content.Should().NotContain("javascript:", "JavaScript URLs should be sanitized");
-            }
+        var contents = await Task.WhenAll(responses
+            .Where(response => response.IsSuccessStatusCode)
+            .Select(async response => await response.Content.ReadAsStringAsync()));
+
+        foreach (var content in contents)
+        {
+            // Should not contain unescaped script tags or event handlers
+            content.Should().NotContain("<script>", "Script tags should be escaped or removed");
+            content.Should().NotContain("onerror=", "Event handlers should be escaped or removed");
+            content.Should().NotContain("onload=", "Event handlers should be escaped or removed");
+            content.Should().NotContain("javascript:", "JavaScript URLs should be sanitized");
         }
     }
 
@@ -453,25 +455,25 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
             "/Identity/Account/InvalidAction"
         };
 
-        foreach (var endpoint in errorEndpoints)
-        {
-            // Act
-            var response = await _client.GetAsync(endpoint);
+        // Act & Assert - Get all error responses and validate they don't leak sensitive information
+        var responses = await Task.WhenAll(errorEndpoints.Select(async endpoint => 
+            await _client.GetAsync(endpoint)));
+        
+        var contents = await Task.WhenAll(responses.Select(async response => 
+            await response.Content.ReadAsStringAsync()));
 
-            // Assert - Error responses should not leak sensitive information
-            var content = await response.Content.ReadAsStringAsync();
-            
-            content.Should().NotContain("ConnectionString");
-            content.Should().NotContain("password");
-            content.Should().NotContain("secret");
-            content.Should().NotContain("token");
-            content.Should().NotContain("api-key");
-            content.Should().NotContain("private-key");
-            content.Should().NotContain("secret-key");
-            content.Should().NotContain("C:\\");
-            content.Should().NotContain("/root/");
-            content.Should().NotContain("StackTrace");
-            content.Should().NotContain("InnerException");
+        var sensitivePatterns = new[]
+        {
+            "ConnectionString", "password", "secret", "token", "api-key", 
+            "private-key", "secret-key", "C:\\", "/root/", "StackTrace", "InnerException"
+        };
+
+        foreach (var content in contents)
+        {
+            foreach (var pattern in sensitivePatterns)
+            {
+                content.Should().NotContain(pattern);
+            }
         }
     }
 
@@ -497,10 +499,12 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
 
         // Verify no session collision or security issues
         var responsesWithCookies = responses.Where(r => r.Headers.Contains("Set-Cookie"));
-        foreach (var response in responsesWithCookies)
+        var allCookies = responsesWithCookies.SelectMany(r => r.Headers.GetValues("Set-Cookie"));
+        
+        // Only validate cookies if any are present (health endpoints may not set cookies)
+        if (allCookies.Any())
         {
-            var cookies = response.Headers.GetValues("Set-Cookie");
-            cookies.Should().OnlyContain(c => !string.IsNullOrEmpty(c),
+            allCookies.Should().OnlyContain(c => !string.IsNullOrEmpty(c),
                 "Session cookies should not be empty or corrupted");
         }
     }
