@@ -70,6 +70,13 @@ public class SecretValidationService
 
         _logger.LogInformation("Validating secrets for environment: {Environment}", environmentName);
 
+        // Check if Azure Key Vault is configured for production
+        if (!_environment.IsDevelopment())
+        {
+            var keyVaultValidation = ValidateKeyVaultConfiguration();
+            result.ValidationErrors.AddRange(keyVaultValidation);
+        }
+
         // Skip validation in development unless explicitly requested
         if (_environment.IsDevelopment() && !strictValidation)
         {
@@ -106,6 +113,16 @@ public class SecretValidationService
         if (result.IsValid)
         {
             _logger.LogInformation("All secrets validated successfully for environment: {Environment}", environmentName);
+            
+            // Log Key Vault usage for production
+            if (!_environment.IsDevelopment())
+            {
+                var keyVaultName = _configuration["KeyVault:VaultName"];
+                if (!string.IsNullOrEmpty(keyVaultName))
+                {
+                    _logger.LogInformation("Using Azure Key Vault for secret management: {KeyVaultName}", keyVaultName);
+                }
+            }
         }
         else
         {
@@ -114,6 +131,74 @@ public class SecretValidationService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Validates Azure Key Vault configuration for production environments
+    /// </summary>
+    private List<SecretValidationError> ValidateKeyVaultConfiguration()
+    {
+        var errors = new List<SecretValidationError>();
+        var keyVaultName = _configuration["KeyVault:VaultName"];
+
+        if (string.IsNullOrWhiteSpace(keyVaultName))
+        {
+            // Key Vault is not configured - this is okay for some deployment scenarios
+            _logger.LogInformation("Azure Key Vault not configured - using local configuration");
+            return errors;
+        }
+
+        // Validate Key Vault name format
+        if (!IsValidKeyVaultName(keyVaultName))
+        {
+            errors.Add(new SecretValidationError(
+                "KeyVault:VaultName",
+                "Azure Key Vault Name",
+                SecretValidationIssue.InvalidFormat,
+                $"Invalid Key Vault name format: {keyVaultName}. Must be 3-24 characters, alphanumeric and hyphens only."
+            ));
+        }
+
+        // Check if Key Vault name contains placeholder values
+        if (PlaceholderValues.Contains(keyVaultName) || keyVaultName.Contains("YOUR_") || keyVaultName.Contains("your_"))
+        {
+            errors.Add(new SecretValidationError(
+                "KeyVault:VaultName",
+                "Azure Key Vault Name",
+                SecretValidationIssue.Placeholder,
+                $"Key Vault name contains placeholder value: {keyVaultName}"
+            ));
+        }
+
+        if (errors.Count == 0)
+        {
+            _logger.LogInformation("Azure Key Vault configuration validated: {KeyVaultName}", keyVaultName);
+        }
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Validates Azure Key Vault name format according to Azure naming conventions
+    /// </summary>
+    private static bool IsValidKeyVaultName(string keyVaultName)
+    {
+        if (string.IsNullOrWhiteSpace(keyVaultName))
+            return false;
+
+        if (keyVaultName.Length < 3 || keyVaultName.Length > 24)
+            return false;
+
+        // Must start with letter
+        if (!char.IsLetter(keyVaultName[0]))
+            return false;
+
+        // Must end with letter or digit
+        if (!char.IsLetterOrDigit(keyVaultName[^1]))
+            return false;
+
+        // Can only contain letters, digits, and hyphens
+        return keyVaultName.All(c => char.IsLetterOrDigit(c) || c == '-');
     }
 
     /// <summary>
