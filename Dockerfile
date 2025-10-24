@@ -5,33 +5,39 @@ WORKDIR /src
 # Install security scanning tools in build stage
 RUN apk add --no-cache git curl
 
-# Copy csproj files and restore dependencies
+# Copy csproj files first for better Docker layer caching
 COPY ["src/SetlistStudio.Web/SetlistStudio.Web.csproj", "SetlistStudio.Web/"]
 COPY ["src/SetlistStudio.Core/SetlistStudio.Core.csproj", "SetlistStudio.Core/"]
 COPY ["src/SetlistStudio.Infrastructure/SetlistStudio.Infrastructure.csproj", "SetlistStudio.Infrastructure/"]
 
-# Restore with explicit package source for security
+# Restore dependencies with explicit package source for security
 RUN dotnet restore "SetlistStudio.Web/SetlistStudio.Web.csproj" \
-    --source https://api.nuget.org/v3/index.json
+    --source https://api.nuget.org/v3/index.json \
+    --verbosity minimal
 
 # Copy all source code
 COPY src/ .
 
-# Build the application with security options
+# Build the application with security options and better error output
 WORKDIR /src/SetlistStudio.Web
 RUN dotnet build "SetlistStudio.Web.csproj" \
     -c Release \
     -o /app/build \
+    --no-restore \
+    --verbosity minimal \
     -p:TreatWarningsAsErrors=true \
     -p:WarningsAsErrors="" \
-    -p:WarningsNotAsErrors="NU1603"
+    -p:WarningsNotAsErrors="NU1603" || \
+    (echo "Build failed. Listing source files:" && find /src -name "*.cs" | head -20 && exit 1)
 
 # Publish stage 
 FROM build AS publish
 RUN dotnet publish "SetlistStudio.Web.csproj" \
     -c Release \
     -o /app/publish \
-    --no-restore
+    --no-restore \
+    --no-build \
+    --verbosity minimal
 
 # Runtime stage with minimal attack surface
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final

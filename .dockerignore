@@ -1,0 +1,50 @@
+# Ignore build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Ignore test results and coverage
+**/TestResults/
+**/CoverageReport/
+**/*.trx
+**/*.coverage
+**/*.coveragexml
+
+# Ignore IDE and temporary files
+.vs/
+.vscode/
+*.user
+*.suo
+*.tmp
+*.temp
+*~
+
+# Ignore version control
+.git/
+.gitignore
+.gitattributes
+
+# Ignore documentation and scripts that aren't needed for runtime
+README.md
+*.md
+docs/
+scripts/
+
+# Ignore Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Ignore security analysis files
+*.sarif
+codeql-database*/
+codeql-results/
+
+# Keep source code and project files
+!src/**
+!*.csproj
+!*.sln
+!*.config
+!*.json
+!*.xml
