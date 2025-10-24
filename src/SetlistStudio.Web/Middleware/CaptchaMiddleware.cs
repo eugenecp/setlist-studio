@@ -157,9 +157,9 @@ public class CaptchaMiddleware
     private string? GetCaptchaResponse(HttpContext context)
     {
         // Check form data for CAPTCHA response
-        if (context.Request.HasFormContentType && context.Request.Form.ContainsKey("g-recaptcha-response"))
+        if (context.Request.HasFormContentType && context.Request.Form.TryGetValue("g-recaptcha-response", out var captchaResponse))
         {
-            return context.Request.Form["g-recaptcha-response"];
+            return captchaResponse;
         }
 
         // Check headers for CAPTCHA response (for API requests)
