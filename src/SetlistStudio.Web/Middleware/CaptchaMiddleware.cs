@@ -111,6 +111,7 @@ public class CaptchaMiddleware
         {
             "/css/", "/js/", "/images/", "/fonts/", "/favicon.ico",
             "/health", "/ready", "/live", "/metrics",
+            "/api/status", // Health check endpoint for Docker containers
             "/_framework/", "/_content/",
             "/captcha/", "/recaptcha/"
         };
