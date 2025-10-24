@@ -57,7 +57,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 "Password", 
                 "Mozilla/5.0 Test Browser",
-                "192.168.1.100"),
+                "192.168.1.xxx"),
             Times.Once);
     }
 
@@ -118,7 +118,7 @@ public class SecurityEventHandlerTests
                 "Unknown", // No authentication type in context
                 failureReason,
                 "Mozilla/5.0 Test Browser",
-                "192.168.1.100"),
+                "192.168.1.xxx"),
             Times.Once);
     }
 
@@ -149,7 +149,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.Is<TimeSpan>(t => t.TotalMinutes > 4 && t.TotalMinutes < 6), // Approximately 5 minutes
                 failedAttemptCount,
-                "192.168.1.100"),
+                "192.168.1.xxx"),
             Times.Once);
     }
 
@@ -215,9 +215,9 @@ public class SecurityEventHandlerTests
     /// Tests IP address extraction with X-Forwarded-For header.
     /// </summary>
     [Theory]
-    [InlineData("203.0.113.1", "203.0.113.1")]
-    [InlineData("203.0.113.1, 203.0.113.2", "203.0.113.1")] // First IP in chain
-    [InlineData("203.0.113.1,203.0.113.2,203.0.113.3", "203.0.113.1")] // No spaces
+    [InlineData("203.0.113.1", "203.0.113.xxx")]
+    [InlineData("203.0.113.1, 203.0.113.2", "203.0.113.xxx")] // First IP in chain
+    [InlineData("203.0.113.1,203.0.113.2,203.0.113.3", "203.0.113.xxx")] // No spaces
     public void OnLoginSuccess_ShouldExtractCorrectIpFromForwardedHeaders(string forwardedFor, string expectedIp)
     {
         // Arrange
@@ -268,7 +268,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                "203.0.113.100"),
+                "203.0.113.xxx"),
             Times.Once);
     }
 
@@ -296,7 +296,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                "192.168.1.200"),
+                "192.168.1.xxx"),
             Times.Once);
     }
 
@@ -442,7 +442,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                "2001:db8::1"),
+                "2001:db8::xxxx"),
             Times.Once);
     }
 
@@ -470,7 +470,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null),
+                "unknown"),
             Times.Once);
     }
 
@@ -755,7 +755,7 @@ public class SecurityEventHandlerTests
                 user.Id,
                 It.Is<TimeSpan>(t => t.TotalMinutes > 14 && t.TotalMinutes < 16), // Approximately 15 minutes
                 attemptCount,
-                "192.168.1.100"),
+                "192.168.1.xxx"),
             Times.Once);
     }
 

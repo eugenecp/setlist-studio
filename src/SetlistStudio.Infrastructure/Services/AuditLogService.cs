@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -270,11 +271,26 @@ public class AuditLogService : IAuditLogService
     }
 
     /// <summary>
-    /// Extracts the client IP address from HTTP context, handling proxy scenarios
+    /// Extracts and sanitizes the client IP address from HTTP context, handling proxy scenarios
+    /// and protecting user privacy by masking the last octet/segments
     /// </summary>
     /// <param name="httpContext">The HTTP context</param>
-    /// <returns>Client IP address</returns>
+    /// <returns>Sanitized client IP address</returns>
     private static string GetClientIpAddress(HttpContext httpContext)
+    {
+        // Get raw IP address first
+        var rawIp = GetRawClientIpAddress(httpContext);
+        
+        // Sanitize the IP address for privacy protection
+        return SecureLoggingHelper.SanitizeIpAddress(rawIp);
+    }
+
+    /// <summary>
+    /// Extracts the raw client IP address from HTTP context, handling proxy scenarios
+    /// </summary>
+    /// <param name="httpContext">The HTTP context</param>
+    /// <returns>Raw client IP address</returns>
+    private static string GetRawClientIpAddress(HttpContext httpContext)
     {
         // Check X-Forwarded-For header (common in load balancer scenarios)
         var xForwardedFor = httpContext.Request.Headers["X-Forwarded-For"].ToString();

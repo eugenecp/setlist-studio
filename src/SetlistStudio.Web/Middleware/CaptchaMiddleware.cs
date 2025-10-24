@@ -1,4 +1,5 @@
 using SetlistStudio.Web.Services;
+using SetlistStudio.Core.Security;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace SetlistStudio.Web.Middleware;
@@ -119,6 +120,13 @@ public class CaptchaMiddleware
 
     private string GetClientIpAddress(HttpContext context)
     {
+        // Get raw IP address and sanitize it for privacy protection
+        var rawIp = GetRawClientIpAddress(context);
+        return SecureLoggingHelper.SanitizeIpAddress(rawIp);
+    }
+
+    private string GetRawClientIpAddress(HttpContext context)
+    {
         // Try to get real IP from forwarded headers (for reverse proxy scenarios)
         var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
         if (!string.IsNullOrEmpty(forwardedFor))
@@ -132,18 +140,18 @@ public class CaptchaMiddleware
         {
             return realIp;
         }
+
+        return context.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+    }
+
     /// <summary>
     /// Sanitizes a string for safe logging by removing newlines and carriage returns.
     /// </summary>
-    private string SanitizeForLogging(string input)
+    private string SanitizeForLogging(string? input)
     {
         if (input == null)
-            return null;
+            return string.Empty;
         return input.Replace("\r", "").Replace("\n", "");
-    }
-
-
-        return context.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     private string? GetCaptchaResponse(HttpContext context)

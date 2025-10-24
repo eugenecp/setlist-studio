@@ -74,7 +74,7 @@ public class AuditLogServiceTests : IDisposable
         auditLog.EntityType.Should().Be(EntityType);
         auditLog.EntityId.Should().Be(EntityId);
         auditLog.UserId.Should().Be(userId);
-        auditLog.IpAddress.Should().Be("192.168.1.100");
+        auditLog.IpAddress.Should().Be("192.168.1.xxx");
         auditLog.UserAgent.Should().Be("Mozilla/5.0 Test Browser");
         auditLog.CorrelationId.Should().Be(correlationId);
         auditLog.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
@@ -164,7 +164,7 @@ public class AuditLogServiceTests : IDisposable
         auditLog.Should().NotBeNull();
         
         // Should extract the first IP from X-Forwarded-For or the direct value from other headers
-        var expectedIP = headerName == "X-Forwarded-For" ? "203.0.113.195" : "203.0.113.195";
+        var expectedIP = "203.0.113.xxx"; // All IPs are now sanitized
         auditLog!.IpAddress.Should().Be(expectedIP);
     }
 
@@ -706,7 +706,6 @@ public class AuditLogServiceTests : IDisposable
     {
         // Arrange
         const string ipList = "192.168.1.100, 10.0.0.1, 172.16.0.1";
-        const string expectedIp = "192.168.1.100";
         
         _mockHeaders.Setup(h => h["X-Forwarded-For"]).Returns(ipList);
 
@@ -721,7 +720,7 @@ public class AuditLogServiceTests : IDisposable
         // Assert
         var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
         auditLog.Should().NotBeNull();
-        auditLog!.IpAddress.Should().Be(expectedIp);
+        auditLog!.IpAddress.Should().Be("192.168.1.xxx");
     }
 
     [Fact]
@@ -743,7 +742,7 @@ public class AuditLogServiceTests : IDisposable
         // Assert
         var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
         auditLog.Should().NotBeNull();
-        auditLog!.IpAddress.Should().Be(realIp);
+        auditLog!.IpAddress.Should().Be("203.0.113.xxx");
     }
 
     [Fact]
@@ -766,7 +765,7 @@ public class AuditLogServiceTests : IDisposable
         // Assert
         var auditLog = await _context.AuditLogs.FirstOrDefaultAsync();
         auditLog.Should().NotBeNull();
-        auditLog!.IpAddress.Should().Be(cfIp);
+        auditLog!.IpAddress.Should().Be("198.51.100.xxx");
     }
 
     [Fact]

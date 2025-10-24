@@ -21,12 +21,14 @@ namespace SetlistStudio.Tests.Web;
 /// Comprehensive tests for Program.cs covering all functionality
 /// Testing startup configuration, middleware, authentication, and database seeding
 /// </summary>
+[Collection("EnvironmentVariable")]
 public class ProgramTests : IDisposable
 {
     private readonly SetlistStudioDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IServiceProvider _serviceProvider;
     private readonly Mock<ILogger> _mockLogger;
+    private static readonly object _environmentLock = new object();
 
     public ProgramTests()
     {
@@ -1368,52 +1370,60 @@ public class ProgramTests : IDisposable
     [Fact]
     public void GetDatabaseConnectionString_WithTestEnvironment_ReturnsMemoryConnection()
     {
-        // Arrange
-        // Explicitly create a configuration with no DefaultConnection to ensure null is returned
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
+            // Arrange
+            // Explicitly create a configuration with no DefaultConnection to ensure null is returned
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
+                Thread.Sleep(50); // Allow environment change to propagate
 
-            // Act
-            var result = GetDatabaseConnectionStringViaReflection(config);
+                // Act
+                var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert
-            result.Should().Be("Data Source=:memory:");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                // Assert
+                result.Should().Be("Data Source=:memory:");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
     [Fact]
     public void GetDatabaseConnectionString_WithContainerFlag_ReturnsContainerPath()
     {
-        // Arrange
-        var config = new ConfigurationBuilder().Build();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+            // Arrange
+            var config = new ConfigurationBuilder().Build();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+            
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+                Thread.Sleep(50); // Allow environment changes to propagate
 
-            // Act
-            var result = GetDatabaseConnectionStringViaReflection(config);
+                // Act
+                var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert
-            result.Should().Be("Data Source=/app/data/setliststudio.db");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+                // Assert
+                result.Should().Be("Data Source=/app/data/setliststudio.db");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
         }
     }
 
@@ -1471,57 +1481,65 @@ public class ProgramTests : IDisposable
     [Fact]
     public void Program_ShouldHandleContainerInDevelopment_WithDatabasePath()
     {
-        // Arrange - Container in development environment
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+            // Arrange - Container in development environment
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
             
-            var config = new ConfigurationBuilder().Build();
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+                Thread.Sleep(50); // Allow environment changes to propagate
+                
+                var config = new ConfigurationBuilder().Build();
 
-            // Act
-            var result = GetDatabaseConnectionStringViaReflection(config);
+                // Act
+                var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert - Should use container database path
-            result.Should().Be("Data Source=/app/data/setliststudio.db");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+                // Assert - Should use container database path
+                result.Should().Be("Data Source=/app/data/setliststudio.db");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
         }
     }
 
     [Fact]
     public void Program_ShouldHandleNonContainerInProduction_WithDatabasePath()
     {
-        // Arrange - Non-container in production environment
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "false");
+            // Arrange - Non-container in production environment
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
             
-            var config = new ConfigurationBuilder().Build();
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "false");
+                Thread.Sleep(50); // Allow environment changes to propagate
+                
+                var config = new ConfigurationBuilder().Build();
 
-            // Act
-            var result = GetDatabaseConnectionStringViaReflection(config);
+                // Act
+                var result = GetDatabaseConnectionStringViaReflection(config);
 
-            // Assert - Should use secure absolute path in Data subdirectory
-            var baseDirectory = AppContext.BaseDirectory;
-            var dataDirectory = Path.Join(baseDirectory, "Data");
-            var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
-            result.Should().Be(expectedPath);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+                // Assert - Should use secure absolute path in Data subdirectory
+                var baseDirectory = AppContext.BaseDirectory;
+                var dataDirectory = Path.Join(baseDirectory, "Data");
+                var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
+                result.Should().Be(expectedPath);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
         }
     }
 
@@ -1586,36 +1604,51 @@ public class ProgramTests : IDisposable
     public void Program_ShouldSelectCorrectDatabasePath_ForAllEnvironmentContainerCombinations(
         string? environment, string container, string expectedPath)
     {
-        // Arrange
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        
-        try
+        // Use lock to prevent parallel test execution from interfering with environment variables
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environment);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", container);
+            // Arrange
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
             
-            var config = new ConfigurationBuilder().Build();
-
-            // Act
-            var result = GetDatabaseConnectionStringViaReflection(config);
-
-            // Assert - Replace placeholder with actual data directory for non-container environments
-            var finalExpectedPath = expectedPath;
-            if (expectedPath.Contains("{DataDirectory}"))
+            try
             {
-                var baseDirectory = AppContext.BaseDirectory;
-                var dataDirectory = Path.Join(baseDirectory, "Data");
-                var expectedFilePath = Path.Join(dataDirectory, "setliststudio.db");
-                finalExpectedPath = $"Data Source={expectedFilePath}";
+                // Clear environment variables first to ensure clean state
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", null);
+                
+                // Wait a small amount to ensure environment variables are cleared
+                Thread.Sleep(200);
+                
+                // Set the test values
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environment);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", container);
+                
+                // Wait a small amount to ensure environment variables are set
+                Thread.Sleep(200);
+                
+                var config = new ConfigurationBuilder().Build();
+
+                // Act
+                var result = GetDatabaseConnectionStringViaReflection(config);
+
+                // Assert - Replace placeholder with actual data directory for non-container environments
+                var finalExpectedPath = expectedPath;
+                if (expectedPath.Contains("{DataDirectory}"))
+                {
+                    var baseDirectory = AppContext.BaseDirectory;
+                    var dataDirectory = Path.Join(baseDirectory, "Data");
+                    var expectedFilePath = Path.Join(dataDirectory, "setliststudio.db");
+                    finalExpectedPath = $"Data Source={expectedFilePath}";
+                }
+                
+                result.Should().Be(finalExpectedPath);
             }
-            
-            result.Should().Be(finalExpectedPath);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
         }
     }
 
@@ -1678,14 +1711,17 @@ public class ProgramTests : IDisposable
     [Fact]
     public void Program_ShouldContinueWithoutDatabase_WhenDatabaseFailsInProduction()
     {
-        // Arrange
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", null);
+            // Arrange
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var originalContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+            
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", null);
+                Thread.Sleep(200); // Allow environment changes to propagate
             
             var configuration = new Dictionary<string, string?>
             {
@@ -1696,11 +1732,12 @@ public class ProgramTests : IDisposable
 
             // Act & Assert - Should continue without throwing in production
             factory.Services.Should().NotBeNull();
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+                Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", originalContainer);
+            }
         }
     }
 

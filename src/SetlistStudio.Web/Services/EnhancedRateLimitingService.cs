@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Caching.Memory;
+using SetlistStudio.Core.Security;
 
 namespace SetlistStudio.Web.Services;
 
@@ -136,15 +137,18 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         // Individual high-severity triggers that should require CAPTCHA alone
         if (suspiciousUserAgent)
         {
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
+            var sanitizedUserAgent = SecureLoggingHelper.SanitizeMessage(userAgent);
             _logger.LogWarning("CAPTCHA required for IP {ClientIp} due to suspicious user agent: {UserAgent}", 
-                clientIp, userAgent);
+                sanitizedClientIp, sanitizedUserAgent);
             return true;
         }
 
         if (distributedAttack)
         {
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
             _logger.LogWarning("CAPTCHA required for IP {ClientIp} due to detected distributed attack pattern", 
-                clientIp);
+                sanitizedClientIp);
             return true;
         }
 
@@ -154,8 +158,9 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         
         if (otherTriggerCount >= 2)
         {
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
             _logger.LogWarning("CAPTCHA required for IP {ClientIp} due to {TriggerCount} security triggers", 
-                clientIp, otherTriggerCount);
+                sanitizedClientIp, otherTriggerCount);
             return true;
         }
 
@@ -279,7 +284,8 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CAPTCHA validation failed for IP {ClientIp}", clientIp);
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
+            _logger.LogError(ex, "CAPTCHA validation failed for IP {ClientIp}", sanitizedClientIp);
             return false;
         }
     }
@@ -473,8 +479,9 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         }
         else if (violationCount >= 5)
         {
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
             _logger.LogWarning("SECURITY WARNING: IP {ClientIp} approaching violation threshold with {ViolationCount} violations", 
-                clientIp, violationCount);
+                sanitizedClientIp, violationCount);
         }
     }
 

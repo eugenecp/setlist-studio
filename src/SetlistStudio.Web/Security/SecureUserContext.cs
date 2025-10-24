@@ -77,6 +77,7 @@ namespace SetlistStudio.Web.Security
 
         /// <summary>
         /// Safely extracts and sanitizes client IP address from HTTP context.
+        /// Masks last octet for IPv4 and last segments for IPv6 to protect user privacy.
         /// </summary>
         /// <param name="context">The HTTP context</param>
         /// <returns>A sanitized IP address safe for logging</returns>
@@ -87,12 +88,23 @@ namespace SetlistStudio.Web.Security
                 return "unknown";
             }
 
-            var ipAddress = context.Connection.RemoteIpAddress?.ToString()
-                ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                ?? context.Request.Headers["X-Real-IP"].FirstOrDefault()
-                ?? "unknown";
+            // Try to get real IP from forwarded headers first (for reverse proxy scenarios)
+            var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(forwardedFor))
+            {
+                var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                var firstIp = ips[0].Trim(); // First IP is the original client
+                return SecureLoggingHelper.SanitizeIpAddress(firstIp);
+            }
 
-            return SecureLoggingHelper.SanitizeMessage(ipAddress) ?? "unknown";
+            var realIp = context.Request.Headers["X-Real-IP"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(realIp))
+            {
+                return SecureLoggingHelper.SanitizeIpAddress(realIp);
+            }
+
+            var remoteIp = context.Connection.RemoteIpAddress?.ToString();
+            return SecureLoggingHelper.SanitizeIpAddress(remoteIp);
         }
 
         /// <summary>

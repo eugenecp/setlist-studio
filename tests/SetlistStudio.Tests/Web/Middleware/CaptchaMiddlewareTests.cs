@@ -78,7 +78,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
         var cacheEntry = Mock.Of<ICacheEntry>();
-        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:192.168.1.100", out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:192.168.1.xxx", out It.Ref<object>.IsAny))
             .Returns(true);
 
         // Act
@@ -193,7 +193,7 @@ public class CaptchaMiddlewareTests
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
             .ReturnsAsync(true);
 
-        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("valid-captcha-token", "192.168.1.100"))
+        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("valid-captcha-token", "192.168.1.xxx"))
             .ReturnsAsync(true);
 
         var cacheEntry = Mock.Of<ICacheEntry>();
@@ -204,7 +204,7 @@ public class CaptchaMiddlewareTests
 
         // Assert
         _mockNext.Verify(x => x(_httpContext), Times.Once);
-        _mockCache.Verify(x => x.CreateEntry("captcha_bypass:192.168.1.100"), Times.Once);
+        _mockCache.Verify(x => x.CreateEntry("captcha_bypass:192.168.1.xxx"), Times.Once);
         
         _mockLogger.Verify(
             x => x.Log(
@@ -237,7 +237,7 @@ public class CaptchaMiddlewareTests
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
             .ReturnsAsync(true);
 
-        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("invalid-captcha-token", "192.168.1.100"))
+        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("invalid-captcha-token", "192.168.1.xxx"))
             .ReturnsAsync(false);
 
         // Act
@@ -342,7 +342,7 @@ public class CaptchaMiddlewareTests
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
             .ReturnsAsync(true);
 
-        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("header-captcha-token", "192.168.1.100"))
+        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("header-captcha-token", "192.168.1.xxx"))
             .ReturnsAsync(true);
 
         var cacheEntry = Mock.Of<ICacheEntry>();
@@ -353,7 +353,7 @@ public class CaptchaMiddlewareTests
 
         // Assert
         _mockNext.Verify(x => x(_httpContext), Times.Once);
-        _mockRateLimitingService.Verify(x => x.ValidateCaptchaAsync("header-captcha-token", "192.168.1.100"), Times.Once);
+        _mockRateLimitingService.Verify(x => x.ValidateCaptchaAsync("header-captcha-token", "192.168.1.xxx"), Times.Once);
     }
 
     [Fact]
@@ -370,7 +370,7 @@ public class CaptchaMiddlewareTests
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
             .ReturnsAsync(true);
 
-        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("query-captcha-token", "192.168.1.100"))
+        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("query-captcha-token", "192.168.1.xxx"))
             .ReturnsAsync(true);
 
         var cacheEntry = Mock.Of<ICacheEntry>();
@@ -381,7 +381,7 @@ public class CaptchaMiddlewareTests
 
         // Assert
         _mockNext.Verify(x => x(_httpContext), Times.Once);
-        _mockRateLimitingService.Verify(x => x.ValidateCaptchaAsync("query-captcha-token", "192.168.1.100"), Times.Once);
+        _mockRateLimitingService.Verify(x => x.ValidateCaptchaAsync("query-captcha-token", "192.168.1.xxx"), Times.Once);
     }
 
     #endregion
@@ -519,7 +519,7 @@ public class CaptchaMiddlewareTests
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
             .ReturnsAsync(true);
 
-        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("captcha-token", "192.168.1.100"))
+        _mockRateLimitingService.Setup(x => x.ValidateCaptchaAsync("captcha-token", "192.168.1.xxx"))
             .ThrowsAsync(new HttpRequestException("CAPTCHA service unavailable"));
 
         // Act

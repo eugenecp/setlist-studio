@@ -33,7 +33,7 @@ public class SecurityEventHandler
         {
             var authenticationMethod = GetAuthenticationMethod(context);
             var userAgent = context.Request.Headers.UserAgent.ToString();
-            var ipAddress = GetClientIpAddress(context);
+            var ipAddress = SecureUserContext.GetSanitizedClientIp(context);
 
             _securityEventLogger.LogAuthenticationSuccess(
                 user.Id,
@@ -70,7 +70,7 @@ public class SecurityEventHandler
         {
             var authenticationMethod = GetAuthenticationMethod(context);
             var userAgent = context.Request.Headers.UserAgent.ToString();
-            var ipAddress = GetClientIpAddress(context);
+            var ipAddress = SecureUserContext.GetSanitizedClientIp(context);
 
             _securityEventLogger.LogAuthenticationFailure(
                 attemptedUserId,
@@ -101,7 +101,7 @@ public class SecurityEventHandler
         try
         {
             var lockoutDuration = lockoutEnd - DateTimeOffset.UtcNow;
-            var ipAddress = GetClientIpAddress(context);
+            var ipAddress = SecureUserContext.GetSanitizedClientIp(context);
 
             _securityEventLogger.LogAccountLockout(
                 user.Id,
@@ -129,7 +129,7 @@ public class SecurityEventHandler
         try
         {
             var userAgent = context.Request.Headers.UserAgent.ToString();
-            var ipAddress = GetClientIpAddress(context);
+            var ipAddress = SecureUserContext.GetSanitizedClientIp(context);
 
             var additionalData = new
             {
@@ -169,13 +169,13 @@ public class SecurityEventHandler
         try
         {
             var userAgent = context.Request.Headers.UserAgent.ToString();
-            var ipAddress = GetClientIpAddress(context);
+            var ipAddress = SecureUserContext.GetSanitizedClientIp(context);
             var requestPath = context.Request.Path;
 
             var additionalContext = new
             {
                 UserAgent = SecureLoggingHelper.SanitizeMessage(userAgent),
-                IpAddress = SecureLoggingHelper.SanitizeMessage(ipAddress ?? "Unknown"),
+                IpAddress = ipAddress, // Already sanitized by SecureUserContext
                 RequestPath = SecureLoggingHelper.SanitizeMessage(requestPath.ToString()),
                 RequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method),
                 DetectionTime = DateTimeOffset.UtcNow

@@ -187,6 +187,13 @@ public class CspReportController : ControllerBase
 
     private string GetClientIpAddress()
     {
+        // Use SecureLoggingHelper to get sanitized IP address for privacy protection
+        var rawIp = GetRawClientIpAddress();
+        return SecureLoggingHelper.SanitizeIpAddress(rawIp);
+    }
+
+    private string GetRawClientIpAddress()
+    {
         // Check for forwarded IP from proxy/load balancer
         var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
         if (!string.IsNullOrEmpty(forwardedFor))

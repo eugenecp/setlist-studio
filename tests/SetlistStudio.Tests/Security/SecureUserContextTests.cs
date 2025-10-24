@@ -364,12 +364,12 @@ public class SecureUserContextTests
     }
 
     [Fact]
-    public void GetSanitizedClientIp_ShouldSanitizeMaliciousInput()
+    public void GetSanitizedClientIp_ShouldHandleMaliciousInput()
     {
         // Arrange
         var context = CreateMockHttpContext();
         context.Connection.RemoteIpAddress = null;
-        context.Request.Headers["X-Forwarded-For"] = "<script>alert('xss')</script>";
+        context.Request.Headers["X-Forwarded-For"] = "192.168.1.1<script>alert('xss')</script>";
 
         // Act
         var result = SecureUserContext.GetSanitizedClientIp(context);
@@ -377,6 +377,53 @@ public class SecureUserContextTests
         // Assert
         result.Should().NotContain("<script>");
         result.Should().NotContain("alert");
+    }
+
+    [Fact]
+    public void GetSanitizedClientIp_ShouldMaskLastOctet_ForPrivacyProtection()
+    {
+        // Arrange
+        var context = CreateMockHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.100");
+
+        // Act
+        var result = SecureUserContext.GetSanitizedClientIp(context);
+
+        // Assert
+        result.Should().Be("192.168.1.xxx");
+        result.Should().NotContain("100"); // Last octet should be masked
+    }
+
+    [Fact]
+    public void GetSanitizedClientIp_ShouldMaskIPv6LastSegments_ForPrivacyProtection()
+    {
+        // Arrange
+        var context = CreateMockHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("2001:db8::1234");
+
+        // Act
+        var result = SecureUserContext.GetSanitizedClientIp(context);
+
+        // Assert
+        result.Should().Be("2001:db8::xxxx");
+        result.Should().NotContain("1234"); // Last segments should be masked
+    }
+
+    [Fact]
+    public void GetSanitizedClientIp_ShouldPrioritizeForwardedFor_AndSanitize()
+    {
+        // Arrange
+        var context = CreateMockHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.1");
+        context.Request.Headers["X-Forwarded-For"] = "203.0.113.45, 192.168.1.1";
+
+        // Act
+        var result = SecureUserContext.GetSanitizedClientIp(context);
+
+        // Assert
+        result.Should().Be("203.0.113.xxx"); // Should use first IP from X-Forwarded-For and mask it
+        result.Should().NotContain("45"); // Original last octet should be masked
+        result.Should().NotContain("10.0.0.1"); // Should not use Connection.RemoteIpAddress
     }
 
     #endregion

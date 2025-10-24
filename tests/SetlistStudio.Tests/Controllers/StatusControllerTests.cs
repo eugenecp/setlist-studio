@@ -13,8 +13,11 @@ namespace SetlistStudio.Tests.Controllers;
 /// Covers: Get (main status endpoint), Ping (ping endpoint)
 /// Tests response structure, data validation, and environment variable handling
 /// </summary>
+[Collection("EnvironmentVariable")]
 public class StatusControllerTests
 {
+    // Shared lock to prevent environment variable race conditions in tests
+    private static readonly object _environmentLock = new object();
     [Fact]
     public void Get_ShouldReturnStatusObject_WithCorrectProperties()
     {
@@ -68,56 +71,64 @@ public class StatusControllerTests
     [Fact]
     public void Get_ShouldReturnEnvironmentVariable_WhenASPNETCORE_ENVIRONMENTIsSet()
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be("Testing");
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be("Testing");
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
     [Fact]
     public void Get_ShouldReturnUnknown_WhenASPNETCORE_ENVIRONMENTIsNotSet()
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be("Unknown");
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be("Unknown");
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
@@ -220,28 +231,32 @@ public class StatusControllerTests
     [InlineData("CustomEnvironment")]
     public void Get_ShouldReturnCorrectEnvironment_ForDifferentEnvironmentValues(string environmentValue)
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentValue);
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be(environmentValue);
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentValue);
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be(environmentValue);
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 

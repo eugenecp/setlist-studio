@@ -111,8 +111,9 @@ public class SecurityMetricsService : ISecurityMetricsService
         });
 
         var sanitizedUsername = SecureLoggingHelper.SanitizeUserId(username);
+        var sanitizedIpAddress = SecureLoggingHelper.SanitizeIpAddress(ipAddress);
         _logger.LogWarning("Authentication failure recorded for user {Username} from IP {IPAddress}", 
-            sanitizedUsername, ipAddress);
+            sanitizedUsername, sanitizedIpAddress);
 
         // Check for brute force patterns
         CheckForBruteForcePattern(ipAddress, username);
@@ -137,8 +138,9 @@ public class SecurityMetricsService : ISecurityMetricsService
         var key = $"rate_limit_{ipAddress}_{endpoint}";
         _rateLimitViolations.AddOrUpdate(key, 1, (k, v) => v + 1);
 
+        var sanitizedIpAddress = SecureLoggingHelper.SanitizeIpAddress(ipAddress);
         _logger.LogWarning("Rate limit violation recorded for IP {IPAddress} on endpoint {Endpoint}", 
-            ipAddress, endpoint);
+            sanitizedIpAddress, endpoint);
 
         // Check for denial of service patterns
         CheckForDosPattern(ipAddress, endpoint);
@@ -170,8 +172,10 @@ public class SecurityMetricsService : ISecurityMetricsService
             ["Details"] = details
         });
 
+        var sanitizedIpAddress = SecureLoggingHelper.SanitizeIpAddress(ipAddress);
+        var sanitizedDetails = SecureLoggingHelper.SanitizeMessage(details);
         _logger.LogError("Suspicious activity detected: {ActivityType} from IP {IPAddress}. Details: {Details}", 
-            activityType, ipAddress, details);
+            activityType, sanitizedIpAddress, sanitizedDetails);
     }
 
     public void RecordSecurityEvent(string eventType, string severity, string details)

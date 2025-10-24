@@ -399,4 +399,70 @@ public static class SecureLoggingHelper
         // For GUIDs or other identifiers, return as-is but break taint
         return TaintBarrier.BreakTaint(safeUserId);
     }
+
+    /// <summary>
+    /// Sanitizes an IP address for logging to protect user privacy while maintaining security monitoring capabilities.
+    /// Masks the last octet for IPv4 and the last 64 bits for IPv6 to balance privacy and security needs.
+    /// </summary>
+    /// <param name="ipAddress">The IP address to sanitize</param>
+    /// <returns>A sanitized IP address safe for logging</returns>
+    public static string SanitizeIpAddress(string? ipAddress)
+    {
+        // Always process through sanitization to prevent user-controlled bypass
+        if (string.IsNullOrWhiteSpace(ipAddress))
+        {
+            return "unknown";
+        }
+
+        var sanitizedIp = SanitizeMessage(ipAddress);
+        
+        try
+        {
+            // Handle IPv4 addresses (e.g., 192.168.1.100 -> 192.168.1.xxx)
+            if (System.Net.IPAddress.TryParse(sanitizedIp, out var parsedIp))
+            {
+                if (parsedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                {
+                    var parts = sanitizedIp.Split('.');
+                    if (parts.Length == 4)
+                    {
+                        return TaintBarrier.BreakTaint($"{parts[0]}.{parts[1]}.{parts[2]}.xxx");
+                    }
+                }
+                // Handle IPv6 addresses (e.g., 2001:db8::1 -> 2001:db8::xxxx)
+                else if (parsedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                {
+                    // Remove zone identifier for IPv6 addresses (e.g., %lo0)
+                    var cleanedIp = sanitizedIp.Split('%')[0];
+                    
+                    // Special case for localhost ::1
+                    if (cleanedIp == "::1")
+                    {
+                        return TaintBarrier.BreakTaint("::xxxx");
+                    }
+                    
+                    var parts = cleanedIp.Split(':');
+                    if (parts.Length >= 3)
+                    {
+                        // Keep first 3 segments for network identification, mask the rest
+                        return TaintBarrier.BreakTaint($"{parts[0]}:{parts[1]}:{parts[2]}:xxxx");
+                    }
+                    else
+                    {
+                        // Fallback for short addresses
+                        return TaintBarrier.BreakTaint($"{cleanedIp}:xxxx");
+                    }
+                }
+            }
+        }
+        // CodeQL[cs/catch-of-all-exceptions] - IP parsing should never break logging
+        catch (Exception)
+        {
+            // If parsing fails, return sanitized version with privacy protection
+            return TaintBarrier.BreakTaint($"[MASKED-IP]");
+        }
+
+        // For malformed or unrecognized IP formats, return a generic masked version
+        return TaintBarrier.BreakTaint($"[MASKED-IP]");
+    }
 }

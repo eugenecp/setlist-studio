@@ -491,8 +491,10 @@ try
             var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
             var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
             
+            var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
             logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
-                partitionKey, context.HttpContext.Request.Path, GetClientIpAddress(context.HttpContext));
+                sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
 
             // Record the violation for enhanced monitoring
             if (rateLimitingService != null)
