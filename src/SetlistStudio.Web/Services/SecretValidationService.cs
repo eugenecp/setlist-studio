@@ -424,13 +424,8 @@ public class SecretValidationService
         // Check for insecure patterns (case-insensitive)
         var lowerValue = secretValue.ToLowerInvariant();
         
-        foreach (var pattern in InsecurePatterns)
-        {
-            if (lowerValue.Contains(pattern.ToLowerInvariant()))
-            {
-                return false;
-            }
-        }
+        // Use LINQ for better performance and CodeQL compliance
+        return !InsecurePatterns.Any(pattern => lowerValue.Contains(pattern));
 
         // Additional checks for weak secrets
         if (IsWeakSecret(secretValue))
