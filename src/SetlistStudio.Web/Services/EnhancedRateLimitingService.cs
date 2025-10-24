@@ -474,8 +474,9 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         // Alert thresholds
         if (violationCount >= 10)
         {
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(clientIp);
             _logger.LogCritical("SECURITY ALERT: IP {ClientIp} has exceeded violation threshold with {ViolationCount} violations", 
-                clientIp, violationCount);
+                sanitizedClientIp, violationCount);
         }
         else if (violationCount >= 5)
         {
