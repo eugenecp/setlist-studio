@@ -442,16 +442,11 @@ public static class SecureLoggingHelper
                     }
                     
                     var parts = cleanedIp.Split(':');
-                    if (parts.Length >= 3)
-                    {
-                        // Keep first 3 segments for network identification, mask the rest
-                        return TaintBarrier.BreakTaint($"{parts[0]}:{parts[1]}:{parts[2]}:xxxx");
-                    }
-                    else
-                    {
-                        // Fallback for short addresses
-                        return TaintBarrier.BreakTaint($"{cleanedIp}:xxxx");
-                    }
+                    // If IPv6 has >= 3 parts, keep first 3; otherwise fallback for short addresses
+                    return TaintBarrier.BreakTaint(
+                        parts.Length >= 3
+                            ? $"{parts[0]}:{parts[1]}:{parts[2]}:xxxx"
+                            : $"{cleanedIp}:xxxx");
                 }
             }
         }
