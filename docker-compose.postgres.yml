@@ -60,19 +60,11 @@ services:
       - Database__Pool__MaxSize=100
       - Database__Pool__MinSize=5  
       - Database__Pool__ConnectionTimeout=30
-      - Database__ReadReplicas__Enabled=false
-      # Database Connection
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=setliststudio;Username=setliststudio_user;Password=${POSTGRES_PASSWORD:-setliststudio_dev_2024};Pooling=true;MinPoolSize=5;MaxPoolSize=50;CommandTimeout=30;
-      # Disable read replicas for this simple setup
-      - ConnectionStrings__ReadReplica1=
-      - ConnectionStrings__ReadReplica2=
-      # Authentication Providers (placeholder values for development)
+      # Database Connection (single connection, no read replicas)
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=setliststudio;Username=setliststudio_user;Password=${POSTGRES_PASSWORD:-setliststudio_dev_2024}
+      # Authentication Providers (Google only)
       - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-placeholder_google_client_id}
       - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-placeholder_google_client_secret}
-      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID:-placeholder_microsoft_client_id}
-      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET:-placeholder_microsoft_client_secret}
-      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID:-placeholder_facebook_app_id}
-      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET:-placeholder_facebook_app_secret}
     volumes:
       - setliststudio-logs:/app/logs
     depends_on:
@@ -96,7 +88,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: setliststudio-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@setliststudio.local
+      PGADMIN_DEFAULT_EMAIL: admin@setliststudio.dev
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_dev}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
