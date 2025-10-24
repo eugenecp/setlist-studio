@@ -30,6 +30,8 @@ README.md
 *.md
 docs/
 scripts/
+# Allow specific scripts needed for Docker build
+!scripts/secure-database.sh
 
 # Ignore security analysis files
 *.sarif

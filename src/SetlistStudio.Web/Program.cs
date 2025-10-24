@@ -868,6 +868,7 @@ static string GetDatabaseConnectionString(IConfiguration configuration)
 
 /// <summary>
 /// Configures the database provider based on the connection string format
+/// SECURITY: Enforces encryption for SQL Server connections to prevent man-in-the-middle attacks
 /// </summary>
 static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
 {
@@ -878,8 +879,56 @@ static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string co
     }
     else
     {
-        // SQL Server connection string
-        options.UseSqlServer(connectionString);
+        // SQL Server connection string - SECURITY: Enforce encryption
+        var secureConnectionString = EnsureSqlServerConnectionSecurity(connectionString);
+        options.UseSqlServer(secureConnectionString);
+    }
+}
+
+/// <summary>
+/// Ensures SQL Server connection strings have proper security settings
+/// SECURITY: Adds encryption and certificate validation to prevent credential interception
+/// </summary>
+static string EnsureSqlServerConnectionSecurity(string connectionString)
+{
+    try
+    {
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+        
+        // SECURITY: Force encryption for all SQL Server connections
+        if (!builder.ContainsKey("Encrypt") || !builder.Encrypt)
+        {
+            builder.Encrypt = true;
+            Log.Information("Added encryption enforcement to SQL Server connection string");
+        }
+        
+        // SECURITY: Validate server certificates in production
+        // Allow self-signed certificates only in development/testing environments
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase);
+        
+        if (!builder.ContainsKey("TrustServerCertificate"))
+        {
+            // In production, validate certificates; in development, allow self-signed
+            builder.TrustServerCertificate = isDevelopment;
+            Log.Information("Set certificate validation policy for {Environment} environment: TrustServerCertificate={TrustCertificate}", 
+                environment, builder.TrustServerCertificate);
+        }
+        
+        // SECURITY: Set connection timeout to prevent indefinite hangs
+        if (builder.ConnectTimeout == 0)
+        {
+            builder.ConnectTimeout = 30; // 30 second timeout
+        }
+        
+        return builder.ConnectionString;
+    }
+    catch (ArgumentException ex)
+    {
+        // If connection string parsing fails, log warning and return original
+        Log.Warning(ex, "Failed to parse SQL Server connection string for security enhancement. Using original connection string.");
+        return connectionString;
     }
 }
 

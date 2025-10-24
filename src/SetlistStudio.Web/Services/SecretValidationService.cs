@@ -31,6 +31,7 @@ public class SecretValidationService
 
     /// <summary>
     /// Placeholder values that indicate secrets are not properly configured
+    /// SECURITY ENHANCEMENT: Expanded list of insecure patterns and development-only values
     /// </summary>
     private static readonly HashSet<string> PlaceholderValues = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,7 +44,45 @@ public class SecretValidationService
         "YOUR_CLIENT_ID",
         "YOUR_CLIENT_SECRET",
         "YOUR_APP_ID",
-        "YOUR_APP_SECRET"
+        "YOUR_APP_SECRET",
+        "YOUR_RECAPTCHA_SITE_KEY",
+        "YOUR_RECAPTCHA_SECRET_KEY",
+        "CHANGE_ME",
+        "REPLACE_ME",
+        "EXAMPLE_VALUE",
+        "TEST_VALUE",
+        "DEMO_VALUE",
+        "PLACEHOLDER",
+        "TODO_CONFIGURE",
+        "SET_YOUR_VALUE_HERE"
+    };
+
+    /// <summary>
+    /// Insecure patterns that indicate non-production-ready secrets
+    /// SECURITY ENHANCEMENT: Detects common insecure values and development artifacts
+    /// </summary>
+    private static readonly string[] InsecurePatterns = new[]
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "password",
+        "secret123",
+        "admin123",
+        "test123",
+        "demo123",
+        "changeme",
+        "defaultpassword",
+        "insecure",
+        "development",
+        "staging", // For production validation
+        "example.com",
+        "test.com",
+        "dev.",
+        ".local",
+        "internal",
+        "temp",
+        "debug"
     };
 
     public SecretValidationService(
@@ -242,6 +281,17 @@ public class SecretValidationService
             );
         }
 
+        // SECURITY ENHANCEMENT: Check for production-unsafe patterns
+        if (!IsProductionReadySecret(secretValue))
+        {
+            return new SecretValidationError(
+                secretKey,
+                description,
+                SecretValidationIssue.InvalidFormat,
+                "Secret contains insecure patterns unsuitable for production"
+            );
+        }
+
         // Validate OAuth secret format
         if ((secretKey.Contains("ClientId") || secretKey.Contains("AppId")) && secretValue.Length < 10)
         {
@@ -343,6 +393,105 @@ public class SecretValidationService
         return connectionString.Contains("Data Source=") || 
                connectionString.Contains("Server=") ||
                connectionString.Contains("Host=");
+    }
+
+    /// <summary>
+    /// SECURITY ENHANCEMENT: Validates if a secret value is production-ready
+    /// Checks for insecure patterns that indicate development or test values
+    /// </summary>
+    private static bool IsProductionReadySecret(string secretValue)
+    {
+        if (string.IsNullOrWhiteSpace(secretValue))
+            return false;
+
+        // Check for insecure patterns (case-insensitive)
+        var lowerValue = secretValue.ToLowerInvariant();
+        
+        foreach (var pattern in InsecurePatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLowerInvariant()))
+            {
+                return false;
+            }
+        }
+
+        // Additional checks for weak secrets
+        if (IsWeakSecret(secretValue))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// SECURITY ENHANCEMENT: Detects weak or predictable secret patterns
+    /// </summary>
+    private static bool IsWeakSecret(string secretValue)
+    {
+        // Too short for most secret types
+        if (secretValue.Length < 8)
+            return true;
+
+        // Sequential characters
+        if (HasSequentialCharacters(secretValue))
+            return true;
+
+        // Repeated characters (like "aaaaaaa" or "1111111")
+        if (HasRepeatedCharacters(secretValue))
+            return true;
+
+        // Common weak patterns
+        var weakPatterns = new[]
+        {
+            "12345", "abcde", "qwerty", "password", "secret", "admin",
+            "guest", "default", "changeme", "letmein", "welcome"
+        };
+
+        var lowerValue = secretValue.ToLowerInvariant();
+        return weakPatterns.Any(pattern => lowerValue.Contains(pattern));
+    }
+
+    /// <summary>
+    /// Detects sequential characters in a string (e.g., "123", "abc")
+    /// </summary>
+    private static bool HasSequentialCharacters(string value)
+    {
+        if (value.Length < 3) return false;
+
+        for (int i = 0; i < value.Length - 2; i++)
+        {
+            if (char.IsLetterOrDigit(value[i]) && 
+                char.IsLetterOrDigit(value[i + 1]) && 
+                char.IsLetterOrDigit(value[i + 2]))
+            {
+                // Check for ascending sequence
+                if (value[i + 1] == value[i] + 1 && value[i + 2] == value[i] + 2)
+                    return true;
+                
+                // Check for descending sequence
+                if (value[i + 1] == value[i] - 1 && value[i + 2] == value[i] - 2)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Detects repeated characters in a string (e.g., "aaa", "111")
+    /// </summary>
+    private static bool HasRepeatedCharacters(string value)
+    {
+        if (value.Length < 3) return false;
+
+        for (int i = 0; i < value.Length - 2; i++)
+        {
+            if (value[i] == value[i + 1] && value[i + 1] == value[i + 2])
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
