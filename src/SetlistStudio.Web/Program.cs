@@ -53,6 +53,14 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // SECURITY: Configure Docker secrets for containerized deployments
+    var useDockerSecrets = builder.Configuration.GetValue<bool>("USE_DOCKER_SECRETS", false);
+    if (useDockerSecrets)
+    {
+        ConfigureDockerSecrets(builder.Configuration);
+        Log.Information("Docker secrets configuration enabled");
+    }
+
     // SECURITY: Configure Azure Key Vault for production secrets management
     if (!builder.Environment.IsDevelopment())
     {
@@ -259,6 +267,9 @@ try
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
     
+    // Register CSP nonce service for enhanced Content Security Policy
+    builder.Services.AddCspNonce();
+    
     // Register security services
     builder.Services.AddScoped<SecretValidationService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -403,8 +414,11 @@ try
     
     builder.Services.AddRateLimiter(options =>
     {
+        // Environment-specific rate limiting configuration
+        var rateLimitConfig = Program.GetRateLimitConfiguration(builder.Environment);
+        
         // Global rate limiter - applies to all endpoints unless overridden
-        // Uses enhanced partitioning for better security
+        // Uses enhanced partitioning for better security with environment-specific limits
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         {
             var rateLimitingService = httpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
@@ -415,69 +429,69 @@ try
                 factory: partition => new FixedWindowRateLimiterOptions
                 {
                     AutoReplenishment = true,
-                    PermitLimit = 1000, // 1000 requests per window
-                    Window = TimeSpan.FromMinutes(1)
+                    PermitLimit = rateLimitConfig.GlobalLimit,
+                    Window = rateLimitConfig.Window
                 });
         });
 
-        // API endpoints - 100 requests per minute (unauthenticated), 200 for authenticated
+        // API endpoints - environment-specific limits
         options.AddFixedWindowLimiter("ApiPolicy", options =>
         {
-            options.PermitLimit = 100;
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.ApiLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 10; // Allow 10 requests to queue
+            options.QueueLimit = rateLimitConfig.ApiQueueLimit;
         });
 
         // Enhanced API policy for authenticated users
         options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
         {
-            options.PermitLimit = 200; // Higher limit for authenticated users
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 20;
+            options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
         });
 
-        // Authentication endpoints - 5 attempts per minute (prevent brute force)
+        // Authentication endpoints - strict limits to prevent brute force
         options.AddFixedWindowLimiter("AuthPolicy", options =>
         {
-            options.PermitLimit = 5;
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.AuthLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 2; // Very limited queue for auth attempts
+            options.QueueLimit = rateLimitConfig.AuthQueueLimit;
         });
 
         // Authenticated users - higher limits
         options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
         {
-            options.PermitLimit = 2000; // Higher limit for authenticated users
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 50;
+            options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
         });
 
-        // Strict policy for sensitive operations - 10 requests per minute
+        // Strict policy for sensitive operations
         options.AddFixedWindowLimiter("StrictPolicy", options =>
         {
-            options.PermitLimit = 10;
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.StrictLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 3;
+            options.QueueLimit = rateLimitConfig.StrictQueueLimit;
         });
 
         // Sensitive operations - enhanced security
         options.AddFixedWindowLimiter("SensitivePolicy", options =>
         {
-            options.PermitLimit = 25;
-            options.Window = TimeSpan.FromMinutes(1);
+            options.PermitLimit = rateLimitConfig.SensitiveLimit;
+            options.Window = rateLimitConfig.Window;
             options.AutoReplenishment = true;
             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = 5;
+            options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
         });
 
         // Configure rejection response with enhanced logging
@@ -590,12 +604,37 @@ try
         // Referrer policy for privacy protection
         context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
         
-        // Content Security Policy - restrictive default with violation reporting
+        // Content Security Policy - enhanced with nonce-based security
         var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
         var cspPolicyBuilder = new StringBuilder();
         cspPolicyBuilder.Append("default-src 'self'; ");
-        cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; "); // Blazor Server requires unsafe-inline for SignalR
-        cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; "); // MudBlazor requires unsafe-inline
+        
+        // Get nonces from the current request context
+        var scriptNonce = context.Items["ScriptNonce"]?.ToString();
+        var styleNonce = context.Items["StyleNonce"]?.ToString();
+        
+        // Enhanced script-src with nonce fallback
+        if (!string.IsNullOrEmpty(scriptNonce))
+        {
+            cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
+        }
+        
+        // Enhanced style-src with nonce fallback
+        if (!string.IsNullOrEmpty(styleNonce))
+        {
+            cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
+        }
+        
         cspPolicyBuilder.Append("img-src 'self' data: https:; ");
         cspPolicyBuilder.Append("font-src 'self'; ");
         cspPolicyBuilder.Append("connect-src 'self'; ");
@@ -628,14 +667,25 @@ try
         await next();
     });
     
-    // Rate Limiting Headers Middleware - Add rate limit headers to responses (disabled in test environment)
-    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
-        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    // CSP Nonce Middleware - Generate nonces for enhanced Content Security Policy
+    app.UseCspNonce();
+    
+    // Rate Limiting Headers Middleware - Environment-specific configuration
+    var enableRateLimiting = Program.ShouldEnableRateLimiting(app.Environment);
+    if (enableRateLimiting)
     {
         app.UseRateLimitHeaders();
         
-        // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT
+        // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT with environment-specific limits
         app.UseRateLimiter();
+        
+        var rateLimitConfig = Program.GetRateLimitConfiguration(app.Environment);
+        Log.Information("Rate limiting enabled with {Environment} configuration: Global={GlobalLimit}, API={ApiLimit}, Auth={AuthLimit}", 
+            app.Environment.EnvironmentName, rateLimitConfig.GlobalLimit, rateLimitConfig.ApiLimit, rateLimitConfig.AuthLimit);
+    }
+    else
+    {
+        Log.Information("Rate limiting disabled for {Environment} environment", app.Environment.EnvironmentName);
     }
     
     // CAPTCHA Middleware - Prevent automated attacks and rate limit bypass
@@ -1195,5 +1245,183 @@ static bool IsApiRequest(HttpContext httpContext)
            httpContext.Request.Headers.ContainsKey("X-Requested-With");
 }
 
+/// <summary>
+/// Configures OAuth secrets from Docker secrets files when running in containerized environment
+/// </summary>
+/// <param name="configuration">The configuration builder to add secrets to</param>
+static void ConfigureDockerSecrets(IConfiguration configuration)
+{
+    const string secretsPath = "/run/secrets";
+    
+    if (!Directory.Exists(secretsPath))
+    {
+        Log.Warning("Docker secrets directory not found: {SecretsPath}", secretsPath);
+        return;
+    }
+
+    var secretMappings = new Dictionary<string, string>
+    {
+        { "setliststudio_google_client_id", "Authentication:Google:ClientId" },
+        { "setliststudio_google_client_secret", "Authentication:Google:ClientSecret" },
+        { "setliststudio_microsoft_client_id", "Authentication:Microsoft:ClientId" },
+        { "setliststudio_microsoft_client_secret", "Authentication:Microsoft:ClientSecret" },
+        { "setliststudio_facebook_app_id", "Authentication:Facebook:AppId" },
+        { "setliststudio_facebook_app_secret", "Authentication:Facebook:AppSecret" }
+    };
+
+    var secretValues = new Dictionary<string, string?>();
+
+    foreach (var (secretFile, configKey) in secretMappings)
+    {
+        var secretFilePath = Path.Combine(secretsPath, secretFile);
+        
+        if (File.Exists(secretFilePath))
+        {
+            try
+            {
+                var secretValue = File.ReadAllText(secretFilePath).Trim();
+                if (!string.IsNullOrEmpty(secretValue) && !secretValue.StartsWith("PLACEHOLDER_"))
+                {
+                    secretValues[configKey] = secretValue;
+                    Log.Information("Loaded Docker secret: {ConfigKey}", configKey);
+                }
+                else
+                {
+                    Log.Warning("Docker secret contains placeholder value: {SecretFile}", secretFile);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to read Docker secret: {SecretFile}", secretFile);
+            }
+        }
+        else
+        {
+            Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
+        }
+    }
+
+    // Add secrets to configuration if any were loaded
+    if (secretValues.Count > 0)
+    {
+        ((IConfigurationBuilder)configuration).AddInMemoryCollection(secretValues);
+        Log.Information("Added {Count} Docker secrets to configuration", secretValues.Count);
+    }
+}
+
+/// <summary>
+/// Rate limiting configuration for different environments
+/// </summary>
+public record RateLimitConfiguration
+{
+    public int GlobalLimit { get; init; }
+    public int ApiLimit { get; init; }
+    public int AuthenticatedApiLimit { get; init; }
+    public int AuthLimit { get; init; }
+    public int AuthenticatedLimit { get; init; }
+    public int StrictLimit { get; init; }
+    public int SensitiveLimit { get; init; }
+    public int ApiQueueLimit { get; init; }
+    public int AuthenticatedApiQueueLimit { get; init; }
+    public int AuthQueueLimit { get; init; }
+    public int AuthenticatedQueueLimit { get; init; }
+    public int StrictQueueLimit { get; init; }
+    public int SensitiveQueueLimit { get; init; }
+    public TimeSpan Window { get; init; }
+}
+
 // Make Program class accessible for testing
-public partial class Program { }
+public partial class Program 
+{
+    /// <summary>
+    /// Gets environment-specific rate limiting configuration
+    /// </summary>
+    /// <param name="environment">The hosting environment</param>
+    /// <returns>Rate limiting configuration for the environment</returns>
+    public static RateLimitConfiguration GetRateLimitConfiguration(IWebHostEnvironment environment)
+    {
+        return environment.EnvironmentName switch
+        {
+            "Production" => new RateLimitConfiguration
+            {
+                GlobalLimit = 1000,
+                ApiLimit = 100,
+                AuthenticatedApiLimit = 200,
+                AuthLimit = 5,
+                AuthenticatedLimit = 2000,
+                StrictLimit = 10,
+                SensitiveLimit = 25,
+                ApiQueueLimit = 10,
+                AuthenticatedApiQueueLimit = 20,
+                AuthQueueLimit = 2,
+                AuthenticatedQueueLimit = 50,
+                StrictQueueLimit = 3,
+                SensitiveQueueLimit = 5,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            "Staging" => new RateLimitConfiguration
+            {
+                GlobalLimit = 2000,
+                ApiLimit = 200,
+                AuthenticatedApiLimit = 400,
+                AuthLimit = 10,
+                AuthenticatedLimit = 4000,
+                StrictLimit = 20,
+                SensitiveLimit = 50,
+                ApiQueueLimit = 20,
+                AuthenticatedApiQueueLimit = 40,
+                AuthQueueLimit = 5,
+                AuthenticatedQueueLimit = 100,
+                StrictQueueLimit = 6,
+                SensitiveQueueLimit = 10,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            "Development" => new RateLimitConfiguration
+            {
+                GlobalLimit = 10000,
+                ApiLimit = 1000,
+                AuthenticatedApiLimit = 2000,
+                AuthLimit = 50,
+                AuthenticatedLimit = 10000,
+                StrictLimit = 100,
+                SensitiveLimit = 250,
+                ApiQueueLimit = 100,
+                AuthenticatedApiQueueLimit = 200,
+                AuthQueueLimit = 20,
+                AuthenticatedQueueLimit = 500,
+                StrictQueueLimit = 30,
+                SensitiveQueueLimit = 50,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            _ => new RateLimitConfiguration // Default for Test and other environments
+            {
+                GlobalLimit = 50000,
+                ApiLimit = 5000,
+                AuthenticatedApiLimit = 10000,
+                AuthLimit = 500,
+                AuthenticatedLimit = 50000,
+                StrictLimit = 1000,
+                SensitiveLimit = 2500,
+                ApiQueueLimit = 500,
+                AuthenticatedApiQueueLimit = 1000,
+                AuthQueueLimit = 100,
+                AuthenticatedQueueLimit = 2500,
+                StrictQueueLimit = 150,
+                SensitiveQueueLimit = 250,
+                Window = TimeSpan.FromMinutes(1)
+            }
+        };
+    }
+
+    /// <summary>
+    /// Determines if rate limiting should be enabled for the given environment
+    /// </summary>
+    /// <param name="environment">The hosting environment</param>
+    /// <returns>True if rate limiting should be enabled</returns>
+    public static bool ShouldEnableRateLimiting(IWebHostEnvironment environment)
+    {
+        // Enable rate limiting in all environments except strict test environments
+        return !environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+               !environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase);
+    }
+}
