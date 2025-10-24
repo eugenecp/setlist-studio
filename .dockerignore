@@ -31,20 +31,10 @@ README.md
 docs/
 scripts/
 
-# Ignore Docker files themselves
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
 # Ignore security analysis files
 *.sarif
 codeql-database*/
 codeql-results/
 
-# Keep source code and project files
-!src/**
-!*.csproj
-!*.sln
-!*.config
-!*.json
-!*.xml
+# Ignore Docker Compose files (but keep Dockerfile)
+docker-compose*.yml

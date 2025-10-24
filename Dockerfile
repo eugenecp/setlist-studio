@@ -13,26 +13,16 @@ RUN dotnet restore "src/SetlistStudio.Web/SetlistStudio.Web.csproj" \
     --source https://api.nuget.org/v3/index.json \
     --verbosity minimal
 
-# Debug: List directory structure before build
-RUN echo "=== Debug: Root directory structure ===" && \
-    ls -la /app/ && \
-    echo "=== Source directory contents ===" && \
-    ls -la /app/src/ && \
-    echo "=== Web project contents ===" && \
-    ls -la /app/src/SetlistStudio.Web/ && \
-    echo "=== Core project contents ===" && \
-    ls -la /app/src/SetlistStudio.Core/ && \
-    echo "=== Infrastructure project contents ===" && \
-    ls -la /app/src/SetlistStudio.Infrastructure/
-
-# Build the application from the correct directory
+# Build the application with production settings
 WORKDIR /app/src/SetlistStudio.Web
 RUN dotnet build "SetlistStudio.Web.csproj" \
     -c Release \
-    -o /app/build \
     --no-restore \
-    --verbosity detailed \
-    -p:TreatWarningsAsErrors=false
+    --verbosity minimal \
+    -p:TreatWarningsAsErrors=true \
+    -p:WarningsAsErrors="" \
+    -p:WarningsNotAsErrors="NU1603" \
+    -p:NoWarn="CS0162"
 
 # Publish stage 
 FROM build AS publish
@@ -41,7 +31,7 @@ RUN dotnet publish "SetlistStudio.Web.csproj" \
     -c Release \
     -o /app/publish \
     --no-restore \
-    --verbosity detailed
+    --verbosity minimal
 
 # Runtime stage with minimal attack surface
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
