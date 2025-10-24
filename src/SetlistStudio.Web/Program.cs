@@ -874,69 +874,7 @@ static void HandleDatabaseInitializationError(IWebHostEnvironment environment, E
     }
 }
 
-/// <summary>
-/// Gets the database connection string, using secure environment-specific defaults if none configured
-/// Legacy method - now handled by DatabaseConfiguration class
-/// </summary>
-static string GetDatabaseConnectionString(IConfiguration configuration)
-{
-    var connectionString = configuration.GetConnectionString("DefaultConnection");
-    
-    if (string.IsNullOrEmpty(connectionString))
-    {
-        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        // Use in-memory database for test environments to avoid file locking
-        if (string.Equals(environment, "Test", StringComparison.OrdinalIgnoreCase))
-        {
-            connectionString = "Data Source=:memory:";
-        }
-        else
-        {
-            // SECURITY: Use secure database path validation to prevent path traversal attacks
-            var isContainerized = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-            
-            try
-            {
-                // Check if a custom database path is configured
-                var customPath = configuration["DatabasePath"];
-                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized, customPath);
-                
-                Log.Information("Database connection configured with secure path validation. Container: {IsContainerized}", isContainerized);
-            }
-            catch (ArgumentException ex)
-            {
-                Log.Error(ex, "Invalid database path configuration detected. Using secure defaults.");
-                
-                // Fall back to secure defaults without custom path
-                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized);
-            }
-        }
-    }
-    else
-    {
-        // SECURITY: Validate configured connection string for path traversal vulnerabilities
-        if (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
-        {
-            var dataSourcePrefix = "Data Source=";
-            var pathPart = connectionString.Substring(dataSourcePrefix.Length).Split(';')[0];
-            
-            // Skip validation for special SQLite paths
-            if (pathPart != ":memory:" && !DatabasePathValidator.IsSecurePath(pathPart))
-            {
-                Log.Warning("Configured database connection string contains potentially insecure path: {PathPart}", pathPart);
-                
-                // Fall back to secure defaults
-                var isContainerized = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized);
-                
-                Log.Information("Using secure default database path due to validation failure");
-            }
-        }
-    }
-    
-    return connectionString;
-}
+
 
 /// <summary>
 /// Configures the database provider based on the connection string format
