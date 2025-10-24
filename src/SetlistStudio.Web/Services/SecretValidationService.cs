@@ -76,13 +76,15 @@ public class SecretValidationService
         "insecure",
         "development",
         "staging", // For production validation
+        "production", // Development/test databases named production
         "example.com",
         "test.com",
         "dev.",
         ".local",
         "internal",
         "temp",
-        "debug"
+        "debug",
+        "valid-" // Test patterns like "valid-google-client-id"
     };
 
     public SecretValidationService(
@@ -98,6 +100,16 @@ public class SecretValidationService
     }
 
     /// <summary>
+    /// Determines if the current environment is non-production (Development or Testing)
+    /// </summary>
+    private bool IsNonProductionEnvironment()
+    {
+        var environmentName = _environment.EnvironmentName;
+        return _environment.IsDevelopment() || 
+               string.Equals(environmentName, "Testing", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Validates all required secrets for the current environment
     /// </summary>
     /// <param name="strictValidation">If true, validates all secrets. If false, only validates configured OAuth providers</param>
@@ -110,14 +122,14 @@ public class SecretValidationService
         _logger.LogInformation("Validating secrets for environment: {Environment}", environmentName);
 
         // Check if Azure Key Vault is configured for production
-        if (!_environment.IsDevelopment())
+        if (!IsNonProductionEnvironment())
         {
             var keyVaultValidation = ValidateKeyVaultConfiguration(environmentName);
             result.ValidationErrors.AddRange(keyVaultValidation);
         }
 
-        // Skip validation in development unless explicitly requested
-        if (_environment.IsDevelopment() && !strictValidation)
+        // Skip validation in development or testing unless explicitly requested
+        if (IsNonProductionEnvironment() && !strictValidation)
         {
             _logger.LogInformation("Skipping strict secret validation in development environment");
             return result;
@@ -154,7 +166,7 @@ public class SecretValidationService
             _logger.LogInformation("All secrets validated successfully for environment: {Environment}", environmentName);
             
             // Log Key Vault usage for production
-            if (!_environment.IsDevelopment())
+            if (!IsNonProductionEnvironment())
             {
                 var keyVaultName = _configuration["KeyVault:VaultName"];
                 if (!string.IsNullOrEmpty(keyVaultName))
@@ -282,7 +294,12 @@ public class SecretValidationService
         }
 
         // SECURITY ENHANCEMENT: Check for production-unsafe patterns
-        if (!IsProductionReadySecret(secretValue))
+        // Skip enhanced security validation for connection strings and OAuth secrets in Development/Testing environments
+        bool skipEnhancedValidation = IsNonProductionEnvironment() && 
+            (secretKey.Contains("ConnectionString") || 
+             secretKey.Contains("Authentication:"));
+        
+        if (!skipEnhancedValidation && !IsProductionReadySecret(secretValue))
         {
             return new SecretValidationError(
                 secretKey,
