@@ -1,0 +1,87 @@
+# Docker Compose configuration for enhanced database security
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.database-security.yml up -d
+version: '3.8'
+
+services:
+  setliststudio-web:
+    # Enhanced security capabilities for database protection
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - FOWNER  # Required for advanced file attribute management
+    
+    # Security options for database protection
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:docker-default
+      - seccomp:./docker/seccomp/database-security.json
+    
+    # Enhanced volume configuration for database security
+    volumes:
+      - setliststudio-data:/app/data:rw,nosuid,nodev
+      - setliststudio-logs:/app/logs:rw,nosuid,nodev
+      # Mount security scripts
+      - ./scripts/secure-database.sh:/app/secure-database.sh:ro
+      - ./scripts/monitor-database.sh:/app/monitor-database.sh:ro
+      # Temporary directories with security restrictions
+      - /tmp:/tmp:rw,nosuid,nodev,noexec,size=100m
+    
+    # Enhanced environment variables for database security
+    environment:
+      # Database security settings
+      - DB_SECURITY_ENABLED=true
+      - DB_FILE_MODE=600
+      - DB_DIR_MODE=700
+      - DB_MONITORING_ENABLED=true
+      - DB_CHECKSUM_VALIDATION=true
+      
+      # Security logging
+      - SECURITY_AUDIT_ENABLED=true
+      - DB_ACCESS_LOGGING=true
+      
+      # Backup security
+      - BACKUP_ENCRYPTION_ENABLED=true
+      - BACKUP_RETENTION_DAYS=30
+    
+    # Health check with database security validation
+    healthcheck:
+      test: |
+        curl -f http://localhost:8080/api/status && \
+        test -f /app/data/setliststudio.db && \
+        test "$(stat -c %a /app/data/setliststudio.db)" = "600" && \
+        test "$(stat -c %a /app/data)" = "700"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Labels for security monitoring
+    labels:
+      - "security.database.enabled=true"
+      - "security.database.level=confidential"
+      - "security.monitoring.enabled=true"
+      - "security.audit.database=enabled"
+
+# Enhanced volume configuration for database security
+volumes:
+  setliststudio-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+    labels:
+      - "security.level=confidential"
+      - "security.encryption=recommended"
+      - "security.backup=required"
+  
+  setliststudio-logs:
+    driver: local
+    driver_opts:
+      type: none  
+      o: bind
+      device: ./logs
+    labels:
+      - "security.level=internal"
+      - "security.audit=enabled"

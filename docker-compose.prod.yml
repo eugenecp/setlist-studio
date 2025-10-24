@@ -1,0 +1,124 @@
+version: '3.8'
+
+# Production Docker Compose override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  setliststudio-web:
+    # Production security hardening
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # Disable unnecessary diagnostics in production
+      - DOTNET_EnableDiagnostics=0
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Warning
+      - ASPNETCORE_LOGGING__LOGLEVEL__Microsoft=Error
+    
+    # Production resource limits (adjust based on your infrastructure)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+    
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Production networks with security groups
+    networks:
+      - setlist-backend
+      - setlist-frontend
+    
+    # Additional security options for production
+    read_only: true  # Enforce read-only filesystem in production
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:docker-default
+      - seccomp=./docker/seccomp/setlist-studio-profile.json
+    user: "1001:1001"
+    
+    # Production volume mounts with security
+    volumes:
+      - setliststudio-prod-data:/app/data
+      - setliststudio-prod-logs:/app/logs
+      # Secure temporary filesystems
+      - /tmp:/tmp:rw,nosuid,nodev,noexec
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=50m
+    
+    # Production labels for monitoring and management
+    labels:
+      - "com.setliststudio.environment=production"
+      - "com.setliststudio.version=1.0"
+      - "traefik.enable=true"
+      - "traefik.http.routers.setliststudio.rule=Host(`setliststudio.com`)"
+      - "traefik.http.routers.setliststudio.entrypoints=websecure"
+      - "traefik.http.routers.setliststudio.tls.certresolver=letsencrypt"
+
+  # Reverse proxy for production (optional)
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=security@setliststudio.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --log.level=WARN
+      - --accesslog=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt-data:/letsencrypt"
+    networks:
+      - setlist-frontend
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  setlist-frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  setlist-backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  letsencrypt-data:
+    driver: local
+  setliststudio-prod-data:
+    driver: local
+  setliststudio-prod-logs:
+    driver: local

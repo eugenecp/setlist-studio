@@ -89,8 +89,9 @@ jobs:
         dotnet clean SetlistStudio.sln --configuration Release
         
         # Set test environment variables to avoid database conflicts
-        export ASPNETCORE_ENVIRONMENT=Test
-        export DOTNET_ENVIRONMENT=Test
+        export ASPNETCORE_ENVIRONMENT=Testing
+        export DOTNET_ENVIRONMENT=Testing
+        export CI=true
 
         # Run comprehensive test suite with coverage collection
         dotnet test SetlistStudio.sln --configuration Release --verbosity normal --logger trx --logger "console;verbosity=detailed" --collect "XPlat Code Coverage" --results-directory ./test-results
@@ -101,21 +102,21 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always() # Upload even if tests fail
       with:
-        name: test-results                # Artifact name for test results
-        path: |                          # Include all test result files
-          ./test-results/**/*.trx        # TRX format test results
-          ./test-results/**/*.xml        # XML format test results
-        retention-days: 30               # Keep test results for 30 days
+        name: test-results
+        path: |
+          ./test-results/*.trx
+          ./test-results/**/*.xml
+        retention-days: 30
     
     # Step 9: Upload code coverage data for analysis
     # Provides coverage metrics for quality monitoring
     - name: 📈 Upload code coverage
       uses: actions/upload-artifact@v4
-      if: always()                       # Upload even if tests failed
+      if: always()
       with:
-        name: code-coverage              # Artifact name for coverage data
-        path: ./test-results/**/coverage.cobertura.xml # Cobertura format coverage
-        retention-days: 30               # Keep coverage data for 30 days
+        name: code-coverage
+        path: ./test-results/**/coverage.cobertura.xml
+        retention-days: 30
     
     # Step 10: Parse and display test results summary
     # Creates human-readable test results in GitHub workflow summary
@@ -129,29 +130,43 @@ jobs:
           echo "Test results found, processing..." >> $GITHUB_STEP_SUMMARY
           
           # Parse TRX files to extract test statistics
-          for trx_file in ./test-results/**/*.trx; do
+          for trx_file in ./test-results/*.trx; do
             if [ -f "$trx_file" ]; then
               echo "Processing: $trx_file" >> $GITHUB_STEP_SUMMARY
               
-              # Extract test statistics using XML parsing with grep
-              if grep -q "outcome.*Passed" "$trx_file"; then
-                passed=$(grep -c "outcome.*Passed" "$trx_file" || echo "0")
-                failed=$(grep -c "outcome.*Failed" "$trx_file" || echo "0")
-                total=$((passed + failed))
+              # Extract test statistics using XML parsing with more robust approach
+              if grep -q "outcome" "$trx_file"; then
+                # Count test outcomes more precisely and clean up the results
+                passed=$(grep -o 'outcome="Passed"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
+                failed=$(grep -o 'outcome="Failed"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
+                skipped=$(grep -o 'outcome="NotExecuted"' "$trx_file" 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
                 
-                echo "- ✅ Passed: $passed" >> $GITHUB_STEP_SUMMARY
-                echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY  
-                echo "- 📊 Total: $total" >> $GITHUB_STEP_SUMMARY
+                # Clean any whitespace and ensure we have valid numbers
+                passed=$(echo "$passed" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
+                failed=$(echo "$failed" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
+                skipped=$(echo "$skipped" | tr -d ' \n' | grep -E '^[0-9]+$' || echo "0")
                 
-                # Fail the workflow if any tests failed
-                if [ "$failed" -gt 0 ]; then
-                  echo "- 🚨 Status: FAILED" >> $GITHUB_STEP_SUMMARY
-                  exit 1
+                # Validate that all variables are numbers
+                if [[ "$passed" =~ ^[0-9]+$ ]] && [[ "$failed" =~ ^[0-9]+$ ]] && [[ "$skipped" =~ ^[0-9]+$ ]]; then
+                  total=$((passed + failed + skipped))
+                  
+                  echo "- ✅ Passed: $passed" >> $GITHUB_STEP_SUMMARY
+                  echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY
+                  echo "- ⏭️ Skipped: $skipped" >> $GITHUB_STEP_SUMMARY  
+                  echo "- 📊 Total: $total" >> $GITHUB_STEP_SUMMARY
+                  
+                  # Fail the workflow if any tests failed
+                  if [ "$failed" -gt 0 ]; then
+                    echo "- 🚨 Status: FAILED" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  else
+                    echo "- ✅ Status: PASSED" >> $GITHUB_STEP_SUMMARY
+                  fi
                 else
-                  echo "- ✅ Status: PASSED" >> $GITHUB_STEP_SUMMARY
+                  echo "- ⚠️ Invalid test counts after cleanup: passed='$passed', failed='$failed', skipped='$skipped'" >> $GITHUB_STEP_SUMMARY
                 fi
               else
-                echo "- ⚠️ Could not parse test results from $trx_file" >> $GITHUB_STEP_SUMMARY
+                echo "- ⚠️ Could not find test outcomes in $trx_file" >> $GITHUB_STEP_SUMMARY
               fi
             fi
           done
@@ -167,7 +182,7 @@ jobs:
       if: always() && github.event_name != 'pull_request' # Skip on PRs to avoid permission issues
       with:
         name: Test Results               # Display name for test report
-        path: './test-results/**/*.trx'  # Path to TRX test result files
+        path: './test-results/*.trx'     # Path to TRX test result files (directly in test-results)
         reporter: dotnet-trx             # Use .NET TRX format reporter
         fail-on-error: false             # Don't fail workflow on test failures (handled elsewhere)
         token: ${{ secrets.GITHUB_TOKEN }} # GitHub token for API access
@@ -180,13 +195,13 @@ jobs:
       with:
         filename: './test-results/**/coverage.cobertura.xml' # Cobertura coverage file
         badge: true                      # Generate coverage badge
-        fail_below_min: false            # Don't fail workflow on low coverage (set true to enforce)
+        fail_below_min: true             # Fail workflow when coverage drops below 80%
         format: markdown                 # Output format for GitHub display
         hide_branch_rate: false          # Show branch coverage metrics
         hide_complexity: false           # Show code complexity metrics
         indicators: true                 # Show visual indicators for coverage levels
         output: both                     # Output to console and file
-        thresholds: '60 80'             # Warning at 60%, good at 80% coverage
+        thresholds: '80 90'              # Fail below 80%, excellent at 90% coverage
     
     # Step 13: Create comprehensive test and build summary for pull requests
     # Provides detailed feedback on PR quality and test results
@@ -244,6 +259,7 @@ jobs:
       if: github.event_name == 'pull_request' # Only on pull requests
       with:
         recreate: true                   # Replace existing comment
+        header: build-test-summary       # Unique identifier for build and test summary
         path: pr-summary.md              # Path to summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
@@ -253,8 +269,9 @@ jobs:
       uses: marocchino/sticky-pull-request-comment@v2
       if: github.event_name == 'pull_request' && hashFiles('code-coverage-results.md') != '' # Only if coverage file exists
       with:
-        recreate: false                  # Don't replace existing comments
-        path: code-coverage-results.md   # Path to coverage results file
+        recreate: true                   # Replace existing coverage comment
+        header: coverage-report          # Unique identifier to distinguish from other comments
+        path: code-coverage-results.md  # Path to coverage results file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 2: Docker Image Build and Container Testing
@@ -318,10 +335,16 @@ jobs:
         docker rm test-container test-debug 2>/dev/null || true
         
         echo "Testing container in foreground first (for debugging)..."
-        timeout 10s docker run --rm --name test-debug -p 8081:5000 setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
+        timeout 10s docker run --rm --name test-debug -p 8081:8080 \
+          -e ASPNETCORE_ENVIRONMENT=Development \
+          -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+          setlist-studio:${{ github.sha }} || echo "Container test completed or timed out"
         
         echo "Starting container in background..."
-        docker run --rm -d --name test-container -p 8080:5000 setlist-studio:${{ github.sha }}
+        docker run --rm -d --name test-container -p 8080:8080 \
+          -e ASPNETCORE_ENVIRONMENT=Development \
+          -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+          setlist-studio:${{ github.sha }}
         
         echo "Waiting for container to start..."
         # Wait and check if container is running
@@ -351,16 +374,10 @@ jobs:
         
         # Test application health endpoint
         echo "Testing health endpoint..."
-        # Get current container logs before testing
-        echo "Current container logs:"
-        docker logs test-container
         
         # Wait for application to fully initialize
         echo "Giving application more time to start..."
         sleep 10
-        
-        echo "Container logs after additional wait:"
-        docker logs test-container
         
         # Try multiple connection attempts as the app might take time to start
         for i in {1..8}; do
@@ -397,19 +414,21 @@ jobs:
           else
             echo "❌ Health check failed on attempt $i (HTTP $health_response)"
             
-            # More detailed diagnostics
-            echo "  📊 Container status:"
-            docker exec test-container ps aux | head -10 || echo "    Cannot exec into container"
-            
-            echo "  🔍 Network connectivity:"
-            docker exec test-container netstat -tuln | grep :5000 || echo "    Cannot check network status"
-            
-            echo "  📋 Latest logs:"
-            docker logs --tail 20 test-container
-            
-            # Test basic connectivity
-            echo "  🌐 Testing connectivity:"
-            nc -z localhost 8080 && echo "    Port 8080 is open" || echo "    Port 8080 is closed"
+            # Only show detailed diagnostics on later attempts to reduce noise
+            if [ $i -ge 4 ]; then
+              echo "  📊 Container status:"
+              docker exec test-container ps aux | head -5 || echo "    Cannot exec into container"
+              
+              echo "  🔍 Network connectivity:"
+              docker exec test-container netstat -tuln | grep :5000 || echo "    Cannot check network status"
+              
+              echo "  📋 Latest logs (last 10 lines):"
+              docker logs --tail 10 test-container
+              
+              # Test basic connectivity
+              echo "  🌐 Testing connectivity:"
+              nc -z localhost 8080 && echo "    Port 8080 is open" || echo "    Port 8080 is closed"
+            fi
             
             if [ $i -lt 8 ]; then
               echo "Retrying in 15 seconds..."
@@ -424,29 +443,18 @@ jobs:
             echo "Container status:"
             docker ps -a --filter name=test-container
             echo ""
-            echo "Full container logs:"
-            docker logs test-container
+            echo "Recent container logs (last 50 lines):"
+            docker logs --tail 50 test-container
             echo ""
             echo "Container processes:"
-            docker exec test-container ps aux || echo "Cannot exec into container"
+            docker exec test-container ps aux | head -5 || echo "Cannot exec into container"
             echo ""
-            echo "Network information:"
+            echo "Network and connectivity:"
             docker port test-container || echo "Cannot get port information"
+            nc -z localhost 8080 && echo "Port 8080 is accessible" || echo "Port 8080 is not accessible"
             echo ""
-            echo "Environment variables:"
-            docker exec test-container env | grep -E "(ASPNET|DOTNET)" || echo "Cannot get environment"
-            echo ""
-            echo "Database directory:"
-            docker exec test-container ls -la /app/data/ || echo "Cannot check database directory"
-            echo ""
-            echo "Application files:"
-            docker exec test-container ls -la /app/ | head -10 || echo "Cannot list app files"
-            echo ""
-            echo "Testing connectivity:"
-            curl -v -m 10 http://localhost:8080/api/status || echo "Cannot connect to health endpoint"
-            echo ""
-            echo "Testing main app:"
-            curl -v -m 10 http://localhost:8080/ || echo "Cannot connect to base URL"
+            echo "Environment check:"
+            docker exec test-container env | grep -E "(ASPNET|DOTNET)" | head -5 || echo "Cannot get environment"
             echo ""
             docker stop test-container || true
             exit 1
@@ -476,12 +484,18 @@ jobs:
         # Add your actual deployment commands here
     
     - name: 💬 Add deployment comment to PR
-      uses: actions/github-script@v7
+      uses: marocchino/sticky-pull-request-comment@v2
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '🚀 Preview deployment available at: https://preview-pr-${{ github.event.number }}.setlist-studio.dev'
-          })
+        recreate: true                   # Replace existing deployment comment
+        header: deployment-preview       # Unique identifier for deployment comments
+        message: |
+          ## 🚀 Preview Deployment Ready
+          
+          **Preview URL:** https://preview-pr-${{ github.event.number }}.setlist-studio.dev
+          
+          **Branch:** `${{ github.head_ref }}`
+          **Commit:** `${{ github.sha }}`
+          
+          ---
+          *Deployment updated automatically on each push*
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

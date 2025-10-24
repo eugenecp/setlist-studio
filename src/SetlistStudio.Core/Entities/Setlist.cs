@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SetlistStudio.Core.Validation;
 
 namespace SetlistStudio.Core.Entities;
 
@@ -18,18 +19,21 @@ public class Setlist
     /// </summary>
     [Required]
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the setlist
     /// </summary>
     [StringLength(1000)]
+    [SanitizedString(AllowHtml = false, AllowLineBreaks = true, MaxLength = 1000)]
     public string? Description { get; set; }
 
     /// <summary>
     /// Performance venue or event name
     /// </summary>
     [StringLength(200)]
+    [SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
     public string? Venue { get; set; }
 
     /// <summary>
@@ -89,7 +93,7 @@ public class Setlist
     /// </summary>
     public int CalculatedDurationMinutes => SetlistSongs
         .Where(ss => ss.Song.DurationSeconds.HasValue)
-        .Sum(ss => ss.Song.DurationSeconds!.Value) / 60;
+        .Sum(ss => ss.Song.DurationSeconds.GetValueOrDefault()) / 60;
 
     /// <summary>
     /// Helper property to get song count

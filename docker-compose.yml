@@ -2,31 +2,82 @@ version: '3.8'
 
 services:
   setliststudio-web:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "5000:5000"
-      - "5001:5001"
+      - "8080:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5000;https://+:5001
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/setliststudio.db
-      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
-      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
-      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID}
-      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET}
-      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID}
-      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET}
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-}
+      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID:-}
+      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET:-}
+      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID:-}
+      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET:-}
     volumes:
       - setliststudio-data:/app/data
       - setliststudio-logs:/app/logs
+      # Security: Mount temporary directories with restricted permissions
+      - /tmp:/tmp:rw,nosuid,nodev,noexec,size=50m
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=100m
+      - /var/tmp:rw,nosuid,nodev,noexec,size=50m
     restart: unless-stopped
+    # Security: Enhanced resource limits and constraints
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpu_quota: 50000  # 0.5 CPU cores
+    pids_limit: 100   # Limit number of processes
+    ulimits:
+      nproc: 100      # Limit number of processes
+      nofile: 1024    # Limit number of file descriptors
+    # Security: Drop ALL capabilities and add only required ones
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN     # Required for file ownership changes
+      - SETGID    # Required for group changes
+      - SETUID    # Required for user changes
+    read_only: true
+    # Security: Enhanced security options
+    security_opt:
+      - no-new-privileges:true    # Prevent privilege escalation
+      - apparmor:docker-default   # Use AppArmor security profile
+      - seccomp:default          # Use default seccomp profile
+    # Security: Run as non-root user
+    user: "1001:1001"
+    # Security: Disable network access to other containers by default
+    networks:
+      - setliststudio-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
 volumes:
   setliststudio-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
   setliststudio-logs:
+    driver: local
+    driver_opts:
+      type: none  
+      o: bind
+      device: ./logs
+
+# Security: Isolated network for the application
+networks:
+  setliststudio-network:
+    driver: bridge
+    internal: false  # Allow external access for the web service
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

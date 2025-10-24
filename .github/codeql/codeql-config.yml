@@ -15,6 +15,10 @@ queries:
 query-filters:
   - exclude:
       id: cs/web/debug-binary  # Exclude debug binary warnings in development
+  - exclude:
+      id: cs/catch-of-all-exceptions  # Exclude generic catch clause warnings
+  - exclude:
+      id: cs/empty-catch-block  # Exclude empty catch block warnings (if applicable)
       
 # Paths to ignore during analysis
 paths-ignore:

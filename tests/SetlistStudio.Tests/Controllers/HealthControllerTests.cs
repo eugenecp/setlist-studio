@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Web.Controllers;
 using FluentAssertions;
+using System.Reflection;
 using Xunit;
 
 namespace SetlistStudio.Tests.Controllers;
@@ -110,14 +113,14 @@ public class HealthControllerTests : IDisposable
         // Should still return "Healthy" for service, but database should show error
         statusProperty!.GetValue(healthStatus).Should().Be("Healthy");
         databaseProperty!.GetValue(healthStatus).Should().NotBe("Connected");
-        databaseProperty!.GetValue(healthStatus)?.ToString().Should().StartWith("Error:");
+        databaseProperty!.GetValue(healthStatus)?.ToString().Should().Be("Database configuration error");
 
         // Verify warning was logged
         _mockLogger.Verify(
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database health check failed")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database configuration invalid during health check")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -264,6 +267,60 @@ public class HealthControllerTests : IDisposable
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
+    }
+
+    [Fact]
+    public void HealthController_ShouldHaveEnableRateLimitingAttribute_WithApiPolicy()
+    {
+        // Arrange
+        var controllerType = typeof(HealthController);
+
+        // Act
+        var rateLimitingAttribute = controllerType.GetCustomAttribute<EnableRateLimitingAttribute>();
+
+        // Assert
+        rateLimitingAttribute.Should().NotBeNull("HealthController should have EnableRateLimiting attribute for security");
+        rateLimitingAttribute!.PolicyName.Should().Be("ApiPolicy", "HealthController should use the ApiPolicy rate limiting policy");
+    }
+
+    [Fact]
+    public void HealthController_ShouldHaveAllowAnonymousAttribute_ForPublicAccess()
+    {
+        // Arrange
+        var controllerType = typeof(HealthController);
+
+        // Act
+        var allowAnonymousAttribute = controllerType.GetCustomAttribute<AllowAnonymousAttribute>();
+
+        // Assert
+        allowAnonymousAttribute.Should().NotBeNull("HealthController should allow anonymous access for health monitoring");
+    }
+
+    [Fact]
+    public void HealthController_ShouldHaveApiControllerAttribute_ForApiBehavior()
+    {
+        // Arrange
+        var controllerType = typeof(HealthController);
+
+        // Act
+        var apiControllerAttribute = controllerType.GetCustomAttribute<ApiControllerAttribute>();
+
+        // Assert
+        apiControllerAttribute.Should().NotBeNull("HealthController should have ApiController attribute for API behavior");
+    }
+
+    [Fact]
+    public void HealthController_ShouldHaveCorrectRouteAttribute()
+    {
+        // Arrange
+        var controllerType = typeof(HealthController);
+
+        // Act
+        var routeAttribute = controllerType.GetCustomAttribute<RouteAttribute>();
+
+        // Assert
+        routeAttribute.Should().NotBeNull("HealthController should have Route attribute");
+        routeAttribute!.Template.Should().Be("api/[controller]", "HealthController should use the correct route template");
     }
 
     public void Dispose()

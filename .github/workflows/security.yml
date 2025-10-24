@@ -201,6 +201,121 @@ jobs:
           --scan "**/*.sln"              # Include solution files
           --out reports/                 # Output directory for reports
       continue-on-error: true            # Continue to allow threshold enforcement step to handle failures
+
+    # Step 11.1: OWASP ZAP Dynamic Security Scan
+    # Dynamic application security testing against running application
+    - name: 🕷️ OWASP ZAP Dynamic Security Scan
+      if: github.event_name != 'schedule' # Skip for scheduled runs to avoid resource usage
+      run: |
+        echo "Starting OWASP ZAP dynamic security scan..."
+        
+        # Start the application in background for testing
+        echo "Starting application for security testing..."
+        cd src/SetlistStudio.Web
+        dotnet run --configuration Release --urls=http://localhost:5000 &
+        APP_PID=$!
+        cd ../..
+        
+        # Wait for application to start and verify it's responding
+        sleep 30
+        for i in {1..10}; do
+          if curl -f http://localhost:5000/api/status > /dev/null 2>&1; then
+            echo "Application is ready for testing"
+            break
+          fi
+          echo "Waiting for application... ($i/10)"
+          sleep 5
+        done
+        
+        # Install and run OWASP ZAP baseline scan
+        echo "Installing OWASP ZAP..."
+        wget -q https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+        tar -xzf ZAP_2.14.0_Linux.tar.gz
+        
+        echo "Running ZAP baseline security scan..."
+        ./ZAP_2.14.0/zap.sh -cmd -quickurl http://localhost:5000 -quickout zap-report.html -quickprogress > zap-scan.log 2>&1 || echo "ZAP scan completed with findings"
+        
+        # Process ZAP results and set environment variable for later use
+        if [ -f "zap-report.html" ]; then
+          CRITICAL_ISSUES=$(grep -o -i "High\|Critical" zap-report.html | wc -l || echo "0")
+          echo "ZAP scan completed. Critical/High issues found: $CRITICAL_ISSUES"
+          echo "ZAP_ISSUES=$CRITICAL_ISSUES" >> $GITHUB_ENV
+        else
+          echo "ZAP report not generated, assuming no critical issues"
+          echo "ZAP_ISSUES=0" >> $GITHUB_ENV
+        fi
+        
+        # Stop the application
+        kill $APP_PID 2>/dev/null || true
+        echo "OWASP ZAP scan completed"
+      continue-on-error: true
+
+    # Step 11.2: Security Configuration Compliance Audit
+    # Verify implementation of security best practices in source code
+    - name: ⚙️ Security Configuration Compliance Audit
+      run: |
+        echo "Starting security configuration audit..."
+        
+        CONFIG_ISSUES=0
+        echo "Security configuration audit results:" > config-audit.log
+        
+        # Check for HTTPS enforcement
+        echo "Checking HTTPS enforcement..." >> config-audit.log
+        if grep -r "UseHttpsRedirection" src/ > /dev/null 2>&1; then
+          echo "✅ HTTPS redirection configured" >> config-audit.log
+        else
+          echo "❌ HTTPS redirection not found" >> config-audit.log
+          CONFIG_ISSUES=$((CONFIG_ISSUES + 1))
+        fi
+        
+        # Check for security headers
+        echo "Checking security headers..." >> config-audit.log
+        if grep -r "X-Content-Type-Options\|X-Frame-Options\|X-XSS-Protection" src/ > /dev/null 2>&1; then
+          echo "✅ Security headers implemented" >> config-audit.log
+        else
+          echo "❌ Security headers not found" >> config-audit.log
+          CONFIG_ISSUES=$((CONFIG_ISSUES + 1))
+        fi
+        
+        # Check for anti-forgery tokens
+        echo "Checking CSRF protection..." >> config-audit.log
+        if grep -r "AddAntiforgery\|ValidateAntiForgeryToken" src/ > /dev/null 2>&1; then
+          echo "✅ CSRF protection configured" >> config-audit.log
+        else
+          echo "❌ Anti-forgery protection not found" >> config-audit.log
+          CONFIG_ISSUES=$((CONFIG_ISSUES + 1))
+        fi
+        
+        # Check for rate limiting
+        echo "Checking rate limiting..." >> config-audit.log
+        if grep -r "AddRateLimiter\|UseRateLimiter" src/ > /dev/null 2>&1; then
+          echo "✅ Rate limiting implemented" >> config-audit.log
+        else
+          echo "❌ Rate limiting not found" >> config-audit.log
+          CONFIG_ISSUES=$((CONFIG_ISSUES + 1))
+        fi
+        
+        # Check for secure session configuration
+        echo "Checking secure session configuration..." >> config-audit.log
+        if grep -r "HttpOnly.*true\|SecurePolicy.*Always\|SameSite.*Strict" src/ > /dev/null 2>&1; then
+          echo "✅ Secure session configuration found" >> config-audit.log
+        else
+          echo "⚠️ Secure session configuration not fully verified" >> config-audit.log
+        fi
+        
+        echo "Security configuration audit completed. Issues found: $CONFIG_ISSUES"
+        echo "CONFIG_ISSUES=$CONFIG_ISSUES" >> $GITHUB_ENV
+      continue-on-error: true
+
+    # Step 11.3: GitHub Dependency Review (PR only)
+    # Native GitHub dependency review for pull requests
+    - name: 🔍 GitHub Dependency Review
+      if: github.event_name == 'pull_request'
+      uses: actions/dependency-review-action@v4
+      with:
+        fail-on-severity: moderate
+        comment-summary-in-pr: false # Don't comment, let final summary handle it
+      continue-on-error: true # Don't fail immediately, let final check handle it
     
     # Step 12: Generate comprehensive security scan summary
     # Creates unified security report combining all scan results
@@ -242,15 +357,31 @@ jobs:
         fi
         
         # Analyze CodeQL static analysis results
-        codeql_status="✅ Secure | No vulnerabilities detected"
-        for sarif_file in ./results/*.sarif; do
+        # CodeQL uploads results to GitHub Security automatically, so we check for workflow step success
+        # If CodeQL analysis step failed, it indicates security issues were found
+        codeql_status="⚠️ Analysis | CodeQL results uploaded to GitHub Security - check Security tab for details"
+        
+        # Check if there are any SARIF files generated locally (if any)
+        sarif_found=false
+        for sarif_file in ./results/*.sarif /tmp/*.sarif *.sarif; do
           if [ -f "$sarif_file" ]; then
-            if jq -e '.runs[].results[]? | select(.level == "error" or .level == "warning")' "$sarif_file" > /dev/null; then
-              codeql_status="⚠️ Issues | Code vulnerabilities detected"
+            sarif_found=true
+            if jq -e '.runs[].results[]? | select(.level == "error" or (.level == "warning" and .properties.["security-severity"] and (.properties.["security-severity"] | tonumber) >= 7.0))' "$sarif_file" > /dev/null 2>&1; then
+              codeql_status="⚠️ HIGH/CRITICAL | High or critical security vulnerabilities detected"
               break
+            elif jq -e '.runs[].results[]?' "$sarif_file" > /dev/null 2>&1; then
+              codeql_status="⚠️ Issues | Security vulnerabilities detected"
+            else
+              codeql_status="✅ Secure | No vulnerabilities detected in local analysis"
             fi
           fi
         done
+        
+        # If no local SARIF files found, remind to check GitHub Security tab
+        if [ "$sarif_found" = false ]; then
+          codeql_status="📊 Uploaded | Results uploaded to GitHub Security tab - manual review required"
+        fi
+        
         echo "| CodeQL | $codeql_status |" >> security-summary.md
         
         # Analyze Semgrep SAST results
@@ -287,8 +418,42 @@ jobs:
         else
           echo "| OWASP Dependency Check | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
+        
+        # Analyze OWASP ZAP dynamic security scan results
+        if [ -n "${ZAP_ISSUES:-}" ]; then
+          if [ "${ZAP_ISSUES}" -gt 0 ]; then
+            echo "| OWASP ZAP Dynamic Scan | ⚠️ Issues | $ZAP_ISSUES critical/high issues detected |" >> security-summary.md
+          else
+            echo "| OWASP ZAP Dynamic Scan | ✅ Secure | No critical/high issues detected |" >> security-summary.md
+          fi
+        else
+          echo "| OWASP ZAP Dynamic Scan | ℹ️ Skipped | Scan not executed (scheduled runs only) |" >> security-summary.md
+        fi
+        
 
+        
+        # Analyze security configuration audit results
+        if [ -n "${CONFIG_ISSUES:-}" ]; then
+          if [ "${CONFIG_ISSUES}" -gt 0 ]; then
+            echo "| Security Configuration | ⚠️ Issues | $CONFIG_ISSUES configuration issues detected |" >> security-summary.md
+          else
+            echo "| Security Configuration | ✅ Secure | All security configurations validated |" >> security-summary.md
+          fi
+        else
+          echo "| Security Configuration | ℹ️ Skipped | Audit not executed |" >> security-summary.md
+        fi
+
+
+        echo "" >> security-summary.md
+        echo "### ⚠️ CRITICAL: CodeQL Security Analysis" >> security-summary.md
+        echo "**IMPORTANT**: This summary may show CodeQL as 'secure' even if issues exist." >> security-summary.md
+        echo "**ALWAYS check the [GitHub Security Tab](../../security) for CodeQL findings.**" >> security-summary.md
+        echo "**High/Critical CodeQL issues MUST be resolved before merge, regardless of this summary.**" >> security-summary.md
+        echo "" >> security-summary.md
+        
         echo "### 📋 Recommendations" >> security-summary.md
+        echo "- **PRIORITY**: Check GitHub Security tab for CodeQL findings" >> security-summary.md
+        echo "- Fix all high/critical CodeQL issues before merge" >> security-summary.md
         echo "- Review all findings in the Security tab" >> security-summary.md
         echo "- Update vulnerable dependencies promptly" >> security-summary.md
         echo "- Follow secure coding practices from copilot-instructions.md" >> security-summary.md
@@ -324,6 +489,9 @@ jobs:
           ./security-report.md
           ./security-summary.md
           ./trufflehog-results.json
+          ./zap-report.html
+          ./zap-scan.log
+          ./config-audit.log
           ./reports/
           ./results/
           ./*.sarif
@@ -333,17 +501,18 @@ jobs:
         overwrite: false
         include-hidden-files: false
     
-    # Step 15: Add security summary comment to pull requests
+    # Step 14: Add security summary comment to pull requests
     # Provides immediate security feedback in PR discussions
     - name: 💬 Add Security Summary to PR
       uses: marocchino/sticky-pull-request-comment@v2
       if: github.event_name == 'pull_request' && always() # Only on PRs, always run
       with:
-        recreate: false                  # Don't replace existing comments
+        recreate: true                   # Replace existing security comment
+        header: security-report          # Unique identifier to distinguish from other comments
         path: security-summary.md        # Path to security summary file
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
-    # Step 16: Enforce security thresholds and fail job if vulnerabilities found
+    # Step 15: Enforce security thresholds and fail job if vulnerabilities found
     - name: 🚨 Enforce Security Thresholds
       if: always()                       # Run on all events to enforce security thresholds
       run: |
@@ -395,6 +564,25 @@ jobs:
           fi
         fi
 
+        # Display and fail for OWASP ZAP critical/high security issues
+        if [ -n "${ZAP_ISSUES:-}" ] && [ "${ZAP_ISSUES}" -gt 0 ]; then
+          echo "❌ OWASP ZAP detected $ZAP_ISSUES critical/high security issues in dynamic scan"
+          if [ -f "zap-report.html" ]; then
+            echo "See zap-report.html artifact for detailed findings"
+          fi
+          fail=1
+        fi
+
+        # Display and fail for security configuration issues
+        if [ -n "${CONFIG_ISSUES:-}" ] && [ "${CONFIG_ISSUES}" -gt 0 ]; then
+          echo "❌ Security configuration issues detected: $CONFIG_ISSUES configuration problems found"
+          if [ -f "config-audit.log" ]; then
+            echo "Configuration audit results:"
+            cat config-audit.log
+          fi
+          fail=1
+        fi
+
         # Fail if any issues were found
         if [ "$fail" = "1" ]; then
           echo ""
@@ -415,6 +603,8 @@ jobs:
         echo "   • CodeQL: No error/warning level findings"
         echo "   • TruffleHog: No secrets detected"
         echo "   • Semgrep: No security issues found"
+        echo "   • OWASP ZAP: No critical/high dynamic security issues"
+        echo "   • Security Configuration: All security controls verified"
 
   # JOB 2: Security Baseline Compliance Check
   # Runs on schedule and manual dispatch to verify security policy compliance

@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Web.Controllers;
 using FluentAssertions;
+using System.Reflection;
 using Xunit;
 
 namespace SetlistStudio.Tests.Controllers;
@@ -10,8 +13,11 @@ namespace SetlistStudio.Tests.Controllers;
 /// Covers: Get (main status endpoint), Ping (ping endpoint)
 /// Tests response structure, data validation, and environment variable handling
 /// </summary>
+[Collection("EnvironmentVariable")]
 public class StatusControllerTests
 {
+    // Shared lock to prevent environment variable race conditions in tests
+    private static readonly object _environmentLock = new object();
     [Fact]
     public void Get_ShouldReturnStatusObject_WithCorrectProperties()
     {
@@ -65,56 +71,64 @@ public class StatusControllerTests
     [Fact]
     public void Get_ShouldReturnEnvironmentVariable_WhenASPNETCORE_ENVIRONMENTIsSet()
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be("Testing");
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be("Testing");
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
     [Fact]
     public void Get_ShouldReturnUnknown_WhenASPNETCORE_ENVIRONMENTIsNotSet()
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be("Unknown");
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be("Unknown");
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
@@ -217,28 +231,32 @@ public class StatusControllerTests
     [InlineData("CustomEnvironment")]
     public void Get_ShouldReturnCorrectEnvironment_ForDifferentEnvironmentValues(string environmentValue)
     {
-        // Arrange
-        var controller = new StatusController();
-        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        
-        try
+        lock (_environmentLock)
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentValue);
-
-            // Act
-            var result = controller.Get();
-
-            // Assert
-            var okResult = result as OkObjectResult;
-            var status = okResult!.Value!;
-            var environmentProperty = status.GetType().GetProperty("Environment");
+            // Arrange
+            var controller = new StatusController();
+            var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             
-            environmentProperty!.GetValue(status).Should().Be(environmentValue);
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            try
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentValue);
+                Thread.Sleep(200); // Allow environment change to propagate
+
+                // Act
+                var result = controller.Get();
+
+                // Assert
+                var okResult = result as OkObjectResult;
+                var status = okResult!.Value!;
+                var environmentProperty = status.GetType().GetProperty("Environment");
+                
+                environmentProperty!.GetValue(status).Should().Be(environmentValue);
+            }
+            finally
+            {
+                // Restore original environment variable
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalEnv);
+            }
         }
     }
 
@@ -263,5 +281,59 @@ public class StatusControllerTests
         {
             result.Should().BeOfType<OkObjectResult>();
         }
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveEnableRateLimitingAttribute_WithApiPolicy()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var rateLimitingAttribute = controllerType.GetCustomAttribute<EnableRateLimitingAttribute>();
+
+        // Assert
+        rateLimitingAttribute.Should().NotBeNull("StatusController should have EnableRateLimiting attribute for security");
+        rateLimitingAttribute!.PolicyName.Should().Be("ApiPolicy", "StatusController should use the ApiPolicy rate limiting policy");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveAllowAnonymousAttribute_ForPublicAccess()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var allowAnonymousAttribute = controllerType.GetCustomAttribute<AllowAnonymousAttribute>();
+
+        // Assert
+        allowAnonymousAttribute.Should().NotBeNull("StatusController should allow anonymous access for status monitoring");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveApiControllerAttribute_ForApiBehavior()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var apiControllerAttribute = controllerType.GetCustomAttribute<ApiControllerAttribute>();
+
+        // Assert
+        apiControllerAttribute.Should().NotBeNull("StatusController should have ApiController attribute for API behavior");
+    }
+
+    [Fact]
+    public void StatusController_ShouldHaveCorrectRouteAttribute()
+    {
+        // Arrange
+        var controllerType = typeof(StatusController);
+
+        // Act
+        var routeAttribute = controllerType.GetCustomAttribute<RouteAttribute>();
+
+        // Assert
+        routeAttribute.Should().NotBeNull("StatusController should have Route attribute");
+        routeAttribute!.Template.Should().Be("api/[controller]", "StatusController should use the correct API route template");
     }
 }

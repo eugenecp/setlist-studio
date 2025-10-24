@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using SetlistStudio.Infrastructure.Data;
 
 namespace SetlistStudio.Tests.Web;
@@ -31,6 +32,17 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 options.UseInMemoryDatabase("TestDatabase");
             });
 
+            // Configure antiforgery for testing - disable HTTPS requirement
+            services.AddAntiforgery(options =>
+            {
+                options.Cookie.Name = "SetlistStudio-CSRF-Test";
+                options.Cookie.SecurePolicy = CookieSecurePolicy.None; // Allow HTTP for testing
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax; // More permissive for testing
+                options.HeaderName = "X-CSRF-TOKEN";
+                options.SuppressXFrameOptionsHeader = true;
+            });
+
             // Configure logging for tests
             services.AddLogging(builder =>
             {
@@ -40,6 +52,6 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             });
         });
 
-        builder.UseEnvironment("Test");
+        builder.UseEnvironment("Testing");
     }
 }

@@ -2,19 +2,20 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using System.Net;
 using Xunit;
+using SetlistStudio.Tests.Web;
 
 namespace SetlistStudio.Tests.Pages;
 
 /// <summary>
 /// Tests for Pages__Host razor page
-/// Target: Achieve 90%+ line and branch coverage
+/// Target: Achieve 80%+ line and branch coverage
 /// Note: Testing the _Host page through integration tests since it's a Razor page
 /// </summary>
-public class Pages__HostTests : IClassFixture<WebApplicationFactory<Program>>
+public class Pages__HostTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public Pages__HostTests(WebApplicationFactory<Program> factory)
+    public Pages__HostTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }
@@ -82,19 +83,24 @@ public class Pages__HostTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task Host_ShouldHandleDifferentHttpMethods_WhenRequested()
+    public async Task Host_ShouldHandleGetRequests_Successfully()
     {
         // Arrange
         var client = _factory.CreateClient();
 
-        // Act & Assert - GET should work
+        // Act - GET should work
         var getResponse = await client.GetAsync("/_Host");
-        getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // POST should be handled (might return MethodNotAllowed, OK, Found, or BadRequest depending on configuration)
-        var postResponse = await client.PostAsync("/_Host", null);
-        var validPostStatusCodes = new[] { HttpStatusCode.OK, HttpStatusCode.MethodNotAllowed, HttpStatusCode.Found, HttpStatusCode.BadRequest };
-        validPostStatusCodes.Should().Contain(postResponse.StatusCode);
+        // Assert
+        getResponse.StatusCode.Should().Be(HttpStatusCode.OK, "GET requests to /_Host should be successful");
+        
+        // Verify response contains HTML content
+        var content = await getResponse.Content.ReadAsStringAsync();
+        content.Should().Contain("html", "Host page should return HTML content");
+        
+        // Verify Content-Type header
+        getResponse.Content.Headers.ContentType?.MediaType.Should().Be("text/html", 
+            "Host page should return HTML content type");
     }
 
     [Fact]

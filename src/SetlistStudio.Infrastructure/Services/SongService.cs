@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
+using System.Text;
 
 namespace SetlistStudio.Infrastructure.Services;
 
@@ -14,11 +16,13 @@ public class SongService : ISongService
 {
     private readonly SetlistStudioDbContext _context;
     private readonly ILogger<SongService> _logger;
+    private readonly IAuditLogService _auditLogService;
 
-    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger)
+    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger, IAuditLogService auditLogService)
     {
         _context = context;
         _logger = logger;
+        _auditLogService = auditLogService;
     }
 
     public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
@@ -64,14 +68,28 @@ public class SongService : ISongService
                 .Take(pageSize)
                 .ToListAsync();
 
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogInformation("Retrieved {Count} songs for user {UserId} (page {Page})", 
-                songs.Count, userId, pageNumber);
+                songs.Count, sanitizedUserId, pageNumber);
 
             return (songs, totalCount);
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error retrieving songs for user {UserId}", userId);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving songs for user {UserId}", sanitizedUserId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid argument retrieving songs for user {UserId}", sanitizedUserId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving songs for user {UserId}", sanitizedUserId);
             throw;
         }
     }
@@ -85,14 +103,28 @@ public class SongService : ISongService
 
             if (song != null)
             {
-                _logger.LogInformation("Retrieved song {SongId} for user {UserId}", songId, userId);
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogInformation("Retrieved song {SongId} for user {UserId}", songId, sanitizedUserId);
             }
 
             return song;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error retrieving song {SongId} for user {UserId}", songId, userId);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving song {SongId} for user {UserId}", songId, sanitizedUserId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid argument retrieving song {SongId} for user {UserId}", songId, sanitizedUserId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving song {SongId} for user {UserId}", songId, sanitizedUserId);
             throw;
         }
     }
@@ -104,7 +136,16 @@ public class SongService : ISongService
             var validationErrors = ValidateSong(song);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             song.CreatedAt = DateTime.UtcNow;
@@ -113,15 +154,48 @@ public class SongService : ISongService
             _context.Songs.Add(song);
             await _context.SaveChangesAsync();
 
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
             _logger?.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
-                song.Id, song.Title, song.Artist, song.UserId);
+                song.Id, sanitizedTitle, sanitizedArtist, sanitizedUserId);
+
+            // Log audit trail for song creation
+            await _auditLogService.LogAuditAsync(
+                "CREATE",
+                nameof(Song),
+                song.Id.ToString(),
+                song.UserId,
+                new { song.Title, song.Artist, song.Album, song.Genre, song.Bpm, song.MusicalKey }
+            );
 
             return song;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger?.LogError(ex, "Error creating song '{Title}' by '{Artist}' for user {UserId}", 
-                song.Title, song.Artist, song.UserId);
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
+            _logger?.LogError(ex, "Database error creating song '{Title}' by '{Artist}' for user {UserId}", 
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
+            _logger?.LogError(ex, "Invalid argument creating song '{Title}' by '{Artist}' for user {UserId}", 
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
+            _logger?.LogError(ex, "Invalid operation creating song '{Title}' by '{Artist}' for user {UserId}", 
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
             throw;
         }
     }
@@ -135,14 +209,24 @@ public class SongService : ISongService
 
             if (existingSong == null)
             {
-                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", song.Id, userId);
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", song.Id, sanitizedUserId);
                 return null;
             }
 
             var validationErrors = ValidateSong(song);
             if (validationErrors.Any())
             {
-                throw new ArgumentException($"Validation failed: {string.Join(", ", validationErrors)}");
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
             }
 
             // Update properties
@@ -158,15 +242,59 @@ public class SongService : ISongService
             existingSong.DifficultyRating = song.DifficultyRating;
             existingSong.UpdatedAt = DateTime.UtcNow;
 
+            // Capture new values for audit logging
+            var newValues = new 
+            { 
+                existingSong.Title, 
+                existingSong.Artist, 
+                existingSong.Album, 
+                existingSong.Genre, 
+                existingSong.Bpm, 
+                existingSong.MusicalKey,
+                existingSong.DurationSeconds,
+                existingSong.Notes,
+                existingSong.Tags,
+                existingSong.DifficultyRating
+            };
+
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Updated song {SongId} for user {UserId}", song.Id, userId);
+            var sanitizedUserIdForLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogInformation("Updated song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog);
+
+            // Log audit trail for song update
+            await _auditLogService.LogAuditAsync(
+                "UPDATE",
+                nameof(Song),
+                song.Id.ToString(),
+                userId,
+                newValues
+            );
 
             return existingSong;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error updating song {SongId} for user {UserId}", song.Id, userId);
+            var sanitizedUserIdForLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Concurrency error updating song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog2);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            var sanitizedUserIdForLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error updating song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog2);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserIdForLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid argument updating song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog2);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserIdForLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation updating song {SongId} for user {UserId}", song.Id, sanitizedUserIdForLog2);
             throw;
         }
     }
@@ -180,21 +308,62 @@ public class SongService : ISongService
 
             if (song == null)
             {
-                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", songId, userId);
+                var sanitizedUserIdForDeleteLog = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", songId, sanitizedUserIdForDeleteLog);
                 return false;
             }
+
+            // Capture values for audit logging before deletion
+            var deletedValues = new 
+            { 
+                song.Title, 
+                song.Artist, 
+                song.Album, 
+                song.Genre, 
+                song.Bpm, 
+                song.MusicalKey,
+                song.DurationSeconds,
+                song.Notes,
+                song.Tags,
+                song.DifficultyRating,
+                song.CreatedAt
+            };
 
             _context.Songs.Remove(song);
             await _context.SaveChangesAsync();
 
+            var sanitizedUserIdForDeleteLog2 = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
             _logger.LogInformation("Deleted song {SongId} '{Title}' for user {UserId}", 
-                songId, song.Title, userId);
+                songId, sanitizedTitle, sanitizedUserIdForDeleteLog2);
+
+            // Log audit trail for song deletion
+            await _auditLogService.LogAuditAsync(
+                "DELETE",
+                nameof(Song),
+                songId.ToString(),
+                userId,
+                deletedValues
+            );
 
             return true;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
         {
-            _logger.LogError(ex, "Error deleting song {SongId} for user {UserId}", songId, userId);
+            var sanitizedUserIdForDeleteLog3 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Concurrency error deleting song {SongId} for user {UserId}", songId, sanitizedUserIdForDeleteLog3);
+            throw;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            var sanitizedUserIdForDeleteLog3 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error deleting song {SongId} for user {UserId}", songId, sanitizedUserIdForDeleteLog3);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserIdForDeleteLog3 = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation deleting song {SongId} for user {UserId}", songId, sanitizedUserIdForDeleteLog3);
             throw;
         }
     }
@@ -212,9 +381,16 @@ public class SongService : ISongService
 
             return genres;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error retrieving genres for user {UserId}", userId);
+            var sanitizedUserIdForGenreLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving genres for user {UserId}", sanitizedUserIdForGenreLog);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserIdForGenreLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving genres for user {UserId}", sanitizedUserIdForGenreLog);
             throw;
         }
     }
@@ -239,9 +415,16 @@ public class SongService : ISongService
 
             return tags;
         }
-        catch (Exception ex)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            _logger.LogError(ex, "Error retrieving tags for user {UserId}", userId);
+            var sanitizedUserIdForTagLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving tags for user {UserId}", sanitizedUserIdForTagLog);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserIdForTagLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving tags for user {UserId}", sanitizedUserIdForTagLog);
             throw;
         }
     }

@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Infrastructure.Data;
 
 namespace SetlistStudio.Web.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("api/[controller]")]
 [AllowAnonymous]
+[EnableRateLimiting("ApiPolicy")]
 public class HealthController : ControllerBase
 {
     private readonly ILogger<HealthController> _logger;
@@ -65,10 +67,21 @@ public class HealthController : ControllerBase
             await _context.Database.CanConnectAsync();
             return "Connected";
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Database configuration invalid during health check");
+            return "Database configuration error";
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Database connection timeout during health check");
+            return "Database connection timeout";
+        }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Database health check failed");
-            return $"Error: {ex.Message}";
+            _logger.LogWarning(ex, "Unexpected error during database health check");
+            return "Database connection failed";
         }
     }
 }

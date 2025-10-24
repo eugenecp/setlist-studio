@@ -112,8 +112,9 @@ To enable social login, configure OAuth providers:
 
 ### Environment Variables
 
+#### Development Configuration
 ```bash
-# OAuth Configuration
+# OAuth Configuration (Development)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 MICROSOFT_CLIENT_ID=your_microsoft_client_id  
@@ -127,6 +128,29 @@ CONNECTION_STRING=Data Source=setliststudio.db
 # Environment
 ASPNETCORE_ENVIRONMENT=Development
 ```
+
+#### Production Configuration with Azure Key Vault
+
+For production deployments, OAuth secrets are securely stored in Azure Key Vault:
+
+```bash
+# Azure Key Vault Configuration
+KeyVault__VaultName=your_keyvault_name
+
+# Azure Authentication (Managed Identity recommended)
+AZURE_CLIENT_ID=your_managed_identity_client_id
+```
+
+**📖 Production OAuth Setup**: 
+- **[Azure Key Vault Setup Guide](docs/azure-keyvault-setup.md)** - Complete step-by-step setup instructions
+- **[OAuth Configuration Summary](docs/azure-keyvault-oauth-summary.md)** - Implementation overview and deployment workflow
+
+Includes:
+- Creating and configuring Azure Key Vault
+- Deploying OAuth secrets securely with automated scripts
+- Setting up managed identity authentication
+- GitHub Actions CI/CD integration
+- Security best practices and troubleshooting
 
 ## 🧪 Testing
 

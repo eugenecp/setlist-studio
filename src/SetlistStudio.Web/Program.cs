@@ -1,24 +1,97 @@
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
+using System.Text;
 using Serilog;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Web.Services;
+using SetlistStudio.Web.Middleware;
+using System.Threading.RateLimiting;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-// Configure Serilog
+// Configure Serilog with secure logging and data filtering
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("logs/setlist-studio-.txt", rollingInterval: RollingInterval.Day)
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", Serilog.Events.LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "SetlistStudio")
+    .Enrich.WithProperty("Environment", Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development")
+    .Filter.ByExcluding(logEvent =>
+    {
+        // Filter out potentially sensitive log messages
+        var message = logEvent.RenderMessage();
+        return SecureLoggingHelper.SensitivePatterns.Any(pattern => pattern.IsMatch(message));
+    })
+    .WriteTo.Console(outputTemplate: 
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File("logs/setlist-studio-.txt", 
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}",
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information)
+    .WriteTo.File("logs/security/security-.txt",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 90,
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Warning)
     .CreateLogger();
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // SECURITY: Configure Docker secrets for containerized deployments
+    var useDockerSecrets = builder.Configuration.GetValue<bool>("USE_DOCKER_SECRETS", false);
+    if (useDockerSecrets)
+    {
+        ConfigureDockerSecrets(builder.Configuration);
+        Log.Information("Docker secrets configuration enabled");
+    }
+
+    // SECURITY: Configure Azure Key Vault for production secrets management
+    if (!builder.Environment.IsDevelopment())
+    {
+        var keyVaultName = builder.Configuration["KeyVault:VaultName"];
+        if (!string.IsNullOrEmpty(keyVaultName))
+        {
+            // Validate Key Vault name to prevent URL injection
+            if (!System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$"))
+            {
+                Log.Warning("Invalid Azure Key Vault name format: {KeyVaultName}", keyVaultName);
+                throw new InvalidOperationException("Invalid Azure Key Vault name format");
+            }
+            
+            try
+            {
+                var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+                var secretClient = new SecretClient(keyVaultUri, new DefaultAzureCredential());
+                builder.Configuration.AddAzureKeyVault(secretClient, new KeyVaultSecretManager());
+                Log.Information("Azure Key Vault configured: {KeyVaultUri}", keyVaultUri);
+            }
+            // CodeQL[cs/catch-of-all-exceptions] - Application startup configuration handling
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
+            }
+        }
+        else if (!builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Azure Key Vault name not configured for non-development environment");
+        }
+    }
 
     // Add Serilog
     builder.Host.UseSerilog();
@@ -29,7 +102,30 @@ try
     // Add services to the container
     builder.Services.AddRazorPages();
     builder.Services.AddServerSideBlazor();
-    builder.Services.AddControllers(); // Add API controllers support
+    builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Configure JSON serialization for API controllers
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.WriteIndented = false;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    }); // Add API controllers support
+    
+    // Configure custom input formatters for CSP reports
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
+    {
+        // Add support for application/csp-report content type
+        var jsonInputFormatter = options.InputFormatters
+            .OfType<Microsoft.AspNetCore.Mvc.Formatters.SystemTextJsonInputFormatter>()
+            .FirstOrDefault();
+        if (jsonInputFormatter != null)
+        {
+            jsonInputFormatter.SupportedMediaTypes.Add("application/csp-report");
+        }
+    });
+    
+    builder.Services.AddHttpContextAccessor(); // Required for audit logging
 
     // Add MudBlazor services for Material Design components
     builder.Services.AddMudServices(config =>
@@ -44,6 +140,91 @@ try
         config.SnackbarConfiguration.SnackbarVariant = MudBlazor.Variant.Filled;
     });
 
+    // SECURITY: Configure CORS with restrictive policy for production security
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("RestrictivePolicy", policy =>
+        {
+            var environment = builder.Environment.EnvironmentName;
+            
+            if (environment == "Production")
+            {
+                // Production: Only allow specific trusted domains
+                policy.WithOrigins(
+                    "https://setliststudio.com",
+                    "https://www.setliststudio.com",
+                    "https://api.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+            else if (environment == "Development")
+            {
+                // Development: Allow any origin for testing purposes
+                policy.AllowAnyOrigin()
+                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
+            else
+            {
+                // Test/Staging: More restrictive than development but not production
+                policy.WithOrigins(
+                    "https://staging.setliststudio.com",
+                    "https://test.setliststudio.com",
+                    "https://preview.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+        });
+
+        // Add a more restrictive policy for API endpoints
+        options.AddPolicy("ApiPolicy", policy =>
+        {
+            var environment = builder.Environment.EnvironmentName;
+            
+            if (environment == "Production")
+            {
+                policy.WithOrigins(
+                    "https://setliststudio.com",
+                    "https://www.setliststudio.com",
+                    "https://api.setliststudio.com"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                .WithHeaders("Content-Type", "Authorization")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+            }
+            else if (environment == "Development")
+            {
+                // Development: Allow any origin for testing purposes
+                policy.AllowAnyOrigin()
+                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
+            else
+            {
+                // Test/Staging: Allow specific localhost origins
+                policy.WithOrigins(
+                    "https://localhost:5001",
+                    "http://localhost:5000",
+                    "https://localhost:7000",
+                    "http://localhost:8000"
+                )
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                .WithHeaders("Content-Type", "Authorization")
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+            }
+        });
+    });
+
     // Configure database
     builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
     {
@@ -54,18 +235,18 @@ try
     // Configure Identity
     builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
     {
-        // Password settings (relaxed for demo purposes)
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequiredLength = 6;
-        options.Password.RequiredUniqueChars = 1;
+        // SECURITY: Strong password requirements for production security
+        options.Password.RequireDigit = true;              // Require at least one digit (0-9)
+        options.Password.RequireLowercase = true;          // Require at least one lowercase letter (a-z)
+        options.Password.RequireNonAlphanumeric = true;    // Require at least one special character (!@#$%^&* etc.)
+        options.Password.RequireUppercase = true;          // Require at least one uppercase letter (A-Z)
+        options.Password.RequiredLength = 12;              // Minimum 12 characters for strong security
+        options.Password.RequiredUniqueChars = 4;          // Require at least 4 unique characters
 
-        // Lockout settings
-        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-        options.Lockout.MaxFailedAccessAttempts = 5;
-        options.Lockout.AllowedForNewUsers = true;
+        // SECURITY: Account lockout protection against brute force attacks
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);  // Lock for 5 minutes
+        options.Lockout.MaxFailedAccessAttempts = 5;                       // Lock after 5 failed attempts
+        options.Lockout.AllowedForNewUsers = true;                         // Apply lockout to new users
 
         // User settings
         options.User.AllowedUserNameCharacters = 
@@ -85,6 +266,301 @@ try
     // Register application services
     builder.Services.AddScoped<ISongService, SongService>();
     builder.Services.AddScoped<ISetlistService, SetlistService>();
+    
+    // Register CSP nonce service for enhanced Content Security Policy
+    builder.Services.AddCspNonce();
+    
+    // Register security services
+    builder.Services.AddScoped<SecretValidationService>();
+    builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+    
+    // Register enhanced authorization services for comprehensive resource-based security
+    builder.Services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
+    
+    // Register security logging services for centralized security event management
+    builder.Services.AddScoped<SecurityEventLogger>();
+    builder.Services.AddScoped<SetlistStudio.Web.Security.SecurityEventHandler>();
+    builder.Services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
+    
+    // Register security metrics service as singleton for centralized metrics collection
+    builder.Services.AddSingleton<ISecurityMetricsService, SecurityMetricsService>();
+
+    // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
+    builder.Services.AddAntiforgery(options =>
+    {
+        // Detect if we're in a test environment (testing framework creates in-memory test server)
+        var isTestEnvironment = builder.Environment.IsDevelopment() || 
+                               builder.Environment.EnvironmentName == "Testing" ||
+                               // Additional test context detection for integration tests
+                               AppDomain.CurrentDomain.GetAssemblies()
+                                   .Any(a => a.FullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
+                                           a.FullName?.Contains("xunit") == true);
+        
+        // Use secure cookie names with __Host- prefix for enhanced security in production
+        if (isTestEnvironment)
+        {
+            options.Cookie.Name = "SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
+        }
+        else
+        {
+            options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
+        }
+        
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
+        
+        // Custom header name for AJAX requests
+        options.HeaderName = "X-CSRF-TOKEN";
+        
+        // Suppress xframe options (already handled by security headers middleware)
+        options.SuppressXFrameOptionsHeader = true;
+    });
+
+    // SECURITY: Configure secure session and cookie settings
+    builder.Services.ConfigureApplicationCookie(options =>
+    {
+        // Session timeout and expiration settings
+        options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
+        options.SlidingExpiration = true; // Reset timeout on user activity
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? "__Host-SetlistStudio-Identity"
+            : "SetlistStudio-Identity";
+        
+        // Secure cookie configuration
+        options.Cookie.HttpOnly = true; // Prevent JavaScript access
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? CookieSecurePolicy.Always // HTTPS only in production
+            : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
+        options.Cookie.IsEssential = true; // Required for GDPR compliance
+        
+        // Session invalidation settings
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            // Validate security stamp to invalidate sessions on password change
+            var securityStampValidator = context.HttpContext.RequestServices
+                .GetRequiredService<ISecurityStampValidator>();
+            await securityStampValidator.ValidateAsync(context);
+        };
+        
+        // SECURITY: Configure proper API authentication behavior
+        options.Events.OnRedirectToLogin = context =>
+        {
+            // For API requests, return 401 instead of redirecting to login page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to login page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            // For API requests, return 403 instead of redirecting to access denied page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to access denied page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        
+        // Login/logout paths
+        options.LoginPath = "/Identity/Account/Login";
+        options.LogoutPath = "/Identity/Account/Logout";
+        options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+    });
+
+    // Configure session state with secure settings
+    builder.Services.AddSession(options =>
+    {
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging() 
+            ? "__Host-SetlistStudio-Session" 
+            : "SetlistStudio-Session";
+        options.Cookie.HttpOnly = true;
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.IsEssential = true;
+        options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
+    });
+
+    // Configure data protection with secure settings
+    builder.Services.AddDataProtection(options =>
+    {
+        options.ApplicationDiscriminator = "SetlistStudio";
+    })
+    .SetApplicationName("SetlistStudio")
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.GetFullPath(Path.Join(builder.Environment.ContentRootPath, "DataProtection-Keys"))))
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
+
+    // Configure Enhanced Rate Limiting - CRITICAL SECURITY ENHANCEMENT
+    builder.Services.AddSingleton<IEnhancedRateLimitingService, EnhancedRateLimitingService>();
+    
+    builder.Services.AddRateLimiter(options =>
+    {
+        // Environment-specific rate limiting configuration
+        var rateLimitConfig = Program.GetRateLimitConfiguration(builder.Environment);
+        
+        // Global rate limiter - applies to all endpoints unless overridden
+        // Uses enhanced partitioning for better security with environment-specific limits
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var rateLimitingService = httpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(httpContext).Result ?? GetSafePartitionKey(httpContext);
+            
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: partitionKey,
+                factory: partition => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = rateLimitConfig.GlobalLimit,
+                    Window = rateLimitConfig.Window
+                });
+        });
+
+        // API endpoints - environment-specific limits
+        options.AddFixedWindowLimiter("ApiPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.ApiLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.ApiQueueLimit;
+        });
+
+        // Enhanced API policy for authenticated users
+        options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
+        });
+
+        // Authentication endpoints - strict limits to prevent brute force
+        options.AddFixedWindowLimiter("AuthPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthQueueLimit;
+        });
+
+        // Authenticated users - higher limits
+        options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
+        });
+
+        // Strict policy for sensitive operations
+        options.AddFixedWindowLimiter("StrictPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.StrictLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.StrictQueueLimit;
+        });
+
+        // Sensitive operations - enhanced security
+        options.AddFixedWindowLimiter("SensitivePolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.SensitiveLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
+        });
+
+        // Configure rejection response with enhanced logging
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            
+            // Enhanced logging with security context
+            var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+            var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
+            
+            var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
+            logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
+                sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
+
+            // Record the violation for enhanced monitoring
+            if (rateLimitingService != null)
+            {
+                await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
+            }
+
+            // Return appropriate response based on request type
+            if (IsApiRequest(context.HttpContext))
+            {
+                context.HttpContext.Response.ContentType = "application/json";
+                var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    error = "rate_limit_exceeded",
+                    message = "Rate limit exceeded. Please try again later.",
+                    retry_after = 60
+                });
+                await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
+            }
+            else
+            {
+                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+            }
+        };
+    });
+
+    // SECURITY: Configure production security settings
+    if (!builder.Environment.IsDevelopment())
+    {
+        // Configure forwarded headers for reverse proxy scenarios
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor 
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+            
+            // Clear default known networks and proxies for security
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
+
+        // Configure data protection for production
+        builder.Services.AddDataProtection();
+
+        // Configure HSTS for production
+        builder.Services.AddHsts(options =>
+        {
+            options.Preload = true;
+            options.IncludeSubDomains = true;
+            options.MaxAge = TimeSpan.FromDays(365);
+        });
+    }
 
     // Configure localization
     builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
@@ -98,6 +574,12 @@ try
 
     var app = builder.Build();
 
+    // SECURITY: Configure forwarded headers for production reverse proxy scenarios
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseForwardedHeaders();
+    }
+
     // Configure the HTTP request pipeline
     if (!app.Environment.IsDevelopment())
     {
@@ -105,10 +587,134 @@ try
         app.UseHsts();
     }
 
-    app.UseHttpsRedirection();
+    // Only use HTTPS redirection if not in test environment
+    if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseHttpsRedirection();
+    }
+    
+    // Security Headers Middleware - CRITICAL SECURITY ENHANCEMENT
+    app.Use(async (context, next) =>
+    {
+        // Prevent MIME type sniffing attacks
+        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        
+        // Prevent clickjacking attacks
+        context.Response.Headers.Append("X-Frame-Options", "DENY");
+        
+        // Enable XSS protection (legacy browsers)
+        context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+        
+        // Referrer policy for privacy protection
+        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+        
+        // Content Security Policy - enhanced with nonce-based security
+        var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
+        var cspPolicyBuilder = new StringBuilder();
+        cspPolicyBuilder.Append("default-src 'self'; ");
+        
+        // Get nonces from the current request context
+        var scriptNonce = context.Items["ScriptNonce"]?.ToString();
+        var styleNonce = context.Items["StyleNonce"]?.ToString();
+        
+        // Enhanced script-src with nonce fallback
+        if (!string.IsNullOrEmpty(scriptNonce))
+        {
+            cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
+        }
+        
+        // Enhanced style-src with nonce fallback
+        if (!string.IsNullOrEmpty(styleNonce))
+        {
+            cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
+        }
+        
+        cspPolicyBuilder.Append("img-src 'self' data: https:; ");
+        cspPolicyBuilder.Append("font-src 'self'; ");
+        cspPolicyBuilder.Append("connect-src 'self'; ");
+        cspPolicyBuilder.Append("frame-ancestors 'none'; ");
+        cspPolicyBuilder.Append("base-uri 'self'; ");
+        cspPolicyBuilder.Append("form-action 'self'");
+        
+        // Add CSP violation reporting if enabled
+        if (cspReportingEnabled)
+        {
+            cspPolicyBuilder.Append("; report-uri /api/cspreport/report");
+        }
+        
+        var cspPolicy = cspPolicyBuilder.ToString();
+        
+        context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
+        
+        // Permissions Policy - disable unnecessary browser features
+        context.Response.Headers.Append("Permissions-Policy", 
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+        
+        // HSTS - only in production and when using HTTPS
+        if (!context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() && 
+            context.Request.IsHttps)
+        {
+            context.Response.Headers.Append("Strict-Transport-Security", 
+                "max-age=31536000; includeSubDomains; preload");
+        }
+        
+        await next();
+    });
+    
+    // CSP Nonce Middleware - Generate nonces for enhanced Content Security Policy
+    app.UseCspNonce();
+    
+    // Rate Limiting Headers Middleware - Environment-specific configuration
+    var enableRateLimiting = Program.ShouldEnableRateLimiting(app.Environment);
+    if (enableRateLimiting)
+    {
+        app.UseRateLimitHeaders();
+        
+        // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT with environment-specific limits
+        app.UseRateLimiter();
+        
+        var rateLimitConfig = Program.GetRateLimitConfiguration(app.Environment);
+        Log.Information("Rate limiting enabled with {Environment} configuration: Global={GlobalLimit}, API={ApiLimit}, Auth={AuthLimit}", 
+            app.Environment.EnvironmentName, rateLimitConfig.GlobalLimit, rateLimitConfig.ApiLimit, rateLimitConfig.AuthLimit);
+    }
+    else
+    {
+        Log.Information("Rate limiting disabled for {Environment} environment", app.Environment.EnvironmentName);
+    }
+    
+    // CAPTCHA Middleware - Prevent automated attacks and rate limit bypass
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseCaptchaMiddleware();
+    }
+    
+    // Security Event Logging Middleware - Monitor and log security events (disabled in test environment)
+    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseMiddleware<SetlistStudio.Web.Middleware.SecurityEventMiddleware>();
+    }
+    
     app.UseStaticFiles();
 
     app.UseRouting();
+
+    // SECURITY: Enable CORS with restrictive policy
+    app.UseCors("RestrictivePolicy");
+
+    // SECURITY: Enable secure session management
+    app.UseSession();
 
     // Add localization
     app.UseRequestLocalization();
@@ -123,6 +729,9 @@ try
     app.MapBlazorHub();
     app.MapFallbackToPage("/_Host");
 
+    // SECURITY: Validate production secrets before starting application
+    await ValidateSecretsAsync(app);
+
     // Initialize database
     await InitializeDatabaseAsync(app);
 
@@ -133,6 +742,7 @@ try
     
     app.Run();
 }
+// CodeQL[cs/catch-of-all-exceptions] - Top-level application exception handler
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
@@ -194,7 +804,7 @@ static void HandleDatabaseInitializationError(IWebHostEnvironment environment, E
 }
 
 /// <summary>
-/// Gets the database connection string, using environment-specific defaults if none configured
+/// Gets the database connection string, using secure environment-specific defaults if none configured
 /// </summary>
 static string GetDatabaseConnectionString(IConfiguration configuration)
 {
@@ -211,9 +821,45 @@ static string GetDatabaseConnectionString(IConfiguration configuration)
         }
         else
         {
-            connectionString = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
-                ? "Data Source=/app/data/setliststudio.db"
-                : "Data Source=setliststudio.db";
+            // SECURITY: Use secure database path validation to prevent path traversal attacks
+            var isContainerized = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+            
+            try
+            {
+                // Check if a custom database path is configured
+                var customPath = configuration["DatabasePath"];
+                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized, customPath);
+                
+                Log.Information("Database connection configured with secure path validation. Container: {IsContainerized}", isContainerized);
+            }
+            catch (ArgumentException ex)
+            {
+                Log.Error(ex, "Invalid database path configuration detected. Using secure defaults.");
+                
+                // Fall back to secure defaults without custom path
+                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized);
+            }
+        }
+    }
+    else
+    {
+        // SECURITY: Validate configured connection string for path traversal vulnerabilities
+        if (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
+        {
+            var dataSourcePrefix = "Data Source=";
+            var pathPart = connectionString.Substring(dataSourcePrefix.Length).Split(';')[0];
+            
+            // Skip validation for special SQLite paths
+            if (pathPart != ":memory:" && !DatabasePathValidator.IsSecurePath(pathPart))
+            {
+                Log.Warning("Configured database connection string contains potentially insecure path: {PathPart}", pathPart);
+                
+                // Fall back to secure defaults
+                var isContainerized = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+                connectionString = DatabasePathValidator.GetSecureDatabaseConnectionString(isContainerized);
+                
+                Log.Information("Using secure default database path due to validation failure");
+            }
         }
     }
     
@@ -222,6 +868,7 @@ static string GetDatabaseConnectionString(IConfiguration configuration)
 
 /// <summary>
 /// Configures the database provider based on the connection string format
+/// SECURITY: Enforces encryption for SQL Server connections to prevent man-in-the-middle attacks
 /// </summary>
 static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
 {
@@ -232,8 +879,56 @@ static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string co
     }
     else
     {
-        // SQL Server connection string
-        options.UseSqlServer(connectionString);
+        // SQL Server connection string - SECURITY: Enforce encryption
+        var secureConnectionString = EnsureSqlServerConnectionSecurity(connectionString);
+        options.UseSqlServer(secureConnectionString);
+    }
+}
+
+/// <summary>
+/// Ensures SQL Server connection strings have proper security settings
+/// SECURITY: Adds encryption and certificate validation to prevent credential interception
+/// </summary>
+static string EnsureSqlServerConnectionSecurity(string connectionString)
+{
+    try
+    {
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+        
+        // SECURITY: Force encryption for all SQL Server connections
+        if (!builder.ContainsKey("Encrypt") || !builder.Encrypt)
+        {
+            builder.Encrypt = true;
+            Log.Information("Added encryption enforcement to SQL Server connection string");
+        }
+        
+        // SECURITY: Validate server certificates in production
+        // Allow self-signed certificates only in development/testing environments
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase);
+        
+        if (!builder.ContainsKey("TrustServerCertificate"))
+        {
+            // In production, validate certificates; in development, allow self-signed
+            builder.TrustServerCertificate = isDevelopment;
+            Log.Information("Set certificate validation policy for {Environment} environment: TrustServerCertificate={TrustCertificate}", 
+                environment, builder.TrustServerCertificate);
+        }
+        
+        // SECURITY: Set connection timeout to prevent indefinite hangs
+        if (builder.ConnectTimeout == 0)
+        {
+            builder.ConnectTimeout = 30; // 30 second timeout
+        }
+        
+        return builder.ConnectionString;
+    }
+    catch (ArgumentException ex)
+    {
+        // If connection string parsing fails, log warning and return original
+        Log.Warning(ex, "Failed to parse SQL Server connection string for security enhancement. Using original connection string.");
+        return connectionString;
     }
 }
 
@@ -269,6 +964,7 @@ static void ConfigureGoogleAuthentication(AuthenticationBuilder authBuilder, ICo
             });
             Log.Information("Google authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Google authentication");
@@ -302,6 +998,7 @@ static void ConfigureMicrosoftAuthentication(AuthenticationBuilder authBuilder, 
             });
             Log.Information("Microsoft authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Microsoft authentication");
@@ -335,6 +1032,7 @@ static void ConfigureFacebookAuthentication(AuthenticationBuilder authBuilder, I
             });
             Log.Information("Facebook authentication configured successfully");
         }
+        // CodeQL[cs/catch-of-all-exceptions] - OAuth provider configuration handling
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to configure Facebook authentication");
@@ -378,6 +1076,7 @@ static async Task SeedDevelopmentDataAsync(SetlistStudioDbContext context, IServ
 
         Log.Information("Sample data seeded successfully");
     }
+    // CodeQL[cs/catch-of-all-exceptions] - Development data seeding error handling
     catch (Exception ex)
     {
         Log.Error(ex, "Failed to seed development data");
@@ -399,10 +1098,18 @@ static async Task<ApplicationUser?> CreateDemoUserAsync(UserManager<ApplicationU
         CreatedAt = DateTime.UtcNow
     };
 
-    var result = await userManager.CreateAsync(demoUser, "Demo123!");
+    var result = await userManager.CreateAsync(demoUser, "DemoUser123456!");
     if (!result.Succeeded)
     {
-        Log.Warning("Failed to create demo user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+        var errorsBuilder = new StringBuilder();
+        bool first = true;
+        foreach (var error in result.Errors)
+        {
+            if (!first) errorsBuilder.Append(", ");
+            errorsBuilder.Append(error.Description);
+            first = false;
+        }
+        Log.Warning("Failed to create demo user: {Errors}", errorsBuilder.ToString());
         return null;
     }
 
@@ -519,5 +1226,255 @@ static int GetSongId(Dictionary<string, Song> songByTitle, string title)
         : throw new InvalidOperationException($"Song '{title}' not found in sample data");
 }
 
+/// <summary>
+/// Validates that all required secrets are properly configured for the current environment
+/// </summary>
+static Task ValidateSecretsAsync(WebApplication app)
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var secretValidationService = scope.ServiceProvider.GetRequiredService<SecretValidationService>();
+        
+        // Validate secrets and throw exception if critical secrets are missing
+        secretValidationService.ValidateSecretsOrThrow();
+        
+        Log.Information("Secret validation completed successfully for environment: {Environment}", 
+            app.Environment.EnvironmentName);
+            
+        return Task.CompletedTask;
+    }
+    // CodeQL[cs/catch-of-all-exceptions] - Application startup secret validation
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Secret validation failed for environment: {Environment}", app.Environment.EnvironmentName);
+        throw;
+    }
+}
+
+/// <summary>
+/// Gets a safe partition key for rate limiting, avoiding null reference issues
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>A safe partition key string</returns>
+static string GetSafePartitionKey(HttpContext httpContext)
+{
+    var userIdentity = httpContext.User?.Identity;
+    if (userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name))
+    {
+        return userIdentity.Name;
+    }
+    
+    var remoteIp = httpContext.Connection?.RemoteIpAddress?.ToString();
+    return remoteIp ?? "anonymous";
+}
+
+static string GetClientIpAddress(HttpContext httpContext)
+{
+    // Try to get real IP from forwarded headers (for reverse proxy scenarios)
+    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedFor))
+    {
+        var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        return ips[0].Trim(); // First IP is the original client
+    }
+
+    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(realIp))
+    {
+        return realIp;
+    }
+
+    return httpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+}
+
+static bool IsApiRequest(HttpContext httpContext)
+{
+    var path = httpContext.Request.Path.Value?.ToLowerInvariant();
+    var acceptHeader = httpContext.Request.Headers.Accept.ToString();
+    
+    return path?.StartsWith("/api/") == true || 
+           acceptHeader.Contains("application/json") ||
+           httpContext.Request.Headers.ContainsKey("X-Requested-With");
+}
+
+/// <summary>
+/// Configures OAuth secrets from Docker secrets files when running in containerized environment
+/// </summary>
+/// <param name="configuration">The configuration builder to add secrets to</param>
+static void ConfigureDockerSecrets(IConfiguration configuration)
+{
+    const string secretsPath = "/run/secrets";
+    
+    if (!Directory.Exists(secretsPath))
+    {
+        Log.Warning("Docker secrets directory not found: {SecretsPath}", secretsPath);
+        return;
+    }
+
+    var secretMappings = new Dictionary<string, string>
+    {
+        { "setliststudio_google_client_id", "Authentication:Google:ClientId" },
+        { "setliststudio_google_client_secret", "Authentication:Google:ClientSecret" },
+        { "setliststudio_microsoft_client_id", "Authentication:Microsoft:ClientId" },
+        { "setliststudio_microsoft_client_secret", "Authentication:Microsoft:ClientSecret" },
+        { "setliststudio_facebook_app_id", "Authentication:Facebook:AppId" },
+        { "setliststudio_facebook_app_secret", "Authentication:Facebook:AppSecret" }
+    };
+
+    var secretValues = new Dictionary<string, string?>();
+
+    foreach (var (secretFile, configKey) in secretMappings)
+    {
+        var secretFilePath = Path.Combine(secretsPath, secretFile);
+        
+        if (File.Exists(secretFilePath))
+        {
+            try
+            {
+                var secretValue = File.ReadAllText(secretFilePath).Trim();
+                if (!string.IsNullOrEmpty(secretValue) && !secretValue.StartsWith("PLACEHOLDER_"))
+                {
+                    secretValues[configKey] = secretValue;
+                    Log.Information("Loaded Docker secret: {ConfigKey}", configKey);
+                }
+                else
+                {
+                    Log.Warning("Docker secret contains placeholder value: {SecretFile}", secretFile);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to read Docker secret: {SecretFile}", secretFile);
+            }
+        }
+        else
+        {
+            Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
+        }
+    }
+
+    // Add secrets to configuration if any were loaded
+    if (secretValues.Count > 0)
+    {
+        ((IConfigurationBuilder)configuration).AddInMemoryCollection(secretValues);
+        Log.Information("Added {Count} Docker secrets to configuration", secretValues.Count);
+    }
+}
+
+/// <summary>
+/// Rate limiting configuration for different environments
+/// </summary>
+public record RateLimitConfiguration
+{
+    public int GlobalLimit { get; init; }
+    public int ApiLimit { get; init; }
+    public int AuthenticatedApiLimit { get; init; }
+    public int AuthLimit { get; init; }
+    public int AuthenticatedLimit { get; init; }
+    public int StrictLimit { get; init; }
+    public int SensitiveLimit { get; init; }
+    public int ApiQueueLimit { get; init; }
+    public int AuthenticatedApiQueueLimit { get; init; }
+    public int AuthQueueLimit { get; init; }
+    public int AuthenticatedQueueLimit { get; init; }
+    public int StrictQueueLimit { get; init; }
+    public int SensitiveQueueLimit { get; init; }
+    public TimeSpan Window { get; init; }
+}
+
 // Make Program class accessible for testing
-public partial class Program { }
+public partial class Program 
+{
+    /// <summary>
+    /// Gets environment-specific rate limiting configuration
+    /// </summary>
+    /// <param name="environment">The hosting environment</param>
+    /// <returns>Rate limiting configuration for the environment</returns>
+    public static RateLimitConfiguration GetRateLimitConfiguration(IWebHostEnvironment environment)
+    {
+        return environment.EnvironmentName switch
+        {
+            "Production" => new RateLimitConfiguration
+            {
+                GlobalLimit = 1000,
+                ApiLimit = 100,
+                AuthenticatedApiLimit = 200,
+                AuthLimit = 5,
+                AuthenticatedLimit = 2000,
+                StrictLimit = 10,
+                SensitiveLimit = 25,
+                ApiQueueLimit = 10,
+                AuthenticatedApiQueueLimit = 20,
+                AuthQueueLimit = 2,
+                AuthenticatedQueueLimit = 50,
+                StrictQueueLimit = 3,
+                SensitiveQueueLimit = 5,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            "Staging" => new RateLimitConfiguration
+            {
+                GlobalLimit = 2000,
+                ApiLimit = 200,
+                AuthenticatedApiLimit = 400,
+                AuthLimit = 10,
+                AuthenticatedLimit = 4000,
+                StrictLimit = 20,
+                SensitiveLimit = 50,
+                ApiQueueLimit = 20,
+                AuthenticatedApiQueueLimit = 40,
+                AuthQueueLimit = 5,
+                AuthenticatedQueueLimit = 100,
+                StrictQueueLimit = 6,
+                SensitiveQueueLimit = 10,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            "Development" => new RateLimitConfiguration
+            {
+                GlobalLimit = 10000,
+                ApiLimit = 1000,
+                AuthenticatedApiLimit = 2000,
+                AuthLimit = 50,
+                AuthenticatedLimit = 10000,
+                StrictLimit = 100,
+                SensitiveLimit = 250,
+                ApiQueueLimit = 100,
+                AuthenticatedApiQueueLimit = 200,
+                AuthQueueLimit = 20,
+                AuthenticatedQueueLimit = 500,
+                StrictQueueLimit = 30,
+                SensitiveQueueLimit = 50,
+                Window = TimeSpan.FromMinutes(1)
+            },
+            _ => new RateLimitConfiguration // Default for Test and other environments
+            {
+                GlobalLimit = 50000,
+                ApiLimit = 5000,
+                AuthenticatedApiLimit = 10000,
+                AuthLimit = 500,
+                AuthenticatedLimit = 50000,
+                StrictLimit = 1000,
+                SensitiveLimit = 2500,
+                ApiQueueLimit = 500,
+                AuthenticatedApiQueueLimit = 1000,
+                AuthQueueLimit = 100,
+                AuthenticatedQueueLimit = 2500,
+                StrictQueueLimit = 150,
+                SensitiveQueueLimit = 250,
+                Window = TimeSpan.FromMinutes(1)
+            }
+        };
+    }
+
+    /// <summary>
+    /// Determines if rate limiting should be enabled for the given environment
+    /// </summary>
+    /// <param name="environment">The hosting environment</param>
+    /// <returns>True if rate limiting should be enabled</returns>
+    public static bool ShouldEnableRateLimiting(IWebHostEnvironment environment)
+    {
+        // Enable rate limiting in all environments except strict test environments
+        return !environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+               !environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase);
+    }
+}

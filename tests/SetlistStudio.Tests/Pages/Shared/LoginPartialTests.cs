@@ -1097,7 +1097,7 @@ namespace SetlistStudio.Tests.Web.Pages.Shared
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
             var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary());
             var tempData = new TempDataDictionary(httpContext, Mock.Of<ITempDataProvider>());
-            var writer = new StringWriter();
+            using var writer = new StringWriter();
 
             return new ViewContext(actionContext, Mock.Of<IView>(), viewData, tempData, writer, new HtmlHelperOptions());
         }

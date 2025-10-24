@@ -1,0 +1,121 @@
+# Docker Compose security enhancements for production deployment
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.security.yml up -d
+version: '3.8'
+
+services:
+  setliststudio-web:
+    # Security: Enhanced hardening for production
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:docker-default
+      - seccomp:docker/seccomp/setliststudio.json  # Custom seccomp profile
+    
+    # Security: Stricter resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+    
+    # Security: Additional tmpfs mounts for sensitive operations
+    tmpfs:
+      - /app/temp:rw,nosuid,nodev,noexec,size=100m,mode=700
+      - /var/tmp:rw,nosuid,nodev,noexec,size=50m,mode=700
+      - /tmp:rw,nosuid,nodev,noexec,size=50m,mode=700
+    
+    # Security: Enhanced ulimits for production
+    ulimits:
+      nproc: 100        # Maximum number of processes
+      nofile: 1024      # Maximum number of open files
+      memlock: 67108864 # Maximum locked memory (64MB)
+      fsize: 104857600  # Maximum file size (100MB)
+    
+    # Security: Environment-specific settings
+    environment:
+      # Security: Minimize information disclosure
+      - DOTNET_SYSTEM_DIAGNOSTICS_DEBUGLEVEL=Error
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Warning
+      - ASPNETCORE_LOGGING__LOGLEVEL__Microsoft=Error
+      - ASPNETCORE_LOGGING__LOGLEVEL__System=Error
+      - DOTNET_EnableDiagnostics=0
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+      
+      # Security: Production database settings
+      - DB_SECURITY_ENABLED=true
+      - DB_FILE_MODE=600
+      - DB_DIR_MODE=700
+      - DB_MONITORING_ENABLED=true
+      - DB_CHECKSUM_VALIDATION=true
+      
+      # Security: Enhanced session settings
+      - ASPNETCORE_SESSION_TIMEOUT=7200  # 2 hours
+      - ASPNETCORE_COOKIE_SECURE_POLICY=Always
+      - ASPNETCORE_COOKIE_SAMESITE_MODE=Strict
+    
+    # Security: Health check with enhanced security validation
+    healthcheck:
+      test: |
+        curl -f http://localhost:8080/api/status && \
+        test -f /app/data/setliststudio.db && \
+        test "$$(stat -c %a /app/data/setliststudio.db)" = "600" && \
+        test "$$(stat -c %a /app/data)" = "700"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Security: Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=setliststudio,environment=production"
+    
+    # Security: Labels for container management and security scanning
+    labels:
+      - "security.scan.enabled=true"
+      - "security.non-root=true"
+      - "security.read-only=true"
+      - "security.network-isolated=true"
+      - "maintainer=eugenecp"
+      - "org.opencontainers.image.title=Setlist Studio"
+      - "org.opencontainers.image.description=Secure music setlist management application"
+      - "org.opencontainers.image.vendor=SetlistStudio"
+
+# Security: Network-level isolation and monitoring
+networks:
+  setliststudio-network:
+    driver: bridge
+    internal: false
+    enable_ipv6: false  # Disable IPv6 if not needed
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.bridge.name: "setlist-br0"
+      com.docker.network.bridge.enable_icc: "false"  # Disable inter-container communication
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+# Security: Volume security settings
+volumes:
+  setliststudio-data:
+    external: false
+    labels:
+      - "security.encrypted=false"
+      - "security.backup.enabled=true"
+      - "security.access.mode=600"
+  setliststudio-logs:
+    external: false
+    labels:
+      - "security.retention.days=30"
+      - "security.access.mode=640"

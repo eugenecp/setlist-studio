@@ -291,12 +291,8 @@ public class DatabaseInitializerTests
             {
                 try
                 {
-                    // Force garbage collection to release any file handles
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect();
-                    
-                    File.Delete(databasePath);
+                    // Attempt to delete file with retry logic instead of forcing GC
+                    await AttemptFileDeleteWithRetryAsync(databasePath);
                 }
                 catch (IOException)
                 {
@@ -315,7 +311,7 @@ public class DatabaseInitializerTests
         var services = new ServiceCollection();
         
         // Create a temporary database file to test file info logging
-        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_database_{Guid.NewGuid()}.db");
+        var tempDbPath = Path.Join(Path.GetTempPath(), $"test_database_{Guid.NewGuid()}.db");
         
         try
         {
@@ -355,12 +351,8 @@ public class DatabaseInitializerTests
             {
                 try
                 {
-                    // Force garbage collection to release any file handles
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect();
-                    
-                    File.Delete(tempDbPath);
+                    // Attempt to delete file with retry logic instead of forcing GC
+                    await AttemptFileDeleteWithRetryAsync(tempDbPath);
                 }
                 catch (IOException)
                 {
@@ -472,5 +464,24 @@ public class DatabaseInitializerTests
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeastOnce);
+    }
+
+    private static async Task AttemptFileDeleteWithRetryAsync(string filePath, int maxRetries = 3, int delayMs = 100)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                File.Delete(filePath);
+                return; // Success
+            }
+            catch (IOException) when (i < maxRetries - 1)
+            {
+                // Wait before retry to allow file handles to be released
+                await Task.Delay(delayMs);
+                delayMs *= 2; // Exponential backoff
+            }
+        }
+        // If we get here, all retries failed - that's acceptable for test cleanup
     }
 }

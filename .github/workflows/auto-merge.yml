@@ -4,108 +4,168 @@ on:
   pull_request:
     types: [labeled, unlabeled, synchronize, opened, edited, ready_for_review]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, dismissed]
   check_suite:
     types: [completed]
-  status: {}
+  status:
 
 permissions:
   contents: write
   pull-requests: write
   checks: read
+  statuses: read
 
 jobs:
-  auto-merge:
-    name: Auto-merge approved PRs
+  merge:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
-    
+    if: |
+      github.event.pull_request.state == 'open' &&
+      !github.event.pull_request.draft &&
+      contains(github.event.pull_request.labels.*.name, 'auto-merge')
     steps:
-    - name: 🔍 Check PR status
+    - name: Check if PR can be merged
       id: check-pr
       uses: actions/github-script@v7
       with:
         script: |
-          const { data: pr } = await github.rest.pulls.get({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            pull_number: context.issue.number
+          const { owner, repo } = context.repo;
+          const pr = context.payload.pull_request;
+          
+          console.log(`Checking PR #${pr.number}: ${pr.title}`);
+          
+          // Get detailed PR information
+          const { data: pullRequest } = await github.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: pr.number
           });
           
+          // Check if PR is mergeable
+          if (!pullRequest.mergeable) {
+            console.log('❌ PR is not mergeable (conflicts)');
+            return { canMerge: false, reason: 'PR has merge conflicts' };
+          }
+          
+          // Check if PR is approved
           const { data: reviews } = await github.rest.pulls.listReviews({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            pull_number: context.issue.number
+            owner,
+            repo,
+            pull_number: pr.number
           });
           
-          const { data: checks } = await github.rest.checks.listForRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: pr.head.sha
+          const latestReviews = {};
+          reviews.forEach(review => {
+            if (review.state !== 'COMMENTED') {
+              latestReviews[review.user.login] = review.state;
+            }
           });
           
-          const approvedReviews = reviews.filter(review => review.state === 'APPROVED');
-          const allChecksSuccess = checks.check_runs.every(check => 
-            check.status === 'completed' && check.conclusion === 'success'
+          const hasApproval = Object.values(latestReviews).includes('APPROVED');
+          const hasChangesRequested = Object.values(latestReviews).includes('CHANGES_REQUESTED');
+          
+          if (!hasApproval) {
+            console.log('❌ PR is not approved');
+            return { canMerge: false, reason: 'PR needs approval' };
+          }
+          
+          if (hasChangesRequested) {
+            console.log('❌ PR has changes requested');
+            return { canMerge: false, reason: 'PR has changes requested' };
+          }
+          
+          // Check status checks and check runs
+          const { data: checkRuns } = await github.rest.checks.listForRef({
+            owner,
+            repo,
+            ref: pr.head.sha,
+            per_page: 100
+          });
+          
+          const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+            owner,
+            repo,
+            ref: pr.head.sha,
+            per_page: 100
+          });
+          
+          // Filter out duplicate statuses (keep latest)
+          const latestStatuses = {};
+          statuses.forEach(status => {
+            if (!latestStatuses[status.context] || 
+                new Date(status.created_at) > new Date(latestStatuses[status.context].created_at)) {
+              latestStatuses[status.context] = status;
+            }
+          });
+          
+          // Check for any failing checks
+          const failingCheckRuns = checkRuns.check_runs.filter(run => 
+            run.conclusion && !['success', 'neutral', 'skipped'].includes(run.conclusion)
           );
           
-          console.log(`PR #${pr.number}: ${pr.title}`);
-          console.log(`- Approved reviews: ${approvedReviews.length}`);
-          console.log(`- All checks successful: ${allChecksSuccess}`);
-          console.log(`- Draft: ${pr.draft}`);
-          console.log(`- Mergeable: ${pr.mergeable}`);
+          const failingStatuses = Object.values(latestStatuses).filter(status => 
+            status.state !== 'success'
+          );
           
-          const canMerge = approvedReviews.length > 0 && 
-                          allChecksSuccess && 
-                          !pr.draft && 
-                          pr.mergeable;
+          if (failingCheckRuns.length > 0) {
+            console.log(`❌ Failing check runs: ${failingCheckRuns.map(r => r.name).join(', ')}`);
+            return { canMerge: false, reason: `Failing check runs: ${failingCheckRuns.map(r => r.name).join(', ')}` };
+          }
           
-          return {
-            canMerge,
-            title: pr.title,
-            number: pr.number,
-            isDependabot: pr.user.login === 'dependabot[bot]'
-          };
-    
-    - name: 🚀 Auto-merge PR
+          if (failingStatuses.length > 0) {
+            console.log(`❌ Failing statuses: ${failingStatuses.map(s => s.context).join(', ')}`);
+            return { canMerge: false, reason: `Failing statuses: ${failingStatuses.map(s => s.context).join(', ')}` };
+          }
+          
+          console.log('✅ All checks passed, PR can be merged');
+          return { canMerge: true, reason: 'All requirements met' };
+
+    - name: Merge PR if ready
       if: fromJSON(steps.check-pr.outputs.result).canMerge
       uses: actions/github-script@v7
       with:
         script: |
-          const result = ${{ steps.check-pr.outputs.result }};
+          const { owner, repo } = context.repo;
+          const pr = context.payload.pull_request;
           
           try {
-            await github.rest.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: result.number,
-              commit_title: `Auto-merge: ${result.title}`,
+            console.log(`Attempting to merge PR #${pr.number}...`);
+            
+            const result = await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: pr.number,
+              commit_title: `Auto-merge: ${pr.title} (#${pr.number})`,
+              commit_message: `Automatically merged by GitHub Actions\n\n${pr.body || ''}`,
               merge_method: 'squash'
             });
             
-            console.log(`✅ Successfully merged PR #${result.number}`);
+            console.log(`✅ Successfully merged PR #${pr.number}`);
             
-            // Add a comment about the auto-merge
+            // Add success comment
+            const isDependabot = pr.user.login === 'dependabot[bot]';
             await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: result.number,
-              body: `🤖 **Auto-merged**\n\nThis PR was automatically merged because:\n- ✅ All checks passed\n- ✅ PR was approved\n- ✅ Contains the \`auto-merge\` label${result.isDependabot ? '\n- 🤖 Created by Dependabot' : ''}`
+              owner,
+              repo,
+              issue_number: pr.number,
+              body: `## 🤖 Auto-merged Successfully\n\nThis PR was automatically merged because:\n- ✅ All checks passed\n- ✅ PR was approved\n- ✅ Contains the \`auto-merge\` label${isDependabot ? '\n- 🤖 Created by Dependabot' : ''}\n\n---\n*Merged automatically by GitHub Actions*`
             });
             
           } catch (error) {
-            console.error('❌ Failed to merge PR:', error.message);
+            console.log(`❌ Failed to merge PR: ${error.message}`);
             
+            // Add failure comment
             await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: result.number,
-              body: `⚠️ **Auto-merge failed**\n\nFailed to automatically merge this PR: ${error.message}\n\nPlease merge manually.`
+              owner,
+              repo,
+              issue_number: pr.number,
+              body: `## ⚠️ Auto-merge Failed\n\nFailed to automatically merge this PR: ${error.message}\n\nPlease merge manually or check the requirements:\n- ✅ PR must be approved\n- ✅ All checks must pass\n- ✅ No changes requested\n- ✅ Must contain \`auto-merge\` label\n- ✅ Must not be a draft\n\n---\n*Auto-merge attempted by GitHub Actions*`
             });
+            
+            throw error;
           }
-    
-    - name: 📝 Log result
+
+    - name: Log completion
       if: always()
       run: |
         echo "Auto-merge workflow completed"
-        echo "PR can be merged: ${{ fromJSON(steps.check-pr.outputs.result).canMerge }}"
+        echo "PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"

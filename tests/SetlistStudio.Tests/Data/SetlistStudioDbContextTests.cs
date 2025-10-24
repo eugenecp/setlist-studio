@@ -495,7 +495,7 @@ public class SetlistStudioDbContextTests : IDisposable
 
     #endregion
 
-    #region Enhanced Coverage Tests for 90% Target
+    #region Enhanced Coverage Tests for 80% Target
 
 
 

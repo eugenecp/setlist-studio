@@ -102,10 +102,10 @@ public class DatabaseInitializerAdvancedTests
         var services = new ServiceCollection();
         
         // Create a temporary file path that exists but will cause SQLite issues
-        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test_invalid_{Guid.NewGuid()}.db");
+        var tempDbPath = Path.Join(Path.GetTempPath(), $"test_invalid_{Guid.NewGuid()}.db");
         
         // Create the directory path that doesn't exist to force a failure
-        var invalidPath = Path.Combine("Z:\\nonexistent-drive", "invalid-database.db");
+        var invalidPath = Path.Join("Z:\\nonexistent-drive", "invalid-database.db");
         
         try
         {
@@ -128,7 +128,15 @@ public class DatabaseInitializerAdvancedTests
             // Cleanup
             if (File.Exists(tempDbPath))
             {
-                try { File.Delete(tempDbPath); } catch { }
+                try 
+                { 
+                    File.Delete(tempDbPath); 
+                } 
+                catch (Exception ex) 
+                { 
+                    // Ignore cleanup failures - test database file deletion is not critical
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete test database: {ex.Message}");
+                }
             }
         }
     }
@@ -200,7 +208,7 @@ public class DatabaseInitializerAdvancedTests
         var services = new ServiceCollection();
         
         // Use invalid path that should cause creation to fail
-        var invalidPath = Path.Combine("Z:", "nonexistent", "invalid.db");
+        var invalidPath = Path.Join("Z:", "nonexistent", "invalid.db");
         services.AddDbContext<SetlistStudioDbContext>(options =>
         {
             options.UseSqlite($"Data Source={invalidPath}");
@@ -444,7 +452,11 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) 
+                { 
+                    // Ignore file deletion failures - test cleanup is not critical
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}");
+                }
             }
         }
     }
@@ -513,7 +525,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -585,7 +597,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempFilePath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -597,7 +609,7 @@ public class DatabaseInitializerAdvancedTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
-        var nonExistentPath = Path.Combine(Path.GetTempPath(), $"nonexistent_{Guid.NewGuid()}.db");
+        var nonExistentPath = Path.Join(Path.GetTempPath(), $"nonexistent_{Guid.NewGuid()}.db");
         
         services.AddDbContext<SetlistStudioDbContext>(options =>
         {
@@ -619,7 +631,7 @@ public class DatabaseInitializerAdvancedTests
             {
                 File.Delete(nonExistentPath);
             }
-            catch (IOException) { }
+            catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
         }
     }
 
@@ -718,7 +730,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -823,7 +835,7 @@ public class DatabaseInitializerAdvancedTests
                 {
                     File.Delete(tempDbPath);
                 }
-                catch (IOException) { }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"Failed to delete test database due to IO exception: {ex.Message}"); }
             }
         }
     }
@@ -849,11 +861,7 @@ public class DatabaseInitializerAdvancedTests
     {
         if (!File.Exists(filePath)) return;
         
-        // Force garbage collection to help close any remaining handles
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        
-        // Retry cleanup to handle file locks
+        // Retry cleanup to handle file locks with exponential backoff
         for (int i = 0; i < 5; i++)
         {
             try
@@ -865,10 +873,6 @@ public class DatabaseInitializerAdvancedTests
             {
                 // Wait progressively longer and retry if file is locked
                 await Task.Delay((i + 1) * 200);
-                
-                // Force garbage collection again after the delay
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
             }
             catch (UnauthorizedAccessException) when (i < 4)
             {
@@ -886,6 +890,110 @@ public class DatabaseInitializerAdvancedTests
         
         // If we still can't delete, don't fail the test
         // In a real test environment, this file will be cleaned up by temp folder cleanup
+    }
+
+    #endregion
+
+    #region Additional Branch Coverage Tests
+
+
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseCreated_WhenDatabaseIsNew()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var tempDbPath = Path.GetTempFileName();
+        File.Delete(tempDbPath); // Ensure it doesn't exist so it will be created
+        
+        var services = new ServiceCollection();
+        
+        try
+        {
+            var connectionString = $"Data Source={tempDbPath};";
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite(connectionString);
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Act
+            await DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object);
+
+            // Assert - Should log that database was created
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database creation result: True (true = created, false = already existed)");
+            VerifyLogMessage(mockLogger, LogLevel.Information, "Database was created, allowing schema to settle");
+        }
+        finally
+        {
+            // Cleanup
+            TryDeleteFile(tempDbPath);
+        }
+    }
+
+
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLogDatabaseFileDetails_OnError()
+    {
+        // Arrange
+        var mockLogger = new Mock<ILogger>();
+        var tempDbPath = Path.GetTempFileName();
+        
+        var services = new ServiceCollection();
+        
+        try
+        {
+            var connectionString = $"Data Source={tempDbPath};Invalid=Parameter;";
+            services.AddDbContext<SetlistStudioDbContext>(options =>
+            {
+                options.UseSqlite(connectionString);
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Corrupt the database file to ensure error logging
+            File.WriteAllText(tempDbPath, "definitely not a database");
+
+            // Act
+            var exception = await Record.ExceptionAsync(() => 
+                DatabaseInitializer.InitializeAsync(serviceProvider, mockLogger.Object));
+
+            // Assert - Should log database file details on error
+            exception.Should().NotBeNull("Invalid database should cause an exception");
+            
+            // Should log database file information on error
+            VerifyLogMessage(mockLogger, LogLevel.Error, $"Connection string: {connectionString}");
+            VerifyLogMessage(mockLogger, LogLevel.Error, $"Database file path: {Path.GetFullPath(tempDbPath)}");
+            VerifyLogMessage(mockLogger, LogLevel.Error, "Database file exists: True");
+        }
+        finally
+        {
+            // Cleanup
+            TryDeleteFile(tempDbPath);
+        }
+    }
+
+
+
+    #endregion
+
+    #region Helper Methods
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+        catch
+        {
+            // Ignore cleanup failures in tests
+        }
     }
 
     #endregion

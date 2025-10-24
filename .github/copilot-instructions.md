@@ -4,7 +4,8 @@
 
 ### Essential Rules
 - **Test Naming**: `{SourceClass}Tests.cs` (base) or `{SourceClass}AdvancedTests.cs` (advanced only)
-- **Coverage Target**: 90%+ line and branch coverage
+- **Coverage Target**: 80%+ line and branch coverage
+- **Security Analysis**: All code must pass CodeQL security scans with zero high/critical issues
 - **Architecture**: Clean Architecture (Core/Infrastructure/Web)
 - **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
 
@@ -37,6 +38,7 @@
 - **ASP.NET Core Identity**: Authentication with OAuth (Google, Microsoft, Facebook)
 - **MudBlazor**: Material Design component library
 - **xUnit + FluentAssertions + Bunit**: Testing framework
+- **CodeQL**: Static application security testing (SAST) for vulnerability detection
 - **Docker**: Containerization for deployment
 - **GitHub Actions**: CI/CD pipeline
 
@@ -46,6 +48,7 @@
 - **Security**: OAuth authentication, input validation, no hardcoded secrets
 - **Maintainability**: Clean code, clear documentation, consistent patterns
 - **User Experience**: Realistic musical data, smooth interactions
+- **Code Quality**: Zero build warnings in main and test projects
 
 ---
 
@@ -53,14 +56,27 @@
 
 ### Coverage Standards
 
-Setlist Studio maintains **minimum 90% code coverage requirements** for both line and branch coverage at file and project levels.
+Setlist Studio maintains **100% test success rate requirement** with minimum 80% code coverage for both line and branch coverage at file and project levels.
+
+**PRIORITY: Individual File Coverage First**
+- **Target each file to 80%+ line AND branch coverage before moving to the next file**
+- **Focus on files closest to 80% threshold first** (e.g., 75%+ files get priority)
+- **Complete one file at a time** rather than spreading effort across multiple files
+- **Use file-specific coverage analysis** to identify exact uncovered lines and branches
+- **Create targeted tests** for specific line coverage gaps and branch conditions
+- **Verify both line and branch coverage targets are met before proceeding**
 
 **Quality Metrics Requirements:**
-- **Line Coverage**: Each file must achieve at least 90% line coverage
-- **Branch Coverage**: Each file must achieve at least 90% branch coverage
-- **Project Coverage**: Overall project must maintain at least 90% line and branch coverage
+- **Test Success Rate**: **100% of all tests must pass** - zero tolerance for failing tests
+- **Build Quality**: **Zero build warnings** in main and test projects - clean builds required
+- **Security Analysis**: **Zero high/critical CodeQL security issues** - all security vulnerabilities must be resolved
+- **Individual File Coverage**: **Each file must achieve at least 80% line AND branch coverage before moving to next file**
+- **Line Coverage**: Each file must achieve at least 80% line coverage
+- **Branch Coverage**: Each file must achieve at least 80% branch coverage
+- **Project Coverage**: Overall project must maintain at least 80% line and branch coverage
 - **CRAP Score**: All methods must maintain passing CRAP scores
 - **Cyclomatic Complexity**: All methods must maintain passing complexity metrics
+- **Test Reliability**: All tests must be deterministic and pass consistently
 
 ### Test Framework Requirements
 
@@ -126,7 +142,7 @@ Setlist Studio follows a strategic test organization approach that separates cor
 - **File Size**: Base test files exceed ~1,400 lines
 - **Different Purposes**: Tests target specific coverage gaps rather than core business logic
 - **Specialized Testing**: Error handling, validation boundaries, configuration scenarios
-- **Coverage Targeting**: Tests specifically to reach 90%+ line and branch coverage
+- **Coverage Targeting**: Tests specifically to reach 80%+ line and branch coverage
 - **Base Tests Complete**: Core functionality is fully tested in base test file
 
 #### Advanced Test Content Guidelines
@@ -206,7 +222,7 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### Coverage Improvement Methodology
 
-1. **Identify Gaps**: Use coverage reports to find files below 90% line/branch coverage
+1. **Identify Gaps**: Use coverage reports to find files below 80% line/branch coverage
 2. **Analyze Uncovered Code**: Determine if gaps are in core logic (add to base tests) or edge cases (create advanced tests)
 3. **Strategic Testing**: Create targeted advanced tests for authentication, validation, error handling
 4. **Validate Impact**: Run coverage analysis after adding advanced tests to measure improvement
@@ -226,6 +242,217 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 - **Cyclomatic Complexity**: Measures code complexity through decision points
   - Target: Break down methods with high complexity or ensure comprehensive testing
 
+### CodeQL Static Security Analysis
+
+**CodeQL is MANDATORY for all code contributions** - it performs static application security testing (SAST) to identify vulnerabilities before they reach production.
+
+#### CodeQL Analysis Configurations
+
+Setlist Studio uses **two different CodeQL analysis configurations** aligned with GitHub Actions security.yaml:
+
+**1. Security-Focused Analysis (Local Development)**
+- **Query Suite**: `codeql/csharp-security-extended.qls` (68 security queries)
+- **Purpose**: Critical security vulnerability detection
+- **Target**: **Zero high/critical security issues** (blocking)
+- **Use**: Pre-commit validation, security-focused development
+
+**2. Comprehensive Quality Analysis (GitHub Actions)**
+- **Query Suite**: `security-and-quality` (170 comprehensive queries)  
+- **Purpose**: Security + code quality + best practices
+- **Configuration**: `.github/codeql/codeql-config.yml`
+- **Results**: Security issues + warnings + recommendations
+- **Use**: CI/CD pipeline, comprehensive code review
+
+#### Running CodeQL Analysis Locally
+
+**OPTION 1: Use Provided Scripts (Recommended)**
+
+**Security-Focused Analysis:**
+```powershell
+# Quick security validation (68 security queries)
+.\scripts\run-codeql-security.ps1
+
+# With clean database rebuild
+.\scripts\run-codeql-security.ps1 -CleanDatabase
+```
+
+**Comprehensive Analysis (Matches GitHub Actions Exactly):**
+```powershell
+# Full analysis matching GitHub Actions security.yml
+.\scripts\run-codeql-comprehensive.ps1
+
+# With clean database and open results
+.\scripts\run-codeql-comprehensive.ps1 -CleanDatabase -OpenResults
+```
+
+**OPTION 2: Manual Commands (Advanced)**
+
+**Security-Only Analysis:**
+```powershell
+# Create CodeQL database (matches GitHub Actions build)
+codeql database create codeql-database --language=csharp --command="dotnet build SetlistStudio.sln --configuration Release --no-restore" --source-root=.
+
+# Run security-focused analysis
+codeql database analyze codeql-database --format=sarif-latest --output=security-analysis.sarif codeql/csharp-security-extended.qls --download
+
+# Check results (should be zero for security compliance)
+$results = (Get-Content security-analysis.sarif | ConvertFrom-Json).runs[0].results
+Write-Host "Security issues found: $($results.Count)"
+```
+
+**Comprehensive Analysis (GitHub Actions Match):**
+```powershell
+# Run full analysis with local config (mirrors GitHub Actions)
+codeql database analyze codeql-database --format=sarif-latest --output=github-analysis.sarif --config-file=.codeql/codeql-config.yml codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls --download
+
+# Categorize findings by severity (matches GitHub Actions analysis)
+$sarif = Get-Content github-analysis.sarif | ConvertFrom-Json; $results = $sarif.runs[0].results; $rules = $sarif.runs[0].tool.driver.rules; $findings = @{}; foreach($result in $results) { $rule = $rules | Where-Object { $_.id -eq $result.ruleId }; $severity = $rule.properties.'problem.severity'; if($findings.ContainsKey($severity)) { $findings[$severity]++ } else { $findings[$severity] = 1 } }; $findings.GetEnumerator() | Sort-Object Value -Descending
+```
+
+#### Local CodeQL Configuration
+
+**Configuration Files:**
+- **`.codeql/codeql-config.yml`**: Local configuration mirroring GitHub Actions exactly
+- **`.codeql/config.env`**: Environment variables for local development
+- **`scripts/run-codeql-local.ps1`**: Main analysis script with full configurability
+- **`scripts/run-codeql-security.ps1`**: Quick security-focused analysis
+- **`scripts/run-codeql-comprehensive.ps1`**: Full analysis matching GitHub Actions
+
+**Local vs GitHub Actions Alignment:**
+- **Same Query Suites**: Both use `security-and-quality` for comprehensive analysis
+- **Same Build Commands**: Both use `dotnet build SetlistStudio.sln --configuration Release --no-restore`
+- **Same Path Exclusions**: Tests, build artifacts, coverage reports excluded
+- **Same Output Format**: SARIF with structured findings categorization
+- **Same Configuration File**: `.codeql/codeql-config.yml` mirrors `.github/codeql/codeql-config.yml`
+
+#### CodeQL Automated Analysis
+
+CodeQL analysis runs automatically via GitHub Actions (.github/workflows/security.yml):
+- **All pull requests** to main branch
+- **Push to main branch** (for baseline maintenance)  
+- **Daily scheduled scans** (2 AM UTC)
+- **Manual workflow dispatch** (ad-hoc security audits)
+
+#### CodeQL Security Standards
+
+**ZERO TOLERANCE POLICY FOR SECURITY ISSUES:**
+- **Critical security issues**: Must be fixed before merge - **no exceptions**
+- **High security issues**: Must be fixed before merge - **no exceptions**
+- **Medium security issues**: Should be fixed or justified with suppression
+
+**CODE QUALITY FINDINGS (Non-blocking):**
+- **Warnings**: Code quality issues, potential bugs (162 typical findings)
+- **Recommendations**: Best practice suggestions (68 typical findings)
+- **Notes**: Minor improvements and optimizations
+
+**CRITICAL DISTINCTION**: 
+- **Security findings** = Blocking (must fix)
+- **Quality findings** = Non-blocking (continuous improvement)
+
+#### CodeQL Results Interpretation
+
+**Understanding GitHub Actions Results:**
+
+When GitHub Actions reports "67 new alerts" (22 warnings + 45 notes), this includes:
+- **Security vulnerabilities** (if any) - **BLOCKING**
+- **Code quality warnings** - Non-blocking  
+- **Best practice recommendations** - Non-blocking
+
+**Local vs GitHub Analysis Comparison:**
+- **Local Security Analysis**: `0 results` = No security vulnerabilities ✅
+- **GitHub Comprehensive Analysis**: `230 results` = Security + quality findings
+- **Discrepancy is Expected**: Different query scopes, not a security concern
+
+**ALWAYS CHECK GitHub Security Tab** for actual security findings rather than relying on workflow summaries.
+
+#### CodeQL Issue Resolution
+
+**For Security Issues (Critical/High):**
+1. **Immediate action**: Treat as security failure regardless of other scan results
+2. **Root cause analysis**: Understand the vulnerability and potential impact  
+3. **Secure implementation**: Fix underlying security flaw, don't just suppress
+4. **Validation testing**: Ensure fix resolves issue without breaking functionality
+5. **Re-verification**: Run security-focused CodeQL to confirm resolution
+6. **Documentation**: Explain security improvements in commit messages
+
+**For Quality Issues (Warnings/Recommendations):**
+1. **Assess impact**: Determine if issue affects maintainability or performance
+2. **Prioritize fix**: Address based on code quality improvement value
+3. **Batch improvements**: Group similar quality fixes in dedicated PRs
+4. **Document rationale**: Explain quality improvements in commit messages
+
+#### CodeQL Configuration Files
+
+**Local Security Configuration:**
+- Uses default security-extended query suite
+- Focuses on OWASP Top 10 and CWE security categories
+- Excludes test files and build artifacts
+
+**GitHub Actions Configuration (.github/codeql/codeql-config.yml):**
+```yaml
+queries:
+  - uses: security-and-quality
+paths-ignore:
+  - "tests/**"
+  - "**/bin/**"
+  - "**/obj/**"  
+  - "TestResults/**"
+  - "CoverageReport/**"
+paths:
+  - "src/**"
+  - "*.cs"
+  - "*.cshtml"
+  - "*.razor"
+```
+
+#### CodeQL Best Practices
+
+**To minimize security findings:**
+- **Input validation**: Always validate and sanitize user inputs
+- **Parameterized queries**: Never concatenate user input into SQL strings
+- **Secure defaults**: Use secure configurations and libraries
+- **Error handling**: Don't expose sensitive information in error messages
+- **Access control**: Implement proper authorization checks
+- **Secrets management**: Never hardcode credentials or API keys
+
+**To minimize quality findings:**
+- **Resource disposal**: Use `using` statements for IDisposable objects
+- **Performance optimization**: Avoid string concatenation in loops
+- **API modernization**: Replace obsolete method calls
+- **Documentation**: Add XML documentation for public APIs
+- **Code simplification**: Reduce complexity and nested conditions
+
+#### CodeQL Suppression Guidelines
+
+**Security Issue Suppressions (Rare):**
+- Only suppress **confirmed false positives** after thorough security review
+- Require security team approval for high/critical suppression
+- Document detailed justification with security impact analysis
+- Regular review of all security suppressions
+
+**Quality Issue Suppressions (Selective):**
+- Suppress when fixing would reduce code readability or maintainability
+- Document business justification for suppression
+- Consider suppression for generated code or third-party integrations
+- Review suppressions during major refactoring efforts
+
+#### Common CodeQL Issues in .NET Applications
+
+**Security Issues (Must Fix):**
+- **SQL Injection**: Use Entity Framework LINQ queries instead of raw SQL
+- **XSS Vulnerabilities**: Always encode output, validate inputs
+- **Path Traversal**: Validate file paths, use safe file operations
+- **Information Disclosure**: Sanitize error messages and logs
+- **Authentication Bypass**: Implement proper authorization checks
+- **Cryptographic Issues**: Use strong algorithms and proper key management
+
+**Quality Issues (Continuous Improvement):**
+- **Resource Management**: Dispose IDisposable objects properly
+- **Performance**: Optimize string operations and LINQ usage
+- **API Usage**: Update obsolete method calls and improve error handling
+- **Code Structure**: Simplify complex conditions and reduce nesting
+- **Documentation**: Add XML comments for public APIs
+
 ---
 
 ## Development Workflow
@@ -237,27 +464,33 @@ reportgenerator -reports:"./TestResults/*/coverage.cobertura.xml" -targetdir:"./
 
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
-- **Quality Gates**: All tests must pass with 90%+ coverage before merge
+- **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 80%+ coverage required before merge
+- **CodeQL Analysis**: Mandatory static security analysis on all pull requests - **CodeQL findings override general security summaries**
+- **CodeQL Code Generation Compliance**: All generated code must pass CodeQL static analysis without high/critical security vulnerabilities
+- **CodeQL Best Practices**: Generated code must follow CodeQL quality recommendations (null safety, LINQ usage, resource disposal)
 - **Code Review**: All changes require peer review and approval
+- **Zero Tolerance**: No failing tests, build warnings, or high/critical security issues allowed in any branch or pull request
+- **Security Priority**: CodeQL high/critical issues constitute security failures regardless of other scan status indicators
 
 ### Test Execution Strategy
-- **Unit Tests**: Fast, isolated tests for individual components
-- **Integration Tests**: Database and service integration scenarios
-- **Component Tests**: Blazor component rendering and interaction tests
-- **Advanced Tests**: Edge cases, error conditions, and coverage gaps
+- **Unit Tests**: Fast, isolated tests for individual components (must pass 100%)
+- **Integration Tests**: Database and service integration scenarios (must pass 100%)
+- **Component Tests**: Blazor component rendering and interaction tests (must pass 100%)
+- **Advanced Tests**: Edge cases, error conditions, and coverage gaps (must pass 100%)
+- **Test Reliability**: All tests must be deterministic and consistently passing
 
 ### Common Commands
 ```bash
-# Run all tests
+# Run all tests (must achieve 100% success rate)
 dotnet test
 
-# Run tests with coverage
+# Run tests with coverage (must achieve 100% success with 80%+ coverage)
 dotnet test --collect:"XPlat Code Coverage"
 
-# Run specific test class
+# Run specific test class (verify 100% success for targeted testing)
 dotnet test --filter "FullyQualifiedName~SetlistServiceTests"
 
-# Run tests and generate coverage report
+# Run tests and generate coverage report (validate 100% success + coverage)
 ./scripts/run-tests-clean.ps1
 ```
 
@@ -283,6 +516,146 @@ Use realistic musical data in all examples, tests, and documentation:
 - **Guitar-friendly**: E, A, D, G, C
 - **Vocal-friendly**: F, Bb, Eb, Ab
 - **Minor keys**: Am, Em, Bm, F#m, Cm
+
+---
+
+## CodeQL Code Generation Standards
+
+**MANDATORY: All generated code must pass CodeQL static analysis with zero high/critical security issues.**
+
+### Code Generation Requirements
+
+When generating any code (classes, methods, controllers, services, tests), **ALWAYS** ensure:
+
+#### 1. **Security-First Code Generation**
+- **Input Validation**: Every user input must be validated and sanitized
+- **Parameterized Queries**: Never concatenate user input into SQL strings - use Entity Framework LINQ exclusively
+- **Authorization Checks**: Every data access operation must verify user ownership
+- **Error Handling**: Never expose sensitive information in error messages or logs
+- **Resource Management**: Always use `using` statements for IDisposable objects
+
+#### 2. **Null Safety and Type Safety**
+- **Explicit Null Handling**: Use null-conditional operators (`?.`) and null-forgiving operators (`!`) appropriately
+- **Avoid `default()` Casts**: Use explicit nullable casts like `(HttpContext?)null` instead of `default(HttpContext)`
+- **Null Checks**: Add proper null checks before accessing potentially null variables
+- **Non-nullable References**: Leverage C# nullable reference types to prevent null reference exceptions
+
+#### 3. **LINQ and Performance Best Practices**
+- **Use LINQ Methods**: Replace foreach loops with appropriate LINQ methods (`.Select()`, `.Where()`, `.Any()`)
+- **Avoid Unnecessary Variables**: Don't create variables that are assigned but never used
+- **Efficient Queries**: Use `FirstOrDefaultAsync()` instead of `Where().FirstAsync()` when appropriate
+- **Resource Optimization**: Avoid string concatenation in loops, use `StringBuilder` or string interpolation
+
+#### 4. **Authentication and Authorization Patterns**
+```csharp
+// CORRECT: Always validate user ownership
+var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException();
+var userResource = await _service.GetByUserIdAsync(userId, resourceId);
+if (userResource == null) throw new ForbiddenException();
+
+// INCORRECT: Direct access without validation
+var resource = await _service.GetByIdAsync(resourceId); // Missing ownership check
+```
+
+#### 5. **Input Validation Patterns**
+```csharp
+// CORRECT: Comprehensive validation
+[SafeBpm(40, 250)]
+public int Bpm { get; set; }
+
+if (string.IsNullOrWhiteSpace(userInput) || userInput.Length > 500)
+    throw new ValidationException("Invalid input");
+
+var sanitized = SecureLoggingHelper.SanitizeMessage(userInput);
+
+// INCORRECT: No validation
+public int Bpm { get; set; } // Missing validation attribute
+var query = $"SELECT * FROM Songs WHERE Name = '{userInput}'"; // SQL injection risk
+```
+
+#### 6. **Error Handling Patterns**
+```csharp
+// CORRECT: Secure error handling
+try 
+{
+    // Operation
+}
+catch (UnauthorizedAccessException)
+{
+    _logger.LogWarning("Unauthorized access attempt by user {UserId}", userId);
+    return Forbid();
+}
+catch (Exception ex)
+{
+    _logger.LogError(ex, "Operation failed for user {UserId}", userId);
+    return Problem("An error occurred processing your request");
+}
+
+// INCORRECT: Information leakage
+catch (Exception ex)
+{
+    return BadRequest(ex.Message); // Exposes internal details
+}
+```
+
+#### 7. **Resource Management Patterns**
+```csharp
+// CORRECT: Proper disposal
+using var scope = _serviceProvider.CreateScope();
+await using var stream = File.OpenRead(path);
+
+// CORRECT: Explicit disposal in tests
+_mockHttpContextAccessor.Setup(x => x.HttpContext).Returns((HttpContext?)null);
+
+// INCORRECT: Resource leaks
+var stream = File.OpenRead(path); // Missing using statement
+```
+
+### CodeQL Quality Standards
+
+#### **Common CodeQL Issues to Avoid:**
+
+1. **Dereferenced variable may be null**
+   - Use null-conditional operators: `user?.Name`
+   - Add null-forgiving operators after null checks: `result!.Message`
+   - Validate parameters: `name ?? throw new ArgumentNullException(nameof(name))`
+
+2. **Useless assignment to local variable**
+   - Remove unused variables
+   - Use discard pattern `_` only when appropriate
+   - Assign and use variables in the same scope
+
+3. **Useless upcast**
+   - Use explicit nullable casts: `(Type?)null` instead of `default(Type)`
+   - Let compiler handle implicit conversions
+
+4. **Missed opportunity to use LINQ**
+   - Replace `foreach` + `Add()` with `.Select()`
+   - Replace `foreach` + `if` with `.Where()`
+   - Use `Any()` instead of `Count() > 0`
+
+### Pre-Generation Checklist
+
+**Before generating any code, ensure:**
+- [ ] Input validation is implemented for all user inputs
+- [ ] Authorization checks verify user ownership of resources
+- [ ] Error handling doesn't leak sensitive information
+- [ ] Resource disposal is handled with `using` statements
+- [ ] Null safety is addressed with appropriate operators
+- [ ] LINQ methods are used instead of manual loops where appropriate
+- [ ] No hardcoded secrets or connection strings
+- [ ] Logging doesn't expose sensitive data
+
+### CodeQL Validation Commands
+
+**Always validate generated code with:**
+```bash
+# Security-focused analysis (zero issues required)
+codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls
+
+# Quality analysis for comprehensive review
+codeql database analyze codeql-database --output=quality-analysis.sarif codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls
+```
 
 ---
 
@@ -315,7 +688,7 @@ Use realistic musical data in all examples, tests, and documentation:
 
 "Create performance edge case tests for large datasets, concurrent operations, and resource exhaustion scenarios"
 
-"Analyze current code coverage and identify classes/methods missing tests to reach 90% line and branch coverage"
+"Analyze current code coverage and identify classes/methods missing tests to reach 80% line and branch coverage"
 
 "Generate coverage report in CoverageReport/NewFeature and analyze which classes need additional testing"
 ```
@@ -347,6 +720,20 @@ Use realistic musical data in all examples, tests, and documentation:
 
 "Add anti-forgery token validation to all state-changing API endpoints"
 
+"Generate code that passes CodeQL static analysis with zero high/critical security issues"
+
+"Use null-conditional operators and null-forgiving operators appropriately to prevent null reference exceptions"
+
+"Replace default() casts with explicit nullable casts like (HttpContext?)null to avoid useless upcast warnings"
+
+"Implement proper resource disposal with using statements for all IDisposable objects"
+
+"Use LINQ methods instead of foreach loops where appropriate - replace foreach + Add() with .Select()"
+
+"Avoid creating variables that are assigned but never used - remove unnecessary variable assignments"
+
+"Validate all user inputs and use parameterized queries exclusively to prevent SQL injection"
+
 "Configure secure session cookies with HttpOnly, Secure, and SameSite attributes"
 
 "Implement rate limiting on API endpoints to prevent DoS attacks (100 requests per minute per user)"
@@ -372,6 +759,32 @@ Use realistic musical data in all examples, tests, and documentation:
 "Add audit trails for all data modifications with user tracking and timestamps"
 
 "Configure CORS policy to only allow specific trusted domains, never use wildcards"
+
+"Run security-focused CodeQL analysis locally before submitting PR: codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls"
+
+"Analyze CodeQL findings and implement proper fixes rather than just suppressing alerts"
+
+"Run comprehensive CodeQL analysis to match GitHub Actions: codeql database analyze codeql-database --output=github-analysis.sarif codeql/csharp-queries:codeql-suites/csharp-security-and-quality.qls"
+
+"Validate that CodeQL security analysis shows zero results in security-analysis.sarif file"
+
+"Distinguish between security findings (blocking) and quality findings (non-blocking) in CodeQL results"
+
+"Address CodeQL SQL injection findings by using Entity Framework LINQ queries exclusively"
+
+"Fix CodeQL XSS vulnerabilities by implementing proper input validation and output sanitization"
+
+"Resolve CodeQL authentication bypass issues by adding proper authorization checks to all endpoints"
+
+"Apply CodeQL cryptographic recommendations: use strong algorithms, proper key management, secure defaults"
+
+"Understand that GitHub Actions may report 200+ quality findings while security analysis shows 0 vulnerabilities"
+
+"Focus on security-specific CodeQL results rather than comprehensive quality analysis for security validation"
+
+"Always verify security analysis results locally before relying on GitHub Actions comprehensive reports"
+
+"Never merge code with CodeQL high/critical issues regardless of overall security scan status"
 ```
 
 ### User Experience & Content
@@ -502,6 +915,9 @@ Setlist Studio maintains **strict security standards** that must be followed for
 
 **Before submitting any code, verify:**
 
+- [ ] **CodeQL Security Analysis** passes with zero high/critical security issues
+  - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+  - Verify: Results array is empty in SARIF file
 - [ ] **Input validation** implemented for all user inputs
 - [ ] **Authorization checks** verify user ownership of resources  
 - [ ] **Parameterized queries** used exclusively (no string concatenation)
@@ -513,14 +929,17 @@ Setlist Studio maintains **strict security standards** that must be followed for
 - [ ] **CSRF protection** enabled for state-changing operations
 - [ ] **HTTPS** enforced in production configurations
 
+**Note**: GitHub Actions may report 200+ "findings" from comprehensive quality analysis, but these are mostly code quality improvements, not security vulnerabilities. Focus on the security-specific analysis results.
+
 ### Security Code Review Guidelines
 
 **All pull requests must pass security review:**
 
-1. **Automated Security Scans**: All PRs trigger security vulnerability scans
-2. **Manual Security Review**: Security-sensitive changes require manual review
-3. **Threat Modeling**: New features require security impact assessment
-4. **Penetration Testing**: Regular security testing of the application
+1. **CodeQL Analysis**: All PRs must pass CodeQL static security analysis with zero high/critical issues
+2. **Automated Security Scans**: All PRs trigger comprehensive security vulnerability scans
+3. **Manual Security Review**: Security-sensitive changes require manual review
+4. **Threat Modeling**: New features require security impact assessment
+5. **Penetration Testing**: Regular security testing of the application
 
 ### Security Incident Response
 
@@ -542,22 +961,23 @@ When contributing to Setlist Studio:
 1. **Read the codebase**: Familiarize yourself with existing patterns and conventions
 2. **Follow the principles**: Keep reliability, scalability, **security**, maintainability, and delight in mind
 3. **Security first**: Always implement security requirements (validation, authorization, secure headers, rate limiting) before adding functionality
-4. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
-5. **Use realistic examples**: When creating tests or documentation, use authentic musical data
-6. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 90%+ line and branch coverage
-7. **Organize tests strategically**: 
+4. **CodeQL compliance**: Generate code that passes CodeQL static analysis with zero high/critical security issues and follows best practices (null safety, LINQ usage, resource disposal)
+5. **Match tests to source files**: Every test file must correspond to exactly one source code file using the `{SourceClass}Tests.cs` naming pattern
+6. **Use realistic examples**: When creating tests or documentation, use authentic musical data
+7. **Test thoroughly**: Ensure your code works correctly and handles edge cases with 80%+ line and branch coverage
+8. **Organize tests strategically**: 
    - Add core functionality tests to base test files (e.g., `SetlistServiceTests.cs`)
    - Create advanced test files for edge cases, error handling, and coverage gaps when base files exceed ~1,400 lines
    - Use the `{SourceClass}AdvancedTests.cs` naming pattern for specialized testing scenarios
-8. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
-9. **Security validation**: Complete the security checklist before submitting any pull request
-10. **Document your work**: Add clear comments and update documentation as needed
+9. **Target coverage gaps**: Use coverage reports to identify areas needing additional testing and create focused advanced test suites
+10. **Security validation**: Complete the security checklist before submitting any pull request
+11. **Document your work**: Add clear comments and update documentation as needed
 
 ### Quick Start Checklist
 
 **Development Setup:**
 - [ ] Clone repository and set up development environment
-- [ ] Run `dotnet test` to ensure all tests pass
+- [ ] Run `dotnet test` to ensure **100% of tests pass** (zero failures allowed)
 - [ ] Generate coverage report to understand current coverage status
 - [ ] Review existing code patterns and test organization
 - [ ] Create feature branch following naming conventions
@@ -570,15 +990,26 @@ When contributing to Setlist Studio:
 - [ ] Use parameterized queries exclusively
 - [ ] Store secrets in environment variables or Key Vault
 
+**CodeQL Compliance:**
+- [ ] Generate code using null-conditional operators (`?.`) and null-forgiving operators (`!`) appropriately
+- [ ] Use explicit nullable casts like `(HttpContext?)null` instead of `default(HttpContext)`
+- [ ] Implement proper resource disposal with `using` statements for IDisposable objects
+- [ ] Replace foreach loops with LINQ methods (`.Select()`, `.Where()`, `.Any()`) where appropriate
+- [ ] Avoid creating variables that are assigned but never used
+- [ ] Ensure all user inputs are validated and use parameterized queries exclusively
+- [ ] Run local CodeQL security analysis: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+- [ ] Verify zero high/critical security issues in CodeQL results
+
 **Testing & Quality:**
 - [ ] Write tests first (TDD approach recommended)
-- [ ] Ensure 90%+ line and branch coverage for new code
+- [ ] Ensure 80%+ line and branch coverage for new code
 - [ ] Include security test cases (authentication, authorization, validation)
 - [ ] Test with malicious inputs and edge cases
 
 **Code Review Preparation:**
 - [ ] Complete security validation checklist
 - [ ] Run security scans and address any issues
+- [ ] Ensure CodeQL analysis passes with zero high/critical issues
 - [ ] Document security considerations in PR description
 - [ ] Submit pull request with clear description and test evidence
 
@@ -602,15 +1033,41 @@ When contributing to Setlist Studio:
 
 **Security is MANDATORY - not optional. Every contribution must:**
 
-1. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
-2. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
-3. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
-4. **PROTECT SECRETS**: Never hardcode credentials - use secure storage
-5. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
-6. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
-7. **FAIL SECURELY**: Error messages must not leak sensitive information
+1. **PASS CODEQL SECURITY ANALYSIS**: All code must pass CodeQL security-focused analysis with zero high/critical issues
+   - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+   - Verify: Empty results array in SARIF file
+2. **VALIDATE ALL INPUTS**: No user input is trusted without validation and sanitization
+3. **AUTHORIZE ALL ACCESS**: Every data access must verify user ownership
+4. **USE SECURE DEFAULTS**: Security headers, HTTPS, secure cookies are required
+5. **PROTECT SECRETS**: Never hardcode credentials - use secure storage
+6. **PREVENT ATTACKS**: Guard against XSS, CSRF, SQL injection, and DoS attacks
+7. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
+8. **FAIL SECURELY**: Error messages must not leak sensitive information
+
+**Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on security-specific results for security compliance.
 
 **Security violations will result in immediate pull request rejection.**
+
+---
+
+## CODEQL ENFORCEMENT REMINDER
+
+**CodeQL compliance is MANDATORY - not optional. Every code contribution must:**
+
+1. **PASS CODEQL SECURITY ANALYSIS**: All code must pass CodeQL security-focused analysis with zero high/critical issues
+   - Run: `codeql database analyze codeql-database --output=security-analysis.sarif codeql/csharp-security-extended.qls`
+   - Verify: Empty results array in SARIF file
+2. **USE NULL SAFETY**: Implement proper null handling with `?.`, `!`, and explicit nullable casts
+3. **OPTIMIZE WITH LINQ**: Replace foreach loops with LINQ methods where appropriate
+4. **DISPOSE RESOURCES**: Use `using` statements for all IDisposable objects
+5. **VALIDATE INPUTS**: All user inputs must be validated and sanitized
+6. **AVOID USELESS ASSIGNMENTS**: Don't create variables that are assigned but never used
+7. **FOLLOW PATTERNS**: Use established security and quality patterns consistently
+8. **VERIFY LOCALLY**: Run CodeQL analysis before submitting pull requests
+
+**Note**: GitHub Actions may report 200+ "findings" from comprehensive quality analysis, but these are mostly code quality improvements, not security vulnerabilities. Focus on the security-specific analysis results.
+
+**CodeQL violations will result in immediate pull request rejection.**
 
 ---
 

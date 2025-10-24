@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using FluentAssertions;
@@ -17,6 +18,7 @@ public class SongServiceTests : IDisposable
 {
     private readonly SetlistStudioDbContext _context;
     private readonly Mock<ILogger<SongService>> _mockLogger;
+    private readonly Mock<IAuditLogService> _mockAuditLogService;
     private readonly SongService _songService;
     private readonly string _testUserId = "test-user-123";
     private readonly string _otherUserId = "other-user-456";
@@ -29,7 +31,8 @@ public class SongServiceTests : IDisposable
 
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SongService>>();
-        _songService = new SongService(_context, _mockLogger.Object);
+        _mockAuditLogService = new Mock<IAuditLogService>();
+        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object);
     }
 
     #region GetSongsAsync Comprehensive Tests
@@ -1447,7 +1450,7 @@ public class SongServiceTests : IDisposable
 
     #endregion
 
-    #region Enhanced Coverage Tests for 90% Target
+    #region Enhanced Coverage Tests for 80% Target
 
     [Fact]
     public async Task GetSongsAsync_ShouldFilterByAlbum_WhenAlbumContainsSearchTerm()
@@ -1598,6 +1601,493 @@ public class SongServiceTests : IDisposable
 
         // Assert
         errors.Should().Contain("Duration must be between 1 second and 1 hour");
+    }
+
+    #endregion
+
+    #region Exception Handling and Error Scenarios Tests
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.GetSongsAsync(_testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving songs") || 
+                                            v.ToString()!.Contains("Invalid argument retrieving songs") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving songs")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetSongByIdAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        const int songId = 1;
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.GetSongByIdAsync(songId, _testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Database error retrieving song {songId}") || 
+                                            v.ToString()!.Contains($"Invalid argument retrieving song {songId}") || 
+                                            v.ToString()!.Contains($"Invalid operation retrieving song {songId}")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateSongAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        var validSong = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist",
+            UserId = _testUserId
+        };
+
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.CreateSongAsync(validSong))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error creating song") || 
+                                            v.ToString()!.Contains("Invalid argument creating song") || 
+                                            v.ToString()!.Contains("Invalid operation creating song")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSongAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        var existingSong = new Song
+        {
+            Title = "Original Title",
+            Artist = "Original Artist",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(existingSong);
+        await _context.SaveChangesAsync();
+
+        var updatedSong = new Song
+        {
+            Id = existingSong.Id,
+            Title = "Updated Title",
+            Artist = "Updated Artist",
+            UserId = _testUserId
+        };
+
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.UpdateSongAsync(updatedSong, _testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Concurrency error updating song") || 
+                                            v.ToString()!.Contains("Database error updating song") || 
+                                            v.ToString()!.Contains("Invalid argument updating song") || 
+                                            v.ToString()!.Contains("Invalid operation updating song")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteSongAsync_ShouldThrowException_WhenDatabaseConnectionFails()
+    {
+        // Arrange
+        var song = new Song
+        {
+            Title = "Song to Delete",
+            Artist = "Test Artist",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.DeleteSongAsync(song.Id, _testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Concurrency error deleting song") || 
+                                            v.ToString()!.Contains("Database error deleting song") || 
+                                            v.ToString()!.Contains("Invalid operation deleting song")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetGenresAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.GetGenresAsync(_testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving genres") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving genres")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetTagsAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
+    {
+        // Arrange
+        _context.Dispose(); // Force database error
+
+        // Act & Assert
+        await FluentActions.Invoking(() => _songService.GetTagsAsync(_testUserId))
+            .Should().ThrowAsync<Exception>();
+
+        // Verify error was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Database error retrieving tags") || 
+                                            v.ToString()!.Contains("Invalid operation retrieving tags")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetGenresAsync_ShouldReturnEmptyList_WhenAllSongsHaveNullGenres()
+    {
+        // Arrange
+        var songWithoutGenre = new Song
+        {
+            Title = "No Genre Song",
+            Artist = "Test Artist",
+            Genre = null,
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(songWithoutGenre);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetGenresAsync(_testUserId);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetGenresAsync_ShouldReturnDistinctGenres_WhenMultipleSongsHaveSameGenre()
+    {
+        // Arrange
+        var songs = new[]
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", Genre = "Rock", UserId = _testUserId, CreatedAt = DateTime.UtcNow },
+            new Song { Title = "Song 2", Artist = "Artist 2", Genre = "Rock", UserId = _testUserId, CreatedAt = DateTime.UtcNow },
+            new Song { Title = "Song 3", Artist = "Artist 3", Genre = "Jazz", UserId = _testUserId, CreatedAt = DateTime.UtcNow }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetGenresAsync(_testUserId);
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.Should().Contain("Rock");
+        result.Should().Contain("Jazz");
+    }
+
+    [Fact]
+    public async Task GetTagsAsync_ShouldReturnEmptyList_WhenAllSongsHaveNullTags()
+    {
+        // Arrange
+        var songWithoutTags = new Song
+        {
+            Title = "No Tags Song",
+            Artist = "Test Artist",
+            Tags = null,
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(songWithoutTags);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetTagsAsync(_testUserId);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetTagsAsync_ShouldHandleEmptyTags_WhenTagStringIsEmpty()
+    {
+        // Arrange
+        var songWithEmptyTags = new Song
+        {
+            Title = "Empty Tags Song",
+            Artist = "Test Artist",
+            Tags = "",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(songWithEmptyTags);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetTagsAsync(_testUserId);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetTagsAsync_ShouldFilterOutEmptyTags_WhenTagStringContainsEmptyEntries()
+    {
+        // Arrange
+        var songWithEmptyTagEntries = new Song
+        {
+            Title = "Mixed Tags Song",
+            Artist = "Test Artist",
+            Tags = "rock,,jazz, ,blues,,",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(songWithEmptyTagEntries);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetTagsAsync(_testUserId);
+
+        // Assert
+        result.Should().HaveCount(3);
+        result.Should().Contain("rock");
+        result.Should().Contain("jazz");
+        result.Should().Contain("blues");
+    }
+
+    [Fact]
+    public async Task CreateSongAsync_ShouldLogAuditTrail_WhenSongCreatedSuccessfully()
+    {
+        // Arrange
+        var newSong = new Song
+        {
+            Title = "Audit Test Song",
+            Artist = "Audit Test Artist",
+            UserId = _testUserId
+        };
+
+        // Act
+        var result = await _songService.CreateSongAsync(newSong);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Id.Should().BeGreaterThan(0);
+
+        // Verify audit log was called
+        _mockAuditLogService.Verify(
+            x => x.LogAuditAsync(
+                "CREATE",
+                nameof(Song),
+                result.Id.ToString(),
+                _testUserId,
+                It.IsAny<object>(),
+                It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSongAsync_ShouldLogAuditTrail_WhenSongUpdatedSuccessfully()
+    {
+        // Arrange
+        var existingSong = new Song
+        {
+            Title = "Original Title",
+            Artist = "Original Artist",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(existingSong);
+        await _context.SaveChangesAsync();
+
+        var updatedSong = new Song
+        {
+            Id = existingSong.Id,
+            Title = "Updated Title",
+            Artist = "Updated Artist",
+            UserId = _testUserId
+        };
+
+        // Act
+        var result = await _songService.UpdateSongAsync(updatedSong, _testUserId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Title.Should().Be("Updated Title");
+
+        // Verify audit log was called
+        _mockAuditLogService.Verify(
+            x => x.LogAuditAsync(
+                "UPDATE",
+                nameof(Song),
+                existingSong.Id.ToString(),
+                _testUserId,
+                It.IsAny<object>(),
+                It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteSongAsync_ShouldLogAuditTrail_WhenSongDeletedSuccessfully()
+    {
+        // Arrange
+        var songToDelete = new Song
+        {
+            Title = "Song to Delete",
+            Artist = "Test Artist",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(songToDelete);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.DeleteSongAsync(songToDelete.Id, _testUserId);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // Verify audit log was called
+        _mockAuditLogService.Verify(
+            x => x.LogAuditAsync(
+                "DELETE",
+                nameof(Song),
+                songToDelete.Id.ToString(),
+                _testUserId,
+                It.IsAny<object>(),
+                It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact] 
+    public void ValidateSong_ShouldReturnNullError_WhenSongIsNull()
+    {
+        // Act
+        var errors = _songService.ValidateSong(null!);
+
+        // Assert
+        errors.Should().Contain("Song cannot be null");
+    }
+
+    [Fact]
+    public async Task GetSongByIdAsync_ShouldLogInformation_WhenSongFound()
+    {
+        // Arrange
+        var song = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist",
+            UserId = _testUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetSongByIdAsync(song.Id, _testUserId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Title.Should().Be("Test Song");
+
+        // Verify information was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains($"Retrieved song {song.Id}")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldLogInformation_WhenSongsRetrieved()
+    {
+        // Arrange
+        var songs = new[]
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", UserId = _testUserId, CreatedAt = DateTime.UtcNow },
+            new Song { Title = "Song 2", Artist = "Artist 2", UserId = _testUserId, CreatedAt = DateTime.UtcNow }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _songService.GetSongsAsync(_testUserId);
+
+        // Assert
+        result.Songs.Should().HaveCount(2);
+
+        // Verify information was logged
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Retrieved 2 songs")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 
     #endregion
