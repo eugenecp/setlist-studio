@@ -15,6 +15,7 @@ using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
+using SetlistStudio.Infrastructure.Configuration;
 using SetlistStudio.Web.Services;
 using SetlistStudio.Web.Middleware;
 using System.Threading.RateLimiting;
@@ -225,11 +226,81 @@ try
         });
     });
 
-    // Configure database
-    builder.Services.AddDbContext<SetlistStudioDbContext>(options =>
+    // Configure database with connection pooling and read replica support
+    builder.Services.AddSingleton<IDatabaseConfiguration>(provider =>
     {
-        var connectionString = GetDatabaseConnectionString(builder.Configuration);
-        ConfigureDatabaseProvider(options, connectionString);
+        var config = provider.GetRequiredService<IConfiguration>();
+        var logger = provider.GetRequiredService<ILogger<DatabaseConfiguration>>();
+        return new DatabaseConfiguration(config, logger);
+    });
+
+    builder.Services.AddSingleton<DatabaseProviderService>(provider =>
+    {
+        var config = provider.GetRequiredService<IDatabaseConfiguration>();
+        var logger = provider.GetRequiredService<ILogger<DatabaseProviderService>>();
+        return new DatabaseProviderService(config, logger);
+    });
+
+    // Configure write context (primary database)
+    builder.Services.AddDbContext<SetlistStudioDbContext>((serviceProvider, options) =>
+    {
+        var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
+        var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
+        
+        // Handle different providers appropriately
+        if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
+        {
+            // For SQLite/InMemory, use traditional configuration since Web project has these packages
+            var connectionString = databaseConfig.WriteConnectionString;
+            ConfigureDatabaseProvider(options, connectionString);
+        }
+        else
+        {
+            // For PostgreSQL/SQL Server, configure with migrations assembly
+            if (databaseConfig.Provider == DatabaseProvider.PostgreSQL)
+            {
+                options.UseNpgsql(databaseConfig.WriteConnectionString, npgsqlOptions =>
+                {
+                    npgsqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                    npgsqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                    npgsqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorCodesToAdd: null);
+                });
+            }
+            else if (databaseConfig.Provider == DatabaseProvider.SqlServer)
+            {
+                options.UseSqlServer(databaseConfig.WriteConnectionString, sqlOptions =>
+                {
+                    sqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                    sqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                    sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorNumbersToAdd: null);
+                });
+            }
+        }
+    });
+
+    // Configure read-only context (read replicas)
+    builder.Services.AddDbContext<ReadOnlySetlistStudioDbContext>((serviceProvider, options) =>
+    {
+        var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
+        var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
+        
+        if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
+        {
+            // For SQLite/InMemory, use same connection as write (no read replicas)
+            var connectionString = databaseConfig.WriteConnectionString;
+            ConfigureDatabaseProvider(options, connectionString);
+        }
+        else
+        {
+            // For PostgreSQL/SQL Server, use read replica configuration
+            providerService.ConfigureReadContext(options);
+        }
     });
 
     // Configure Identity
@@ -805,6 +876,7 @@ static void HandleDatabaseInitializationError(IWebHostEnvironment environment, E
 
 /// <summary>
 /// Gets the database connection string, using secure environment-specific defaults if none configured
+/// Legacy method - now handled by DatabaseConfiguration class
 /// </summary>
 static string GetDatabaseConnectionString(IConfiguration configuration)
 {

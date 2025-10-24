@@ -1,18 +1,29 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Infrastructure.Services;
 
 namespace SetlistStudio.Infrastructure.Data;
 
 /// <summary>
 /// Entity Framework database context for Setlist Studio
-/// Manages user authentication and application data
+/// Manages user authentication and application data with write operations support
 /// </summary>
 public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
 {
+    private readonly DatabaseProviderService? _providerService;
+
     public SetlistStudioDbContext(DbContextOptions<SetlistStudioDbContext> options)
         : base(options)
     {
+    }
+
+    public SetlistStudioDbContext(
+        DbContextOptions<SetlistStudioDbContext> options,
+        DatabaseProviderService providerService)
+        : base(options)
+    {
+        _providerService = providerService;
     }
 
     /// <summary>
@@ -34,6 +45,16 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     /// Audit logs for tracking data changes
     /// </summary>
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        if (!optionsBuilder.IsConfigured && _providerService != null)
+        {
+            _providerService.ConfigureWriteContext(optionsBuilder);
+        }
+        
+        base.OnConfiguring(optionsBuilder);
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
