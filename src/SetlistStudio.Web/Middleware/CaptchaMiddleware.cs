@@ -70,7 +70,7 @@ public class CaptchaMiddleware
                     
                     if (!isValidCaptcha)
                     {
-                        _logger.LogWarning("Invalid CAPTCHA response from IP {ClientIp}", SanitizeForLogging(clientIp));
+                        _logger.LogWarning("Invalid CAPTCHA response from IP {ClientIp}", SecureLoggingHelper.SanitizeMessage(clientIp));
                         await ReturnCaptchaChallenge(context, clientIp, "Invalid CAPTCHA. Please try again.");
                         return;
                     }
@@ -78,12 +78,12 @@ public class CaptchaMiddleware
                     // CAPTCHA passed - grant bypass for 30 minutes
                     _cache.Set(captchaBypassKey, true, TimeSpan.FromMinutes(30));
                     
-                    _logger.LogInformation("CAPTCHA challenge passed for IP {ClientIp}", SanitizeForLogging(clientIp));
+                    _logger.LogInformation("CAPTCHA challenge passed for IP {ClientIp}", SecureLoggingHelper.SanitizeMessage(clientIp));
                 }
                 catch (HttpRequestException ex)
                 {
                     // CAPTCHA service is unavailable - return too many requests
-                    _logger.LogError(ex, "CAPTCHA service unavailable for IP {ClientIp}", SanitizeForLogging(clientIp));
+                    _logger.LogError(ex, "CAPTCHA service unavailable for IP {ClientIp}", SecureLoggingHelper.SanitizeMessage(clientIp));
                     context.Response.StatusCode = 429;
                     await context.Response.WriteAsync("CAPTCHA service temporarily unavailable. Please try again later.");
                     return;
@@ -93,7 +93,7 @@ public class CaptchaMiddleware
         catch (Exception ex)
         {
             // Rate limiting service failed - continue without CAPTCHA check
-            _logger.LogError(ex, "Rate limiting service failed for IP {ClientIp}. Continuing without CAPTCHA.", SanitizeForLogging(clientIp));
+            _logger.LogError(ex, "Rate limiting service failed for IP {ClientIp}. Continuing without CAPTCHA.", SecureLoggingHelper.SanitizeMessage(clientIp));
         }
 
         await _next(context);
@@ -144,16 +144,6 @@ public class CaptchaMiddleware
         return context.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
-    /// <summary>
-    /// Sanitizes a string for safe logging by removing newlines and carriage returns.
-    /// </summary>
-    private string SanitizeForLogging(string? input)
-    {
-        if (input == null)
-            return string.Empty;
-        return input.Replace("\r", "").Replace("\n", "");
-    }
-
     private string? GetCaptchaResponse(HttpContext context)
     {
         // Check form data for CAPTCHA response
@@ -163,15 +153,15 @@ public class CaptchaMiddleware
         }
 
         // Check headers for CAPTCHA response (for API requests)
-        if (context.Request.Headers.ContainsKey("X-Captcha-Response"))
+        if (context.Request.Headers.TryGetValue("X-Captcha-Response", out var headerCaptchaResponse))
         {
-            return context.Request.Headers["X-Captcha-Response"];
+            return headerCaptchaResponse;
         }
 
         // Check query string
-        if (context.Request.Query.ContainsKey("captcha"))
+        if (context.Request.Query.TryGetValue("captcha", out var queryCaptchaResponse))
         {
-            return context.Request.Query["captcha"];
+            return queryCaptchaResponse;
         }
 
         return null;
@@ -206,7 +196,7 @@ public class CaptchaMiddleware
         }
 
         _logger.LogInformation("CAPTCHA challenge issued to IP {ClientIp} for path {Path}", 
-            clientIp, context.Request.Path);
+            clientIp, SecureLoggingHelper.SanitizeMessage(context.Request.Path.Value));
     }
 
     private bool IsApiRequest(HttpContext context)
