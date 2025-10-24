@@ -270,14 +270,18 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
                 ["remoteip"] = clientIp
             };
 
-            var content = new FormUrlEncodedContent(parameters);
-            var response = await httpClient.PostAsync("https://www.google.com/recaptcha/api/siteverify", content);
-            
-            if (response.IsSuccessStatusCode)
+            using (var content = new FormUrlEncodedContent(parameters))
             {
-                var jsonResponse = await response.Content.ReadAsStringAsync();
-                // Parse JSON response to check success field
-                return jsonResponse.Contains("\"success\": true");
+                var response = await httpClient.PostAsync("https://www.google.com/recaptcha/api/siteverify", content);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonResponse = await response.Content.ReadAsStringAsync();
+                    // Parse JSON response to check success field
+                    return jsonResponse.Contains("\"success\": true");
+                }
+
+                return false;
             }
 
             return false;
