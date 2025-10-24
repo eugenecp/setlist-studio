@@ -448,7 +448,7 @@ try
         };
         
         // Login/logout paths
-        options.LoginPath = "/Identity/Account/Login";
+        options.LoginPath = "/login";
         options.LogoutPath = "/Identity/Account/Logout";
         options.AccessDeniedPath = "/Identity/Account/AccessDenied";
     });
