@@ -53,12 +53,17 @@ WORKDIR /app
 # Copy published app with specific ownership
 COPY --from=publish --chown=setliststudio:setliststudio /app/publish .
 
-# Create logs and data directories with secure permissions
+# Copy database security scripts
+COPY --chown=setliststudio:setliststudio scripts/secure-database.sh /app/secure-database.sh
+
+# Create logs and data directories with enhanced security permissions and setup scripts
 RUN mkdir -p /app/logs /app/data && \
-    chmod 750 /app/data /app/logs && \
+    chmod 700 /app/data && \
+    chmod 750 /app/logs && \
     chown -R setliststudio:setliststudio /app/logs /app/data /app && \
     find /app -type f -exec chmod 640 {} \; && \
-    chmod 750 /app/SetlistStudio.Web.dll
+    chmod 750 /app/SetlistStudio.Web.dll && \
+    chmod +x /app/secure-database.sh
 
 # Security: Set restrictive environment variables
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080
@@ -77,8 +82,12 @@ ENV LANG=en_US.UTF-8
 # Switch to non-root user for security
 USER setliststudio
 
-# Create empty database file with proper permissions (will be overridden by volume in production)
-RUN touch /app/data/setliststudio.db && chmod 640 /app/data/setliststudio.db
+# Create empty database file with enhanced security permissions (will be overridden by volume in production)
+# Note: chattr +i (immutable) requires privileged container or specific capabilities
+RUN touch /app/data/setliststudio.db && \
+    chmod 600 /app/data/setliststudio.db && \
+    # Set restrictive umask for any future file creation
+    echo 'umask 077' >> ~/.bashrc
 
 # Security-enhanced health check with minimal privileges
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -283,8 +283,6 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
 
                 return false;
             }
-
-            return false;
         }
         catch (Exception ex)
         {

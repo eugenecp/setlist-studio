@@ -73,7 +73,7 @@ public class SecretValidationService
         // Check if Azure Key Vault is configured for production
         if (!_environment.IsDevelopment())
         {
-            var keyVaultValidation = ValidateKeyVaultConfiguration();
+            var keyVaultValidation = ValidateKeyVaultConfiguration(environmentName);
             result.ValidationErrors.AddRange(keyVaultValidation);
         }
 
@@ -126,8 +126,12 @@ public class SecretValidationService
         }
         else
         {
-            _logger.LogWarning("Secret validation failed with {ErrorCount} errors in environment: {Environment}", 
-                result.ValidationErrors.Count, environmentName);
+            // Only log warning for non-test environments
+            if (!environmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Secret validation failed with {ErrorCount} errors in environment: {Environment}", 
+                    result.ValidationErrors.Count, environmentName);
+            }
         }
 
         return result;
@@ -136,7 +140,7 @@ public class SecretValidationService
     /// <summary>
     /// Validates Azure Key Vault configuration for production environments
     /// </summary>
-    private List<SecretValidationError> ValidateKeyVaultConfiguration()
+    private List<SecretValidationError> ValidateKeyVaultConfiguration(string environmentName)
     {
         var errors = new List<SecretValidationError>();
         var keyVaultName = _configuration["KeyVault:VaultName"];
@@ -144,7 +148,10 @@ public class SecretValidationService
         if (string.IsNullOrWhiteSpace(keyVaultName))
         {
             // Key Vault is not configured - this is okay for some deployment scenarios
-            _logger.LogInformation("Azure Key Vault not configured - using local configuration");
+            if (!environmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Azure Key Vault not configured - using local configuration");
+            }
             return errors;
         }
 

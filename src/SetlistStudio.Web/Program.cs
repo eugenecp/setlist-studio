@@ -87,7 +87,7 @@ try
                 Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
             }
         }
-        else
+        else if (!builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
         {
             Log.Warning("Azure Key Vault name not configured for non-development environment");
         }
@@ -587,7 +587,11 @@ try
         app.UseHsts();
     }
 
-    app.UseHttpsRedirection();
+    // Only use HTTPS redirection if not in test environment
+    if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+    {
+        app.UseHttpsRedirection();
+    }
     
     // Security Headers Middleware - CRITICAL SECURITY ENHANCEMENT
     app.Use(async (context, next) =>
@@ -1045,7 +1049,7 @@ static async Task<ApplicationUser?> CreateDemoUserAsync(UserManager<ApplicationU
         CreatedAt = DateTime.UtcNow
     };
 
-    var result = await userManager.CreateAsync(demoUser, "Demo123!");
+    var result = await userManager.CreateAsync(demoUser, "DemoUser123456!");
     if (!result.Succeeded)
     {
         var errorsBuilder = new StringBuilder();
