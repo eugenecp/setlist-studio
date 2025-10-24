@@ -78,7 +78,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
         var cacheEntry = Mock.Of<ICacheEntry>();
-        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:192.168.1.xxx", out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:192.168.1.xxx", out It.Ref<object?>.IsAny))
             .Returns(true);
 
         // Act
@@ -96,7 +96,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Path = "/api/songs";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -123,7 +123,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers.Accept = "application/json";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -146,7 +146,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.ContentType = "text/html";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -187,7 +187,7 @@ public class CaptchaMiddlewareTests
         });
         _httpContext.Request.Form = formCollection;
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -231,7 +231,7 @@ public class CaptchaMiddlewareTests
         });
         _httpContext.Request.Form = formCollection;
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -269,7 +269,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.1, 192.168.1.1";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.1"); // Proxy IP
 
-        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:203.0.113.1", out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:203.0.113.1", out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -291,7 +291,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers["X-Real-IP"] = "198.51.100.1";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.1");
 
-        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:198.51.100.1", out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:198.51.100.1", out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -311,7 +311,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Path = "/api/songs";
         _httpContext.Connection.RemoteIpAddress = null; // No IP address available
 
-        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:unknown", out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue("captcha_bypass:unknown", out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -336,7 +336,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers["X-Captcha-Response"] = "header-captcha-token";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -364,7 +364,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.QueryString = new QueryString("?captcha=query-captcha-token");
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -429,7 +429,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers.Accept = acceptHeader;
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -459,7 +459,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Headers["X-Requested-With"] = "XMLHttpRequest";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -484,7 +484,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Path = "/api/songs";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -513,7 +513,7 @@ public class CaptchaMiddlewareTests
         });
         _httpContext.Request.Form = formCollection;
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))
@@ -541,7 +541,7 @@ public class CaptchaMiddlewareTests
         _httpContext.Request.Path = "/api/songs";
         _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
 
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
             .Returns(false);
 
         _mockRateLimitingService.Setup(x => x.ShouldRequireCaptchaAsync(It.IsAny<HttpContext>()))

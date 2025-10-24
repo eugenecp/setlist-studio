@@ -132,7 +132,7 @@ public class EnhancedRateLimitingServiceTests
     public async Task GetCompositePartitionKeyAsync_WithNullContext_ShouldReturnAnonymous()
     {
         // Act
-        var result = await _service.GetCompositePartitionKeyAsync(null);
+        var result = await _service.GetCompositePartitionKeyAsync(null!);
 
         // Assert
         result.Should().Be("anonymous");
@@ -157,8 +157,8 @@ public class EnhancedRateLimitingServiceTests
         // Setup cache to return violation history
         var cacheEntry = Mock.Of<ICacheEntry>();
         _mockCache.Setup(x => x.CreateEntry(It.IsAny<object>())).Returns(cacheEntry);
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
-            .Returns((object key, out object value) =>
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
+            .Returns((object key, out object? value) =>
             {
                 value = 5; // High violation count
                 return true;
@@ -201,8 +201,8 @@ public class EnhancedRateLimitingServiceTests
         _mockRequest.Setup(x => x.Path).Returns(path);
 
         // Setup cache to return low violation counts
-        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
-            .Returns((object key, out object value) =>
+        _mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object?>.IsAny))
+            .Returns((object key, out object? value) =>
             {
                 value = 1; // Low violation count
                 return true;
