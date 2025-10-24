@@ -154,11 +154,9 @@ services:
       - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET:-}
     volumes:
       - setliststudio-logs:/app/logs
-      # Security: Mount temporary directories with restricted permissions
-      - /tmp:/tmp:rw,nosuid,nodev,noexec,size=50m
+
     tmpfs:
-      - /app/temp:rw,nosuid,nodev,noexec,size=100m
-      - /var/tmp:rw,nosuid,nodev,noexec,size=50m
+      - /tmp:rw,noexec,nosuid,size=100m
     depends_on:
       postgres-primary:
         condition: service_healthy
@@ -183,11 +181,9 @@ services:
       - SETGID    # Required for group changes
       - SETUID    # Required for user changes
     read_only: true
-    # Security: Enhanced security options
+    # Security: Enhanced security options (Windows compatible)
     security_opt:
       - no-new-privileges:true    # Prevent privilege escalation
-      - apparmor:docker-default   # Use AppArmor security profile
-      - seccomp:default          # Use default seccomp profile
     networks:
       - setliststudio-network
 
