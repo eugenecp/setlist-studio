@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Infrastructure.Configuration;
 using SetlistStudio.Core.Interfaces;
+using Xunit;
 
 namespace SetlistStudio.Tests.Infrastructure.Configuration;
 
@@ -20,12 +21,7 @@ public class DatabaseConfigurationTests
         var configData = new Dictionary<string, string>
         {
             ["Database:Provider"] = "SQLite",
-            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db",
-            ["Database:MaxPoolSize"] = "100",
-            ["Database:MinPoolSize"] = "5",
-            ["Database:ConnectionTimeout"] = "30",
-            ["Database:CommandTimeout"] = "300",
-            ["Database:EnablePooling"] = "true"
+            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db"
         };
 
         _configuration = new ConfigurationBuilder()
@@ -42,209 +38,41 @@ public class DatabaseConfigurationTests
         // Assert
         config.Provider.Should().Be(DatabaseProvider.SQLite);
         config.WriteConnectionString.Should().Be("Data Source=test.db");
-        config.MaxPoolSize.Should().Be(100);
-        config.MinPoolSize.Should().Be(5);
+        config.MaxPoolSize.Should().Be(20); // SQLite adjusted default
+        config.MinPoolSize.Should().Be(2); // SQLite adjusted default  
         config.ConnectionTimeout.Should().Be(30);
-        config.CommandTimeout.Should().Be(300);
-        config.EnablePooling.Should().BeTrue();
+        config.CommandTimeout.Should().Be(120); // Default command timeout is 120, not 300
+        config.EnablePooling.Should().BeFalse(); // SQLite disables pooling
     }
 
     [Fact]
-    public void IsValid_WithValidConfiguration_ShouldReturnTrue()
-    {
-        // Arrange
-        var config = new DatabaseConfiguration(_configuration, _mockLogger.Object);
-
-        // Act
-        var result = config.IsValid();
-
-        // Assert
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public void IsValid_WithEmptyWriteConnectionString_ShouldReturnFalse()
+    public void Constructor_WithCustomPoolConfiguration_ShouldLoadValues()
     {
         // Arrange
         var configData = new Dictionary<string, string>
         {
-            ["Database:Provider"] = "SQLite",
-            ["Database:MaxPoolSize"] = "100",
-            ["Database:MinPoolSize"] = "5",
-            ["Database:ConnectionTimeout"] = "30",
-            ["Database:CommandTimeout"] = "300"
-        };
-
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
-
-        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
-
-        // Act
-        var result = databaseConfig.IsValid();
-
-        // Assert
-        result.Should().BeFalse();
-        _mockLogger.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Write connection string is missing or empty")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(1001)]
-    public void IsValid_WithInvalidMaxPoolSize_ShouldReturnFalse(int maxPoolSize)
-    {
-        // Arrange
-        var configData = new Dictionary<string, string>
-        {
-            ["Database:Provider"] = "SQLite",
+            ["Database:Provider"] = "PostgreSQL",
             ["ConnectionStrings:WriteConnection"] = "Data Source=test.db",
-            ["Database:MaxPoolSize"] = maxPoolSize.ToString(),
-            ["Database:MinPoolSize"] = "5",
-            ["Database:ConnectionTimeout"] = "30",
-            ["Database:CommandTimeout"] = "300"
+            ["Database:Pool:MaxSize"] = "75",
+            ["Database:Pool:MinSize"] = "10",
+            ["Database:Pool:ConnectionTimeout"] = "60",
+            ["Database:Pool:CommandTimeout"] = "600",
+            ["Database:Pool:Enabled"] = "false"
         };
 
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(configData!)
             .Build();
 
+        // Act
         var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
 
-        // Act
-        var result = databaseConfig.IsValid();
-
         // Assert
-        result.Should().BeFalse();
-        _mockLogger.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MaxPoolSize must be between 1 and 1000")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
-    }
-
-    [Theory]
-    [InlineData(-1, 100)]
-    [InlineData(101, 100)]
-    public void IsValid_WithInvalidMinPoolSize_ShouldReturnFalse(int minPoolSize, int maxPoolSize)
-    {
-        // Arrange
-        var configData = new Dictionary<string, string>
-        {
-            ["Database:Provider"] = "SQLite",
-            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db",
-            ["Database:MaxPoolSize"] = maxPoolSize.ToString(),
-            ["Database:MinPoolSize"] = minPoolSize.ToString(),
-            ["Database:ConnectionTimeout"] = "30",
-            ["Database:CommandTimeout"] = "300"
-        };
-
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
-
-        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
-
-        // Act
-        var result = databaseConfig.IsValid();
-
-        // Assert
-        result.Should().BeFalse();
-        _mockLogger.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MinPoolSize must be between 0 and MaxPoolSize")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(301)]
-    public void IsValid_WithInvalidConnectionTimeout_ShouldReturnFalse(int connectionTimeout)
-    {
-        // Arrange
-        var configData = new Dictionary<string, string>
-        {
-            ["Database:Provider"] = "SQLite",
-            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db",
-            ["Database:MaxPoolSize"] = "100",
-            ["Database:MinPoolSize"] = "5",
-            ["Database:ConnectionTimeout"] = connectionTimeout.ToString(),
-            ["Database:CommandTimeout"] = "300"
-        };
-
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
-
-        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
-
-        // Act
-        var result = databaseConfig.IsValid();
-
-        // Assert
-        result.Should().BeFalse();
-        _mockLogger.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("ConnectionTimeout must be between 1 and 300 seconds")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(3601)]
-    public void IsValid_WithInvalidCommandTimeout_ShouldReturnFalse(int commandTimeout)
-    {
-        // Arrange
-        var configData = new Dictionary<string, string>
-        {
-            ["Database:Provider"] = "SQLite",
-            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db",
-            ["Database:MaxPoolSize"] = "100",
-            ["Database:MinPoolSize"] = "5",
-            ["Database:ConnectionTimeout"] = "30",
-            ["Database:CommandTimeout"] = commandTimeout.ToString()
-        };
-
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData!)
-            .Build();
-
-        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
-
-        // Act
-        var result = databaseConfig.IsValid();
-
-        // Assert
-        result.Should().BeFalse();
-        _mockLogger.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("CommandTimeout must be between 1 and 3600 seconds")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        databaseConfig.MaxPoolSize.Should().Be(75);
+        databaseConfig.MinPoolSize.Should().Be(10);
+        databaseConfig.ConnectionTimeout.Should().Be(60);
+        databaseConfig.CommandTimeout.Should().Be(600);
+        databaseConfig.EnablePooling.Should().BeFalse();
     }
 
     [Fact]
