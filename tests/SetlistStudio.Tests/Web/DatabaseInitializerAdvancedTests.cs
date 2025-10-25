@@ -171,7 +171,7 @@ public class DatabaseInitializerAdvancedTests
         var services = new ServiceCollection();
         
         // Use SQLite file database (production scenario)
-        var tempDbPath = Path.GetTempFileName() + ".db";
+        var tempDbPath = Path.ChangeExtension(Path.GetTempFileName(), ".db");
         try
         {
             services.AddDbContext<SetlistStudioDbContext>(options =>
@@ -231,7 +231,7 @@ public class DatabaseInitializerAdvancedTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
-        var tempDbPath = Path.GetTempFileName() + ".db";
+        var tempDbPath = Path.ChangeExtension(Path.GetTempFileName(), ".db");
         try
         {
             services.AddDbContext<SetlistStudioDbContext>(options =>
@@ -340,7 +340,7 @@ public class DatabaseInitializerAdvancedTests
         var mockLogger = new Mock<ILogger>();
         var services = new ServiceCollection();
         
-        var tempDbPath = Path.GetTempFileName() + ".db";
+        var tempDbPath = Path.ChangeExtension(Path.GetTempFileName(), ".db");
         try
         {
             services.AddDbContext<SetlistStudioDbContext>(options =>
