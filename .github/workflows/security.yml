@@ -212,43 +212,57 @@ jobs:
         # Start the application in background for testing
         echo "Starting application for security testing..."
         cd src/SetlistStudio.Web
+        # Set security testing environment to bypass strict secret validation
+        export ASPNETCORE_ENVIRONMENT=SecurityTesting
+        export SECURITY_TESTING=true
+        export SKIP_SECRET_VALIDATION=true
         dotnet run --configuration Release --urls=http://localhost:5000 &
         APP_PID=$!
         cd ../..
         
         # Wait for application to start and verify it's responding
-        sleep 30
+        sleep 5
+        APP_STARTED=false
         for i in {1..10}; do
-          if curl -f http://localhost:5000/api/status > /dev/null 2>&1; then
+          if curl -f http://localhost:5000/health > /dev/null 2>&1 || curl -f http://localhost:5000/ > /dev/null 2>&1; then
             echo "Application is ready for testing"
+            APP_STARTED=true
             break
           fi
           echo "Waiting for application... ($i/10)"
           sleep 5
         done
         
-        # Install and run OWASP ZAP baseline scan
+        # Install OWASP ZAP (always install, regardless of app status)
         echo "Installing OWASP ZAP..."
         wget -q https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
         tar -xzf ZAP_2.14.0_Linux.tar.gz
         
-        echo "Running ZAP baseline security scan..."
-        ./ZAP_2.14.0/zap.sh -cmd -quickurl http://localhost:5000 -quickout zap-report.html -quickprogress > zap-scan.log 2>&1 || echo "ZAP scan completed with findings"
-        
-        # Process ZAP results and set environment variable for later use
-        if [ -f "zap-report.html" ]; then
-          CRITICAL_ISSUES=$(grep -o -i "High\|Critical" zap-report.html | wc -l || echo "0")
-          echo "ZAP scan completed. Critical/High issues found: $CRITICAL_ISSUES"
-          echo "ZAP_ISSUES=$CRITICAL_ISSUES" >> $GITHUB_ENV
+        if [ "$APP_STARTED" = true ]; then
+          echo "Running ZAP baseline security scan..."
+          ./ZAP_2.14.0/zap.sh -cmd -quickurl http://localhost:5000 -quickout zap-report.html -quickprogress > zap-scan.log 2>&1 || echo "ZAP scan completed with findings"
+          
+          # Process ZAP results and set environment variable for later use
+          if [ -f "zap-report.html" ]; then
+            CRITICAL_ISSUES=$(grep -o -i "High\|Critical" zap-report.html | wc -l || echo "0")
+            echo "ZAP scan completed. Critical/High issues found: $CRITICAL_ISSUES"
+            echo "ZAP_ISSUES=$CRITICAL_ISSUES" >> $GITHUB_ENV
+            echo "ZAP_STATUS=completed" >> $GITHUB_ENV
+          else
+            echo "ZAP report not generated, scan may have failed"
+            echo "ZAP_ISSUES=0" >> $GITHUB_ENV
+            echo "ZAP_STATUS=failed" >> $GITHUB_ENV
+          fi
         else
-          echo "ZAP report not generated, assuming no critical issues"
+          echo "Application failed to start - cannot run ZAP scan"
           echo "ZAP_ISSUES=0" >> $GITHUB_ENV
+          echo "ZAP_STATUS=app_failed" >> $GITHUB_ENV
         fi
         
         # Stop the application
         kill $APP_PID 2>/dev/null || true
-        echo "OWASP ZAP scan completed"
-      continue-on-error: true
+        echo "OWASP ZAP scan process completed"
+      continue-on-error: true # Continue to allow summary step to handle failures properly
 
     # Step 11.2: Security Configuration Compliance Audit
     # Verify implementation of security best practices in source code
@@ -420,14 +434,20 @@ jobs:
         fi
         
         # Analyze OWASP ZAP dynamic security scan results
-        if [ -n "${ZAP_ISSUES:-}" ]; then
-          if [ "${ZAP_ISSUES}" -gt 0 ]; then
+        if [ "${ZAP_STATUS:-}" = "completed" ]; then
+          if [ "${ZAP_ISSUES:-0}" -gt 0 ]; then
             echo "| OWASP ZAP Dynamic Scan | ⚠️ Issues | $ZAP_ISSUES critical/high issues detected |" >> security-summary.md
           else
             echo "| OWASP ZAP Dynamic Scan | ✅ Secure | No critical/high issues detected |" >> security-summary.md
           fi
+        elif [ "${ZAP_STATUS:-}" = "failed" ]; then
+          echo "| OWASP ZAP Dynamic Scan | ❌ Failed | ZAP scan failed to generate report |" >> security-summary.md
+        elif [ "${ZAP_STATUS:-}" = "app_failed" ]; then
+          echo "| OWASP ZAP Dynamic Scan | ❌ Failed | Application failed to start for testing |" >> security-summary.md
+        elif [ "${{ github.event_name }}" = "schedule" ]; then
+          echo "| OWASP ZAP Dynamic Scan | ℹ️ Skipped | Scan skipped for scheduled runs (resource optimization) |" >> security-summary.md
         else
-          echo "| OWASP ZAP Dynamic Scan | ℹ️ Skipped | Scan not executed (scheduled runs only) |" >> security-summary.md
+          echo "| OWASP ZAP Dynamic Scan | ℹ️ Skipped | Scan not executed |" >> security-summary.md
         fi
         
 
@@ -564,12 +584,23 @@ jobs:
           fi
         fi
 
-        # Display and fail for OWASP ZAP critical/high security issues
+        # Display and fail for OWASP ZAP critical/high security issues or scan failures
         if [ -n "${ZAP_ISSUES:-}" ] && [ "${ZAP_ISSUES}" -gt 0 ]; then
           echo "❌ OWASP ZAP detected $ZAP_ISSUES critical/high security issues in dynamic scan"
           if [ -f "zap-report.html" ]; then
             echo "See zap-report.html artifact for detailed findings"
           fi
+          fail=1
+        elif [ "${ZAP_STATUS:-}" = "failed" ]; then
+          echo "❌ OWASP ZAP scan failed to complete - dynamic security verification incomplete"
+          if [ -f "zap-scan.log" ]; then
+            echo "ZAP scan log output:"
+            tail -20 zap-scan.log
+          fi
+          fail=1
+        elif [ "${ZAP_STATUS:-}" = "app_failed" ]; then
+          echo "❌ OWASP ZAP scan failed - application could not start for security testing"
+          echo "This indicates a critical application startup issue that must be resolved"
           fail=1
         fi
 

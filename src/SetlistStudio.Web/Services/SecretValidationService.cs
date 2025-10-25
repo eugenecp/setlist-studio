@@ -100,13 +100,20 @@ public class SecretValidationService
     }
 
     /// <summary>
-    /// Determines if the current environment is non-production (Development or Testing)
+    /// Determines if the current environment is non-production (Development, Testing, or SecurityTesting)
     /// </summary>
     private bool IsNonProductionEnvironment()
     {
         var environmentName = _environment.EnvironmentName;
+        
+        // Check for explicit security testing bypass
+        var skipSecretValidation = _configuration.GetValue<bool>("SKIP_SECRET_VALIDATION", false) ||
+                                 !string.IsNullOrEmpty(_configuration["SECURITY_TESTING"]);
+        
         return _environment.IsDevelopment() || 
-               string.Equals(environmentName, "Testing", StringComparison.OrdinalIgnoreCase);
+               string.Equals(environmentName, "Testing", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(environmentName, "SecurityTesting", StringComparison.OrdinalIgnoreCase) ||
+               skipSecretValidation;
     }
 
     /// <summary>
@@ -514,7 +521,9 @@ public class SecretValidationService
     /// </summary>
     public void ValidateSecretsOrThrow()
     {
-        var result = ValidateSecrets(strictValidation: _environment.IsProduction());
+        // Skip strict validation for non-production environments (including security testing)
+        var shouldStrictValidate = !IsNonProductionEnvironment();
+        var result = ValidateSecrets(strictValidation: shouldStrictValidate);
         
         if (!result.IsValid)
         {
@@ -522,11 +531,11 @@ public class SecretValidationService
                 .Where(e => e.Issue == SecretValidationIssue.Missing || e.Issue == SecretValidationIssue.Placeholder)
                 .ToList();
 
-            // Only throw in production/staging environments AND not in test context
+            // Only throw in actual production/staging environments (not security testing)
             var isInTestContext = AppDomain.CurrentDomain.GetAssemblies()
                 .Any(a => a.GetName().Name?.Contains("Test", StringComparison.OrdinalIgnoreCase) == true);
                 
-            if (criticalErrors.Any() && (_environment.IsProduction() || _environment.IsStaging()) && !isInTestContext)
+            if (criticalErrors.Any() && shouldStrictValidate && !isInTestContext)
             {
                 var errorMessageBuilder = new StringBuilder();
                 errorMessageBuilder.AppendLine($"Critical secret validation failed in {_environment.EnvironmentName} environment:");

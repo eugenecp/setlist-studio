@@ -887,6 +887,11 @@ static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string co
         // SQLite connection string
         options.UseSqlite(connectionString);
     }
+    else if (connectionString.Contains("Host=") || connectionString.Contains("host="))
+    {
+        // PostgreSQL connection string
+        options.UseNpgsql(connectionString);
+    }
     else
     {
         // SQL Server connection string - SECURITY: Enforce encryption
