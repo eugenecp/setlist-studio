@@ -243,62 +243,8 @@ public static class SecureLoggingHelper
                 var propertyName = property.Name;
                 var value = property.GetValue(obj);
 
-                // Special handling for emails - preserve domain but redact username
-                if (propertyName.ToLowerInvariant() == "email" && value is string emailValue)
-                {
-                    if (emailValue.Contains('@'))
-                    {
-                        var parts = emailValue.Split('@');
-                        if (parts.Length == 2)
-                        {
-                            result[propertyName] = $"[REDACTED]@{parts[1]}";
-                            continue;
-                        }
-                    }
-                    result[propertyName] = "[REDACTED]";
-                    continue;
-                }
-
-                // Check if this is a sensitive field
-                if (IsSensitiveField(propertyName))
-                {
-                    result[propertyName] = "[REDACTED]";
-                    continue;
-                }
-
-                // Handle different value types
-                if (value == null)
-                {
-                    result[propertyName] = null;
-                }
-                else if (value is string stringValue)
-                {
-                    result[propertyName] = SanitizeMessage(stringValue);
-                }
-                else if (value.GetType().IsPrimitive || value is DateTime || value is DateTimeOffset || value is TimeSpan)
-                {
-                    result[propertyName] = value;
-                }
-                else
-                {
-                    // For complex objects, use their type name to avoid exposing sensitive data
-                    // Anonymous types will show their compiler-generated type name which is safe for logging
-                    var typeName = value.GetType().ToString();
-                    
-                    // Format anonymous types to match expected test format
-                    if (typeName.Contains("AnonymousType"))
-                    {
-                        // Remove generic type parameters and wrap in brackets to match test expectation
-                        var genericIndex = typeName.IndexOf('[');
-                        if (genericIndex > 0)
-                        {
-                            typeName = typeName.Substring(0, genericIndex) + "]";
-                        }
-                        typeName = "[" + typeName;
-                    }
-                    
-                    result[propertyName] = typeName;
-                }
+                var sanitizedValue = ProcessPropertyValue(propertyName, value);
+                result[propertyName] = sanitizedValue;
             }
             catch (TargetParameterCountException)
             {
@@ -323,6 +269,130 @@ public static class SecureLoggingHelper
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Processes a property value for sanitization.
+    /// </summary>
+    /// <param name="propertyName">The name of the property</param>
+    /// <param name="value">The value of the property</param>
+    /// <returns>The sanitized value</returns>
+    private static object? ProcessPropertyValue(string propertyName, object? value)
+    {
+        // Special handling for emails - preserve domain but redact username
+        if (IsEmailProperty(propertyName, value))
+        {
+            return SanitizeEmailValue((string)value!);
+        }
+
+        // Check if this is a sensitive field
+        if (IsSensitiveField(propertyName))
+        {
+            return "[REDACTED]";
+        }
+
+        return SanitizeValueByType(value);
+    }
+
+    /// <summary>
+    /// Checks if the property is an email property.
+    /// </summary>
+    /// <param name="propertyName">The property name</param>
+    /// <param name="value">The property value</param>
+    /// <returns>True if this is an email property</returns>
+    private static bool IsEmailProperty(string propertyName, object? value)
+    {
+        return propertyName.ToLowerInvariant() == "email" && value is string;
+    }
+
+    /// <summary>
+    /// Sanitizes an email value by preserving the domain but redacting the username.
+    /// </summary>
+    /// <param name="emailValue">The email value to sanitize</param>
+    /// <returns>The sanitized email value</returns>
+    private static string SanitizeEmailValue(string emailValue)
+    {
+        if (emailValue.Contains('@'))
+        {
+            var parts = emailValue.Split('@');
+            if (parts.Length == 2)
+            {
+                return $"[REDACTED]@{parts[1]}";
+            }
+        }
+        return "[REDACTED]";
+    }
+
+    /// <summary>
+    /// Sanitizes a value based on its type.
+    /// </summary>
+    /// <param name="value">The value to sanitize</param>
+    /// <returns>The sanitized value</returns>
+    private static object? SanitizeValueByType(object? value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (value is string stringValue)
+        {
+            return SanitizeMessage(stringValue);
+        }
+
+        if (IsSimpleType(value))
+        {
+            return value;
+        }
+
+        return FormatComplexTypeForLogging(value);
+    }
+
+    /// <summary>
+    /// Checks if a value is a simple type that can be logged directly.
+    /// </summary>
+    /// <param name="value">The value to check</param>
+    /// <returns>True if the value is a simple type</returns>
+    private static bool IsSimpleType(object value)
+    {
+        return value.GetType().IsPrimitive || 
+               value is DateTime || 
+               value is DateTimeOffset || 
+               value is TimeSpan;
+    }
+
+    /// <summary>
+    /// Formats a complex type for safe logging.
+    /// </summary>
+    /// <param name="value">The complex object to format</param>
+    /// <returns>A safe string representation of the type</returns>
+    private static string FormatComplexTypeForLogging(object value)
+    {
+        var typeName = value.GetType().ToString();
+        
+        // Format anonymous types to match expected test format
+        if (typeName.Contains("AnonymousType"))
+        {
+            return FormatAnonymousType(typeName);
+        }
+        
+        return typeName;
+    }
+
+    /// <summary>
+    /// Formats an anonymous type name for logging.
+    /// </summary>
+    /// <param name="typeName">The anonymous type name</param>
+    /// <returns>The formatted type name</returns>
+    private static string FormatAnonymousType(string typeName)
+    {
+        // Remove generic type parameters and wrap in brackets to match test expectation
+        var genericIndex = typeName.IndexOf('[');
+        if (genericIndex > 0)
+        {
+            typeName = typeName.Substring(0, genericIndex) + "]";
+        }
+        return "[" + typeName;
     }
 
     /// <summary>

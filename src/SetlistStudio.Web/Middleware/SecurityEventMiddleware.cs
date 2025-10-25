@@ -145,13 +145,9 @@ public class SecurityEventMiddleware
         await CheckRapidRequests(context, securityEventHandler);
 
         // Check request body for suspicious patterns (for POST requests)
-        if (request.Method == "POST")
+        if (request.Method == "POST" && request.HasFormContentType)
         {
-            // Check if it has form content type OR if form feature is available (for testing)
-            if (request.HasFormContentType || context.Features.Get<IFormFeature>() != null)
-            {
-                await CheckFormDataForSuspiciousPatterns(context, securityEventHandler);
-            }
+            await CheckFormDataForSuspiciousPatterns(context, securityEventHandler);
         }
     }
 
