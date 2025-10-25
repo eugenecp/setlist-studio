@@ -86,6 +86,23 @@ Please include the following information in your report:
 1. **Security testing** - Include security test cases
 2. **Edge case testing** - Test with malicious inputs
 3. **Authentication testing** - Verify auth flows work correctly
+4. **Test dependency isolation** - Test dependencies with vulnerabilities are isolated from production
+
+### Test Dependency Security
+
+Test dependencies may include packages with known vulnerabilities that are acceptable in test-only scenarios:
+
+1. **Testcontainers.PostgreSql** - Contains PostgreSQL container image CVEs that are suppressed because:
+   - Used only in isolated test containers, not production
+   - PostgreSQL container runs temporarily during tests and is destroyed afterward  
+   - Latest stable version (4.8.1) is maintained
+   - CVEs are for PostgreSQL server, not the Testcontainers library
+   - Tests are currently skipped by default and run manually when needed
+
+2. **Suppression Review** - Test dependency suppressions are reviewed quarterly and updated when:
+   - Newer secure versions become available
+   - Alternative testing approaches are identified
+   - Test dependencies are no longer needed
 
 ## Security Resources
 

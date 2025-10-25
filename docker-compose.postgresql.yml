@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # PostgreSQL Primary Database (Write Operations)
   postgres-primary:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: setliststudio-postgres-primary
     environment:
       POSTGRES_DB: setliststudio
@@ -33,6 +33,17 @@ services:
       -c checkpoint_completion_target=0.9
       -c wal_buffers=16MB
       -c default_statistics_target=100
+      -c ssl=on
+      -c ssl_cert_file='/var/lib/postgresql/server.crt'
+      -c ssl_key_file='/var/lib/postgresql/server.key'
+      -c ssl_ca_file='/var/lib/postgresql/ca.crt'
+      -c ssl_ciphers='HIGH:MEDIUM:+3DES:!aNULL'
+      -c ssl_prefer_server_ciphers=on
+      -c password_encryption=scram-sha-256
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_hostname=off
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U setliststudio -d setliststudio"]
@@ -44,7 +55,7 @@ services:
 
   # PostgreSQL Read Replica 1
   postgres-replica-1:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: setliststudio-postgres-replica-1
     environment:
       POSTGRES_DB: setliststudio
@@ -84,7 +95,7 @@ services:
 
   # PostgreSQL Read Replica 2
   postgres-replica-2:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: setliststudio-postgres-replica-2
     environment:
       POSTGRES_DB: setliststudio
