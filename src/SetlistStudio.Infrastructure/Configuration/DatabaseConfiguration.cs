@@ -261,6 +261,9 @@ public class DatabaseConfiguration : IDatabaseConfiguration
         var dataDirectory = isContainerized ? "/app/data" : Path.Combine(Directory.GetCurrentDirectory(), "data");
         var databaseFile = Path.Combine(dataDirectory, "setliststudio.db");
         
+        // Normalize path separators for consistent behavior across platforms
+        databaseFile = databaseFile.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        
         // Ensure directory exists
         Directory.CreateDirectory(dataDirectory);
         

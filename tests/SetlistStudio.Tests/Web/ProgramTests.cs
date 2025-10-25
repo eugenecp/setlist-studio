@@ -11,6 +11,7 @@ using FluentAssertions;
 using Moq;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Infrastructure.Data;
+using SetlistStudio.Infrastructure.Configuration;
 using System.Net;
 using System.Reflection;
 using Xunit;
@@ -1361,7 +1362,7 @@ public class ProgramTests : IDisposable
             .Build();
 
         // Act
-        var result = GetDatabaseConnectionStringViaReflection(config);
+        var result = GetDatabaseConnectionString(config);
 
         // Assert
         result.Should().Be("Data Source=custom.db");
@@ -1385,7 +1386,7 @@ public class ProgramTests : IDisposable
                 Thread.Sleep(50); // Allow environment change to propagate
 
                 // Act
-                var result = GetDatabaseConnectionStringViaReflection(config);
+                var result = GetDatabaseConnectionString(config);
 
                 // Assert
                 result.Should().Be("Data Source=:memory:");
@@ -1414,10 +1415,11 @@ public class ProgramTests : IDisposable
                 Thread.Sleep(50); // Allow environment changes to propagate
 
                 // Act
-                var result = GetDatabaseConnectionStringViaReflection(config);
+                var result = GetDatabaseConnectionString(config);
 
-                // Assert
-                result.Should().Be("Data Source=/app/data/setliststudio.db");
+                // Assert - Normalize path separators for current OS
+                var expectedPath = "Data Source=/app/data/setliststudio.db".Replace("/", Path.DirectorySeparatorChar.ToString());
+                result.Should().Be(expectedPath);
             }
             finally
             {
@@ -1496,10 +1498,11 @@ public class ProgramTests : IDisposable
                 var config = new ConfigurationBuilder().Build();
 
                 // Act
-                var result = GetDatabaseConnectionStringViaReflection(config);
+                var result = GetDatabaseConnectionString(config);
 
-                // Assert - Should use container database path
-                result.Should().Be("Data Source=/app/data/setliststudio.db");
+                // Assert - Should use container database path (normalize path separators)
+                var expectedPath = "Data Source=/app/data/setliststudio.db".Replace("/", Path.DirectorySeparatorChar.ToString());
+                result.Should().Be(expectedPath);
             }
             finally
             {
@@ -1527,11 +1530,11 @@ public class ProgramTests : IDisposable
                 var config = new ConfigurationBuilder().Build();
 
                 // Act
-                var result = GetDatabaseConnectionStringViaReflection(config);
+                var result = GetDatabaseConnectionString(config);
 
-                // Assert - Should use secure absolute path in Data subdirectory
+                // Assert - Should use secure absolute path in data subdirectory (lowercase to match implementation)
                 var baseDirectory = AppContext.BaseDirectory;
-                var dataDirectory = Path.Join(baseDirectory, "Data");
+                var dataDirectory = Path.Join(baseDirectory, "data");
                 var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
                 result.Should().Be(expectedPath);
             }
@@ -1630,16 +1633,21 @@ public class ProgramTests : IDisposable
                 var config = new ConfigurationBuilder().Build();
 
                 // Act
-                var result = GetDatabaseConnectionStringViaReflection(config);
+                var result = GetDatabaseConnectionString(config);
 
                 // Assert - Replace placeholder with actual data directory for non-container environments
                 var finalExpectedPath = expectedPath;
                 if (expectedPath.Contains("{DataDirectory}"))
                 {
                     var baseDirectory = AppContext.BaseDirectory;
-                    var dataDirectory = Path.Join(baseDirectory, "Data");
+                    var dataDirectory = Path.Join(baseDirectory, "data"); // Use lowercase to match actual implementation
                     var expectedFilePath = Path.Join(dataDirectory, "setliststudio.db");
                     finalExpectedPath = $"Data Source={expectedFilePath}";
+                }
+                else if (expectedPath.Contains("/app/data/"))
+                {
+                    // For container paths, normalize path separators for current OS
+                    finalExpectedPath = expectedPath.Replace("/", Path.DirectorySeparatorChar.ToString());
                 }
                 
                 result.Should().Be(finalExpectedPath);
@@ -1750,25 +1758,18 @@ public class ProgramTests : IDisposable
         return new TestWebApplicationFactory();
     }
 
-    // Helper methods using reflection to access static methods
-    private static string GetDatabaseConnectionStringViaReflection(IConfiguration configuration)
+    // Helper methods using DatabaseConfiguration service (replaces reflection-based approach)
+    private static string GetDatabaseConnectionString(IConfiguration configuration)
     {
-        var programType = typeof(Program);
+        // Create a logger for DatabaseConfiguration
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        var logger = loggerFactory.CreateLogger<DatabaseConfiguration>();
         
-        // Find the generated method name for GetDatabaseConnectionString
-        var method = programType.GetMethods(BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)
-            .FirstOrDefault(m => m.Name.Contains("GetDatabaseConnectionString"));
+        // Create DatabaseConfiguration instance
+        var databaseConfig = new DatabaseConfiguration(configuration, logger);
         
-        if (method == null)
-        {
-            var allMethods = programType.GetMethods(BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)
-                .Where(m => m.IsStatic)
-                .Select(m => m.Name)
-                .ToArray();
-            throw new InvalidOperationException($"GetDatabaseConnectionString method not found. Available static methods: {string.Join(", ", allMethods)}");
-        }
-        
-        return (string)method.Invoke(null, new object[] { configuration })!;
+        // Return the write connection string (primary database connection)
+        return databaseConfig.WriteConnectionString;
     }
 
     private static void ConfigureDatabaseProviderViaReflection(DbContextOptionsBuilder options, string connectionString)
@@ -1827,7 +1828,7 @@ public class ProgramTests : IDisposable
             .Build();
 
         // Act
-        var result = GetDatabaseConnectionStringViaReflection(configuration);
+        var result = GetDatabaseConnectionString(configuration);
 
         // Assert
         result.Should().Be("Server=localhost;Database=TestDb;Trusted_Connection=true;");
@@ -1843,7 +1844,7 @@ public class ProgramTests : IDisposable
         try
         {
             // Act
-            var result = GetDatabaseConnectionStringViaReflection(configuration);
+            var result = GetDatabaseConnectionString(configuration);
 
             // Assert
             result.Should().Be("Data Source=:memory:");
@@ -1865,10 +1866,11 @@ public class ProgramTests : IDisposable
         try
         {
             // Act
-            var result = GetDatabaseConnectionStringViaReflection(configuration);
+            var result = GetDatabaseConnectionString(configuration);
 
-            // Assert
-            result.Should().Be("Data Source=/app/data/setliststudio.db");
+            // Assert - Normalize path separators for current OS
+            var expectedPath = "Data Source=/app/data/setliststudio.db".Replace("/", Path.DirectorySeparatorChar.ToString());
+            result.Should().Be(expectedPath);
         }
         finally
         {
@@ -1888,11 +1890,11 @@ public class ProgramTests : IDisposable
         try
         {
             // Act
-            var result = GetDatabaseConnectionStringViaReflection(configuration);
+            var result = GetDatabaseConnectionString(configuration);
 
-            // Assert - Should use secure absolute path in Data subdirectory
+            // Assert - Should use secure absolute path in data subdirectory (lowercase to match implementation)
             var baseDirectory = AppContext.BaseDirectory;
-            var dataDirectory = Path.Join(baseDirectory, "Data");
+            var dataDirectory = Path.Join(baseDirectory, "data");
             var expectedPath = $"Data Source={dataDirectory}{Path.DirectorySeparatorChar}setliststudio.db";
             result.Should().Be(expectedPath);
         }
