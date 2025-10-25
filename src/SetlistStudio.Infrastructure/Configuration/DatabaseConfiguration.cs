@@ -56,12 +56,30 @@ public class DatabaseConfiguration : IDatabaseConfiguration
     /// </summary>
     public bool IsValid()
     {
+        return IsConnectionStringValid() && 
+               IsPoolConfigurationValid() && 
+               IsTimeoutConfigurationValid();
+    }
+
+    /// <summary>
+    /// Validates the connection string configuration
+    /// </summary>
+    private bool IsConnectionStringValid()
+    {
         if (string.IsNullOrWhiteSpace(WriteConnectionString))
         {
             _logger.LogError("Write connection string is missing or empty");
             return false;
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Validates the connection pool configuration
+    /// </summary>
+    private bool IsPoolConfigurationValid()
+    {
         if (MaxPoolSize <= 0 || MaxPoolSize > 1000)
         {
             _logger.LogError("MaxPoolSize must be between 1 and 1000, got: {MaxPoolSize}", MaxPoolSize);
@@ -75,6 +93,14 @@ public class DatabaseConfiguration : IDatabaseConfiguration
             return false;
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Validates the timeout configuration
+    /// </summary>
+    private bool IsTimeoutConfigurationValid()
+    {
         if (ConnectionTimeout <= 0 || ConnectionTimeout > 300)
         {
             _logger.LogError("ConnectionTimeout must be between 1 and 300 seconds, got: {ConnectionTimeout}", ConnectionTimeout);

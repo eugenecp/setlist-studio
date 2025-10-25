@@ -1275,43 +1275,106 @@ static Task ValidateSecretsAsync(WebApplication app)
 /// <returns>A safe partition key string</returns>
 static string GetSafePartitionKey(HttpContext httpContext)
 {
+    var authenticatedUser = GetAuthenticatedUser(httpContext);
+    return authenticatedUser ?? GetClientIpAddress(httpContext);
+}
+
+/// <summary>
+/// Gets the authenticated user name if available
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>User name if authenticated, null otherwise</returns>
+static string? GetAuthenticatedUser(HttpContext httpContext)
+{
     var userIdentity = httpContext.User?.Identity;
-    if (userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name))
-    {
-        return userIdentity.Name;
-    }
-    
-    var remoteIp = httpContext.Connection?.RemoteIpAddress?.ToString();
-    return remoteIp ?? "anonymous";
+    return userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name) 
+        ? userIdentity.Name 
+        : null;
 }
 
 static string GetClientIpAddress(HttpContext httpContext)
 {
-    // Try to get real IP from forwarded headers (for reverse proxy scenarios)
+    var forwardedIp = GetForwardedIpAddress(httpContext);
+    if (forwardedIp != null) return forwardedIp;
+    
+    var realIp = GetRealIpAddress(httpContext);
+    if (realIp != null) return realIp;
+    
+    return GetRemoteIpAddress(httpContext);
+}
+
+/// <summary>
+/// Extracts IP address from X-Forwarded-For header (reverse proxy scenarios)
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>First IP from forwarded header, or null if not available</returns>
+static string? GetForwardedIpAddress(HttpContext httpContext)
+{
     var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(forwardedFor))
-    {
-        var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        return ips[0].Trim(); // First IP is the original client
-    }
+    if (string.IsNullOrEmpty(forwardedFor)) return null;
+    
+    var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+    return ips.Length > 0 ? ips[0].Trim() : null;
+}
 
+/// <summary>
+/// Extracts IP address from X-Real-IP header
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>Real IP from header, or null if not available</returns>
+static string? GetRealIpAddress(HttpContext httpContext)
+{
     var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(realIp))
-    {
-        return realIp;
-    }
+    return !string.IsNullOrEmpty(realIp) ? realIp : null;
+}
 
+/// <summary>
+/// Gets the remote IP address from connection
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>Remote IP address or "unknown" if not available</returns>
+static string GetRemoteIpAddress(HttpContext httpContext)
+{
     return httpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
 }
 
 static bool IsApiRequest(HttpContext httpContext)
 {
+    return IsApiPath(httpContext) || 
+           IsJsonRequest(httpContext) || 
+           IsAjaxRequest(httpContext);
+}
+
+/// <summary>
+/// Checks if the request path indicates an API endpoint
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>True if path starts with /api/</returns>
+static bool IsApiPath(HttpContext httpContext)
+{
     var path = httpContext.Request.Path.Value?.ToLowerInvariant();
+    return path?.StartsWith("/api/") == true;
+}
+
+/// <summary>
+/// Checks if the request accepts JSON content
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>True if Accept header contains application/json</returns>
+static bool IsJsonRequest(HttpContext httpContext)
+{
     var acceptHeader = httpContext.Request.Headers.Accept.ToString();
-    
-    return path?.StartsWith("/api/") == true || 
-           acceptHeader.Contains("application/json") ||
-           httpContext.Request.Headers.ContainsKey("X-Requested-With");
+    return acceptHeader.Contains("application/json");
+}
+
+/// <summary>
+/// Checks if the request is an AJAX request
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>True if X-Requested-With header is present</returns>
+static bool IsAjaxRequest(HttpContext httpContext)
+{
+    return httpContext.Request.Headers.ContainsKey("X-Requested-With");
 }
 
 /// <summary>
@@ -1328,7 +1391,19 @@ static void ConfigureDockerSecrets(IConfiguration configuration)
         return;
     }
 
-    var secretMappings = new Dictionary<string, string>
+    var secretMappings = GetSecretMappings();
+    var secretValues = LoadSecretValues(secretsPath, secretMappings);
+
+    ApplySecretsToConfiguration(configuration, secretValues);
+}
+
+/// <summary>
+/// Gets the mapping of Docker secret files to configuration keys
+/// </summary>
+/// <returns>Dictionary mapping secret file names to configuration keys</returns>
+static Dictionary<string, string> GetSecretMappings()
+{
+    return new Dictionary<string, string>
     {
         { "setliststudio_google_client_id", "Authentication:Google:ClientId" },
         { "setliststudio_google_client_secret", "Authentication:Google:ClientSecret" },
@@ -1337,40 +1412,72 @@ static void ConfigureDockerSecrets(IConfiguration configuration)
         { "setliststudio_facebook_app_id", "Authentication:Facebook:AppId" },
         { "setliststudio_facebook_app_secret", "Authentication:Facebook:AppSecret" }
     };
+}
 
+/// <summary>
+/// Loads secret values from Docker secret files
+/// </summary>
+/// <param name="secretsPath">Path to the secrets directory</param>
+/// <param name="secretMappings">Mapping of secret files to configuration keys</param>
+/// <returns>Dictionary of configuration keys and their values</returns>
+static Dictionary<string, string?> LoadSecretValues(string secretsPath, Dictionary<string, string> secretMappings)
+{
     var secretValues = new Dictionary<string, string?>();
 
     foreach (var (secretFile, configKey) in secretMappings)
     {
-        var secretFilePath = Path.Combine(secretsPath, secretFile);
-        
-        if (File.Exists(secretFilePath))
+        var secretValue = ReadSecretFile(secretsPath, secretFile);
+        if (secretValue != null)
         {
-            try
-            {
-                var secretValue = File.ReadAllText(secretFilePath).Trim();
-                if (!string.IsNullOrEmpty(secretValue) && !secretValue.StartsWith("PLACEHOLDER_"))
-                {
-                    secretValues[configKey] = secretValue;
-                    Log.Information("Loaded Docker secret: {ConfigKey}", configKey);
-                }
-                else
-                {
-                    Log.Warning("Docker secret contains placeholder value: {SecretFile}", secretFile);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to read Docker secret: {SecretFile}", secretFile);
-            }
-        }
-        else
-        {
-            Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
+            secretValues[configKey] = secretValue;
+            Log.Information("Loaded Docker secret: {ConfigKey}", configKey);
         }
     }
 
-    // Add secrets to configuration if any were loaded
+    return secretValues;
+}
+
+/// <summary>
+/// Reads a single secret file and validates its content
+/// </summary>
+/// <param name="secretsPath">Path to the secrets directory</param>
+/// <param name="secretFile">Name of the secret file</param>
+/// <returns>Secret value if valid, null otherwise</returns>
+static string? ReadSecretFile(string secretsPath, string secretFile)
+{
+    var secretFilePath = Path.Combine(secretsPath, secretFile);
+    
+    if (!File.Exists(secretFilePath))
+    {
+        Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
+        return null;
+    }
+
+    try
+    {
+        var secretValue = File.ReadAllText(secretFilePath).Trim();
+        if (string.IsNullOrEmpty(secretValue) || secretValue.StartsWith("PLACEHOLDER_"))
+        {
+            Log.Warning("Docker secret contains placeholder value: {SecretFile}", secretFile);
+            return null;
+        }
+
+        return secretValue;
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Failed to read Docker secret: {SecretFile}", secretFile);
+        return null;
+    }
+}
+
+/// <summary>
+/// Applies loaded secrets to the configuration
+/// </summary>
+/// <param name="configuration">Configuration to update</param>
+/// <param name="secretValues">Secret values to apply</param>
+static void ApplySecretsToConfiguration(IConfiguration configuration, Dictionary<string, string?> secretValues)
+{
     if (secretValues.Count > 0)
     {
         ((IConfigurationBuilder)configuration).AddInMemoryCollection(secretValues);
