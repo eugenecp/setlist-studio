@@ -262,7 +262,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
             new("BPM", "120"),
             new("Key", "C")
         };
-        var formContent = new FormUrlEncodedContent(formData);
+        using var formContent = new FormUrlEncodedContent(formData);
 
         // Act
         var response = await client.PostAsync("/Songs/Create", formContent);
@@ -297,7 +297,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
             new("BPM", "120"),
             new("Key", "C")
         };
-        var formContent = new FormUrlEncodedContent(formData);
+        using var formContent = new FormUrlEncodedContent(formData);
 
         // Act
         var response = await client.PostAsync("/Songs/Create", formContent);

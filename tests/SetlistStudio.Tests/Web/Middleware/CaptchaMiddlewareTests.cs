@@ -161,7 +161,7 @@ public class CaptchaMiddlewareTests
         
         // Check that HTML content contains CAPTCHA elements
         _httpContext.Response.Body.Position = 0;
-        var reader = new StreamReader(_httpContext.Response.Body);
+        using var reader = new StreamReader(_httpContext.Response.Body);
         var content = await reader.ReadToEndAsync();
         
         content.Should().Contain("Security Verification Required");
