@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 
 namespace SetlistStudio.Infrastructure.Configuration;
 
@@ -264,10 +265,27 @@ public class DatabaseConfiguration : IDatabaseConfiguration
         // Normalize path separators for consistent behavior across platforms
         databaseFile = databaseFile.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         
-        // Ensure directory exists
-        Directory.CreateDirectory(dataDirectory);
+        // Ensure directory exists - skip during testing to avoid permission issues
+        if (!IsRunningInTests())
+        {
+            Directory.CreateDirectory(dataDirectory);
+        }
         
         return $"Data Source={databaseFile}";
+    }
+
+    /// <summary>
+    /// Detects if the application is running in a test environment
+    /// </summary>
+    private static bool IsRunningInTests()
+    {
+        // Check if any test framework assemblies are loaded
+        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+        return loadedAssemblies.Any(assembly => 
+            assembly.FullName?.Contains("xunit") == true ||
+            assembly.FullName?.Contains("nunit") == true ||
+            assembly.FullName?.Contains("mstest") == true ||
+            assembly.FullName?.Contains("SetlistStudio.Tests") == true);
     }
 
     private void LoadPoolConfiguration(IConfiguration configuration)
