@@ -22,7 +22,7 @@ public class SecurityEventMiddlewareTests
 {
     private readonly Mock<RequestDelegate> _mockNext;
     private readonly Mock<ILogger<SecurityEventMiddleware>> _mockLogger;
-    private readonly Mock<SecurityEventHandler> _mockSecurityEventHandler;
+    private readonly Mock<ISecurityEventHandler> _mockSecurityEventHandler;
     private readonly Mock<SecurityEventLogger> _mockSecurityEventLogger;
     private readonly SecurityEventMiddleware _middleware;
 
@@ -31,12 +31,8 @@ public class SecurityEventMiddlewareTests
         _mockNext = new Mock<RequestDelegate>();
         _mockLogger = new Mock<ILogger<SecurityEventMiddleware>>();
         
-        // Create mocks with proper constructor arguments
-        var mockSecurityEventLoggerForHandler = new Mock<SecurityEventLogger>(Mock.Of<ILogger<SecurityEventLogger>>());
-        var mockHandlerLogger = new Mock<ILogger<SecurityEventHandler>>();
-        _mockSecurityEventHandler = new Mock<SecurityEventHandler>(
-            mockSecurityEventLoggerForHandler.Object,
-            mockHandlerLogger.Object);
+        // Create mocks using interfaces for better testability
+        _mockSecurityEventHandler = new Mock<ISecurityEventHandler>();
         
         var mockLoggerForEventLogger = new Mock<ILogger<SecurityEventLogger>>();
         _mockSecurityEventLogger = new Mock<SecurityEventLogger>(mockLoggerForEventLogger.Object);
@@ -420,9 +416,11 @@ public class SecurityEventMiddlewareTests
         var formFeature = new Mock<IFormFeature>();
         formFeature.Setup(x => x.ReadFormAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(formCollection);
+        formFeature.Setup(x => x.HasFormContentType).Returns(true);
         
         context.Features.Set(formFeature.Object);
         context.Request.ContentType = "application/x-www-form-urlencoded";
+        context.Request.ContentLength = 100; // Set content length to simulate real form
         
         _mockNext.Setup(x => x(context))
             .Returns(Task.CompletedTask);
@@ -432,11 +430,14 @@ public class SecurityEventMiddlewareTests
 
         // Assert
         _mockSecurityEventHandler.Verify(x => x.OnSuspiciousActivity(
-            context,
             "XSS_Pattern_Detection",
             It.IsAny<string>(),
-            null,
-            SecurityEventSeverity.High), Times.Once);
+            It.IsAny<string>(),
+            SecurityEventSeverity.High,
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -452,9 +453,11 @@ public class SecurityEventMiddlewareTests
         var formFeature = new Mock<IFormFeature>();
         formFeature.Setup(x => x.ReadFormAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(formCollection);
+        formFeature.Setup(x => x.HasFormContentType).Returns(true);
         
         context.Features.Set(formFeature.Object);
         context.Request.ContentType = "application/x-www-form-urlencoded";
+        context.Request.ContentLength = 100; // Set content length to simulate real form
         
         _mockNext.Setup(x => x(context))
             .Returns(Task.CompletedTask);
@@ -464,11 +467,14 @@ public class SecurityEventMiddlewareTests
 
         // Assert
         _mockSecurityEventHandler.Verify(x => x.OnSuspiciousActivity(
-            context,
             "SQL_Injection_Pattern_Detection",
             It.IsAny<string>(),
-            null,
-            SecurityEventSeverity.High), Times.Once);
+            It.IsAny<string>(),
+            SecurityEventSeverity.High,
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Once);
     }
 
     [Fact]

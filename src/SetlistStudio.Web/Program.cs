@@ -18,6 +18,7 @@ using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Infrastructure.Configuration;
 using SetlistStudio.Web.Services;
 using SetlistStudio.Web.Middleware;
+using SetlistStudio.Web.Security;
 using System.Threading.RateLimiting;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -350,7 +351,7 @@ try
     
     // Register security logging services for centralized security event management
     builder.Services.AddScoped<SecurityEventLogger>();
-    builder.Services.AddScoped<SetlistStudio.Web.Security.SecurityEventHandler>();
+    builder.Services.AddScoped<ISecurityEventHandler, SecurityEventHandler>();
     builder.Services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
     
     // Register security metrics service as singleton for centralized metrics collection

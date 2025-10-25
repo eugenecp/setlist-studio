@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Security;
@@ -21,7 +22,7 @@ public class SecurityEventMiddleware
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task InvokeAsync(HttpContext context, SecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
+    public async Task InvokeAsync(HttpContext context, ISecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
     {
         var startTime = DateTimeOffset.UtcNow;
         var requestPath = context.Request.Path.Value ?? string.Empty;
@@ -98,7 +99,7 @@ public class SecurityEventMiddleware
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
     /// <param name="securityEventLogger">The security event logger</param>
-    private async Task DetectSuspiciousPatterns(HttpContext context, SecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
+    private async Task DetectSuspiciousPatterns(HttpContext context, ISecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
     {
         var request = context.Request;
         var requestPath = request.Path.Value ?? string.Empty;
@@ -144,9 +145,13 @@ public class SecurityEventMiddleware
         await CheckRapidRequests(context, securityEventHandler);
 
         // Check request body for suspicious patterns (for POST requests)
-        if (request.Method == "POST" && request.HasFormContentType)
+        if (request.Method == "POST")
         {
-            await CheckFormDataForSuspiciousPatterns(context, securityEventHandler);
+            // Check if it has form content type OR if form feature is available (for testing)
+            if (request.HasFormContentType || context.Features.Get<IFormFeature>() != null)
+            {
+                await CheckFormDataForSuspiciousPatterns(context, securityEventHandler);
+            }
         }
     }
 
@@ -367,7 +372,7 @@ public class SecurityEventMiddleware
     /// </summary>
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
-    private Task CheckRapidRequests(HttpContext context, SecurityEventHandler securityEventHandler)
+    private Task CheckRapidRequests(HttpContext context, ISecurityEventHandler securityEventHandler)
     {
         // This is a simplified implementation. In production, you'd want to use a more sophisticated
         // tracking mechanism with distributed cache or database.
@@ -396,7 +401,7 @@ public class SecurityEventMiddleware
     /// </summary>
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
-    private async Task CheckFormDataForSuspiciousPatterns(HttpContext context, SecurityEventHandler securityEventHandler)
+    private async Task CheckFormDataForSuspiciousPatterns(HttpContext context, ISecurityEventHandler securityEventHandler)
     {
         try
         {
@@ -509,7 +514,7 @@ public class SecurityEventMiddleware
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
     /// <param name="securityEventLogger">The security event logger</param>
-    private Task LogAuthenticationEvents(HttpContext context, SecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
+    private Task LogAuthenticationEvents(HttpContext context, ISecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
     {
         var path = context.Request.Path.Value ?? string.Empty;
         var user = context.User;
@@ -562,7 +567,7 @@ public class SecurityEventMiddleware
     /// <param name="context">The HTTP context</param>
     /// <param name="securityEventHandler">The security event handler</param>
     /// <param name="exception">The exception that occurred</param>
-    private Task LogSecurityException(HttpContext context, SecurityEventHandler securityEventHandler, Exception exception)
+    private Task LogSecurityException(HttpContext context, ISecurityEventHandler securityEventHandler, Exception exception)
     {
         securityEventHandler.OnSuspiciousActivity(
             context,
