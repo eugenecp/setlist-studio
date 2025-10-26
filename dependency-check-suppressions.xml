@@ -67,7 +67,7 @@
     <suppress>
         <notes><![CDATA[
             Suppression for PostgreSQL CVEs in Testcontainers.PostgreSql test dependency
-            Reviewed: 2025-10-24
+            Reviewed: 2025-10-26
             Reviewer: Security Team
             Reason: These CVEs are for PostgreSQL server vulnerabilities, not the Testcontainers library itself.
             The Testcontainers.PostgreSql package is only used in test environments in isolated containers,
@@ -97,6 +97,20 @@
         <cve>CVE-2017-14798</cve>
         <cve>CVE-2017-7484</cve>
         <cve>CVE-2021-23214</cve>
+        <cve>CVE-2014-0061</cve>
+        <cve>CVE-2014-0063</cve>
+        <cve>CVE-2014-0064</cve>
+        <cve>CVE-2014-0065</cve>
+        <cve>CVE-2015-5288</cve>
+        <cve>CVE-2007-2138</cve>
+        <cve>CVE-2014-0062</cve>
+        <cve>CVE-2014-0067</cve>
+        <cve>CVE-2014-8161</cve>
+        <cve>CVE-2015-3165</cve>
+        <cve>CVE-2021-3393</cve>
+        <cve>CVE-2014-0060</cve>
+        <cve>CVE-2014-0066</cve>
+        <cve>CVE-2010-0733</cve>
     </suppress>
 
     <!-- 
