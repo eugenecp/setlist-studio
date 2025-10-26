@@ -80,19 +80,33 @@ public class DatabaseConfiguration : IDatabaseConfiguration
     /// </summary>
     private bool IsPoolConfigurationValid()
     {
+        return ValidateMaxPoolSizeRange() && ValidateMinPoolSizeRange();
+    }
+
+    /// <summary>
+    /// Validates that MaxPoolSize is within acceptable bounds
+    /// </summary>
+    private bool ValidateMaxPoolSizeRange()
+    {
         if (MaxPoolSize <= 0 || MaxPoolSize > 1000)
         {
             _logger.LogError("MaxPoolSize must be between 1 and 1000, got: {MaxPoolSize}", MaxPoolSize);
             return false;
         }
+        return true;
+    }
 
+    /// <summary>
+    /// Validates that MinPoolSize is within acceptable bounds relative to MaxPoolSize
+    /// </summary>
+    private bool ValidateMinPoolSizeRange()
+    {
         if (MinPoolSize < 0 || MinPoolSize > MaxPoolSize)
         {
             _logger.LogError("MinPoolSize must be between 0 and MaxPoolSize ({MaxPoolSize}), got: {MinPoolSize}", 
                 MaxPoolSize, MinPoolSize);
             return false;
         }
-
         return true;
     }
 
@@ -101,18 +115,32 @@ public class DatabaseConfiguration : IDatabaseConfiguration
     /// </summary>
     private bool IsTimeoutConfigurationValid()
     {
+        return ValidateConnectionTimeoutRange() && ValidateCommandTimeoutRange();
+    }
+
+    /// <summary>
+    /// Validates that ConnectionTimeout is within acceptable bounds
+    /// </summary>
+    private bool ValidateConnectionTimeoutRange()
+    {
         if (ConnectionTimeout <= 0 || ConnectionTimeout > 300)
         {
             _logger.LogError("ConnectionTimeout must be between 1 and 300 seconds, got: {ConnectionTimeout}", ConnectionTimeout);
             return false;
         }
+        return true;
+    }
 
+    /// <summary>
+    /// Validates that CommandTimeout is within acceptable bounds
+    /// </summary>
+    private bool ValidateCommandTimeoutRange()
+    {
         if (CommandTimeout <= 0 || CommandTimeout > 3600)
         {
             _logger.LogError("CommandTimeout must be between 1 and 3600 seconds, got: {CommandTimeout}", CommandTimeout);
             return false;
         }
-
         return true;
     }
 

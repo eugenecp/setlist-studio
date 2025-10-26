@@ -218,6 +218,29 @@ public class SecretValidationService
         var errors = new List<SecretValidationError>();
         var keyVaultName = _configuration["KeyVault:VaultName"];
 
+        // Check for empty/missing Key Vault configuration
+        if (ValidateKeyVaultNotEmpty(keyVaultName, environmentName, errors))
+        {
+            return errors; // Early return if Key Vault not configured
+        }
+
+        // Validate Key Vault name format
+        ValidateKeyVaultNameFormat(keyVaultName!, errors);
+
+        // Check for placeholder values
+        ValidateKeyVaultNotPlaceholder(keyVaultName!, errors);
+
+        // Log successful validation
+        LogKeyVaultValidationSuccess(keyVaultName!, errors);
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Validates that Key Vault name is not empty and logs appropriate message
+    /// </summary>
+    private bool ValidateKeyVaultNotEmpty(string? keyVaultName, string environmentName, List<SecretValidationError> errors)
+    {
         if (string.IsNullOrWhiteSpace(keyVaultName))
         {
             // Key Vault is not configured - this is okay for some deployment scenarios
@@ -225,10 +248,16 @@ public class SecretValidationService
             {
                 _logger.LogInformation("Azure Key Vault not configured - using local configuration");
             }
-            return errors;
+            return true; // Indicates early return should happen
         }
+        return false; // Continue validation
+    }
 
-        // Validate Key Vault name format
+    /// <summary>
+    /// Validates Key Vault name format according to Azure naming conventions
+    /// </summary>
+    private void ValidateKeyVaultNameFormat(string keyVaultName, List<SecretValidationError> errors)
+    {
         if (!IsValidKeyVaultName(keyVaultName))
         {
             errors.Add(new SecretValidationError(
@@ -238,8 +267,13 @@ public class SecretValidationService
                 $"Invalid Key Vault name format: {keyVaultName}. Must be 3-24 characters, alphanumeric and hyphens only."
             ));
         }
+    }
 
-        // Check if Key Vault name contains placeholder values
+    /// <summary>
+    /// Validates that Key Vault name does not contain placeholder values
+    /// </summary>
+    private void ValidateKeyVaultNotPlaceholder(string keyVaultName, List<SecretValidationError> errors)
+    {
         if (PlaceholderValues.Contains(keyVaultName) || keyVaultName.Contains("YOUR_") || keyVaultName.Contains("your_"))
         {
             errors.Add(new SecretValidationError(
@@ -249,13 +283,17 @@ public class SecretValidationService
                 $"Key Vault name contains placeholder value: {keyVaultName}"
             ));
         }
+    }
 
+    /// <summary>
+    /// Logs successful Key Vault validation if no errors occurred
+    /// </summary>
+    private void LogKeyVaultValidationSuccess(string keyVaultName, List<SecretValidationError> errors)
+    {
         if (errors.Count == 0)
         {
             _logger.LogInformation("Azure Key Vault configuration validated: {KeyVaultName}", keyVaultName);
         }
-
-        return errors;
     }
 
     /// <summary>

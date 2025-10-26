@@ -675,13 +675,34 @@ static List<SetlistSong> CreateJazzSetlistSongs(int setlistId, Dictionary<string
 /// </summary>
 static void ConfigureServices(IServiceCollection services, IWebHostEnvironment environment, IConfiguration configuration)
 {
+    ConfigureApplicationServices(services);
+    ConfigureSecurityServices(services);
+    ConfigureAntiForgeryTokens(services, environment);
+    ConfigureCookiesAndSessions(services, environment);
+    ConfigureDataProtection(services, environment);
+    ConfigureRateLimiting(services, environment);
+    ConfigureProductionSecurity(services, environment);
+    ConfigureLocalization(services);
+}
+
+/// <summary>
+/// Configures core application services
+/// </summary>
+static void ConfigureApplicationServices(IServiceCollection services)
+{
     // Register application services
     services.AddScoped<ISongService, SongService>();
     services.AddScoped<ISetlistService, SetlistService>();
     
     // Register CSP nonce service for enhanced Content Security Policy
     services.AddCspNonce();
-    
+}
+
+/// <summary>
+/// Configures security services and logging
+/// </summary>
+static void ConfigureSecurityServices(IServiceCollection services)
+{
     // Register security services
     services.AddScoped<SecretValidationService>();
     services.AddScoped<IAuditLogService, AuditLogService>();
@@ -696,7 +717,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
     
     // Register security metrics service as singleton for centralized metrics collection
     services.AddSingleton<ISecurityMetricsService, SecurityMetricsService>();
+}
 
+/// <summary>
+/// Configures anti-forgery tokens for CSRF protection
+/// </summary>
+static void ConfigureAntiForgeryTokens(IServiceCollection services, IWebHostEnvironment environment)
+{
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     services.AddAntiforgery(options =>
     {
@@ -729,7 +756,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
         // Suppress xframe options (already handled by security headers middleware)
         options.SuppressXFrameOptionsHeader = true;
     });
+}
 
+/// <summary>
+/// Configures cookies, sessions, and authentication behavior
+/// </summary>
+static void ConfigureCookiesAndSessions(IServiceCollection services, IWebHostEnvironment environment)
+{
     // SECURITY: Configure secure session and cookie settings
     services.ConfigureApplicationCookie(options =>
     {
@@ -810,7 +843,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
         options.Cookie.IsEssential = true;
         options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
     });
+}
 
+/// <summary>
+/// Configures data protection for key management and security
+/// </summary>
+static void ConfigureDataProtection(IServiceCollection services, IWebHostEnvironment environment)
+{
     // Configure data protection with secure settings
     services.AddDataProtection(options =>
     {
@@ -820,7 +859,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
     .PersistKeysToFileSystem(new DirectoryInfo(
         Path.GetFullPath(Path.Join(environment.ContentRootPath, "DataProtection-Keys"))))
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
+}
 
+/// <summary>
+/// Configures rate limiting policies for enhanced security
+/// </summary>
+static void ConfigureRateLimiting(IServiceCollection services, IWebHostEnvironment environment)
+{
     // Configure Enhanced Rate Limiting - CRITICAL SECURITY ENHANCEMENT
     services.AddSingleton<IEnhancedRateLimitingService, EnhancedRateLimitingService>();
     
@@ -846,107 +891,128 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
                 });
         });
 
-        // API endpoints - environment-specific limits
-        options.AddFixedWindowLimiter("ApiPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.ApiLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.ApiQueueLimit;
-        });
+        ConfigureRateLimitPolicies(options, rateLimitConfig);
+        ConfigureRateLimitRejection(options);
+    });
+}
 
-        // Enhanced API policy for authenticated users
-        options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
-        });
-
-        // Authentication endpoints - strict limits to prevent brute force
-        options.AddFixedWindowLimiter("AuthPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthQueueLimit;
-        });
-
-        // Authenticated users - higher limits
-        options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
-        });
-
-        // Strict policy for sensitive operations
-        options.AddFixedWindowLimiter("StrictPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.StrictLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.StrictQueueLimit;
-        });
-
-        // Sensitive operations - enhanced security
-        options.AddFixedWindowLimiter("SensitivePolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.SensitiveLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
-        });
-
-        // Configure rejection response with enhanced logging
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.OnRejected = async (context, token) =>
-        {
-            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            
-            // Enhanced logging with security context
-            var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
-            var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
-            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
-            
-            var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
-            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
-            logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
-                sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
-
-            // Record the violation for enhanced monitoring
-            if (rateLimitingService != null)
-            {
-                await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
-            }
-
-            // Return appropriate response based on request type
-            if (IsApiRequest(context.HttpContext))
-            {
-                context.HttpContext.Response.ContentType = "application/json";
-                var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    error = "rate_limit_exceeded",
-                    message = "Rate limit exceeded. Please try again later.",
-                    retry_after = 60
-                });
-                await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
-            }
-            else
-            {
-                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
-            }
-        };
+/// <summary>
+/// Configures individual rate limit policies
+/// </summary>
+static void ConfigureRateLimitPolicies(RateLimiterOptions options, RateLimitConfiguration rateLimitConfig)
+{
+    // API endpoints - environment-specific limits
+    options.AddFixedWindowLimiter("ApiPolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.ApiLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.ApiQueueLimit;
     });
 
+    // Enhanced API policy for authenticated users
+    options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
+    });
+
+    // Authentication endpoints - strict limits to prevent brute force
+    options.AddFixedWindowLimiter("AuthPolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.AuthLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.AuthQueueLimit;
+    });
+
+    // Authenticated users - higher limits
+    options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
+    });
+
+    // Strict policy for sensitive operations
+    options.AddFixedWindowLimiter("StrictPolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.StrictLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.StrictQueueLimit;
+    });
+
+    // Sensitive operations - enhanced security
+    options.AddFixedWindowLimiter("SensitivePolicy", options =>
+    {
+        options.PermitLimit = rateLimitConfig.SensitiveLimit;
+        options.Window = rateLimitConfig.Window;
+        options.AutoReplenishment = true;
+        options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
+    });
+}
+
+/// <summary>
+/// Configures rate limit rejection handling
+/// </summary>
+static void ConfigureRateLimitRejection(RateLimiterOptions options)
+{
+    // Configure rejection response with enhanced logging
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        
+        // Enhanced logging with security context
+        var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+        var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+        var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
+        
+        var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
+        var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
+        logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
+            sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
+
+        // Record the violation for enhanced monitoring
+        if (rateLimitingService != null)
+        {
+            await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
+        }
+
+        // Return appropriate response based on request type
+        if (IsApiRequest(context.HttpContext))
+        {
+            context.HttpContext.Response.ContentType = "application/json";
+            var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                error = "rate_limit_exceeded",
+                message = "Rate limit exceeded. Please try again later.",
+                retry_after = 60
+            });
+            await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
+        }
+        else
+        {
+            await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+        }
+    };
+}
+
+/// <summary>
+/// Configures production security settings
+/// </summary>
+static void ConfigureProductionSecurity(IServiceCollection services, IWebHostEnvironment environment)
+{
     // SECURITY: Configure production security settings
     if (!environment.IsDevelopment())
     {
@@ -973,7 +1039,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
             options.MaxAge = TimeSpan.FromDays(365);
         });
     }
+}
 
+/// <summary>
+/// Configures localization settings
+/// </summary>
+static void ConfigureLocalization(IServiceCollection services)
+{
     // Configure localization
     services.AddLocalization(options => options.ResourcesPath = "Resources");
     services.Configure<RequestLocalizationOptions>(options =>
@@ -1078,10 +1150,28 @@ static string GetSafePartitionKey(HttpContext httpContext)
 /// <returns>User name if authenticated, null otherwise</returns>
 static string? GetAuthenticatedUser(HttpContext httpContext)
 {
-    var userIdentity = httpContext.User?.Identity;
-    return userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name) 
-        ? userIdentity.Name 
-        : null;
+    var userIdentity = GetUserIdentity(httpContext);
+    return IsValidAuthenticatedUser(userIdentity) ? userIdentity?.Name : null;
+}
+
+/// <summary>
+/// Extracts user identity from HTTP context
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>User identity if available, null otherwise</returns>
+static System.Security.Principal.IIdentity? GetUserIdentity(HttpContext httpContext)
+{
+    return httpContext.User?.Identity;
+}
+
+/// <summary>
+/// Validates if user identity represents a valid authenticated user
+/// </summary>
+/// <param name="userIdentity">The user identity to validate</param>
+/// <returns>True if user is authenticated with a valid name</returns>
+static bool IsValidAuthenticatedUser(System.Security.Principal.IIdentity? userIdentity)
+{
+    return userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name);
 }
 
 static string GetClientIpAddress(HttpContext httpContext)
@@ -1237,18 +1327,56 @@ static Dictionary<string, string?> LoadSecretValues(string secretsPath, Dictiona
 /// <returns>Secret value if valid, null otherwise</returns>
 static string? ReadSecretFile(string secretsPath, string secretFile)
 {
-    var secretFilePath = Path.Combine(secretsPath, secretFile);
+    var secretFilePath = GetSecretFilePath(secretsPath, secretFile);
     
-    if (!File.Exists(secretFilePath))
+    if (!ValidateSecretFileExists(secretFilePath, secretFile))
     {
-        Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
         return null;
     }
 
+    return ReadAndValidateSecretContent(secretFilePath, secretFile);
+}
+
+/// <summary>
+/// Constructs the full path to a secret file
+/// </summary>
+/// <param name="secretsPath">Base secrets directory path</param>
+/// <param name="secretFile">Secret file name</param>
+/// <returns>Complete path to secret file</returns>
+static string GetSecretFilePath(string secretsPath, string secretFile)
+{
+    return Path.Combine(secretsPath, secretFile);
+}
+
+/// <summary>
+/// Validates that a secret file exists and logs appropriate message
+/// </summary>
+/// <param name="secretFilePath">Path to the secret file</param>
+/// <param name="secretFile">Secret file name for logging</param>
+/// <returns>True if file exists, false otherwise</returns>
+static bool ValidateSecretFileExists(string secretFilePath, string secretFile)
+{
+    if (!File.Exists(secretFilePath))
+    {
+        Log.Debug("Docker secret file not found: {SecretFile}", secretFile);
+        return false;
+    }
+    return true;
+}
+
+/// <summary>
+/// Reads secret file content and validates it's not a placeholder
+/// </summary>
+/// <param name="secretFilePath">Path to the secret file</param>
+/// <param name="secretFile">Secret file name for logging</param>
+/// <returns>Valid secret value or null if invalid</returns>
+static string? ReadAndValidateSecretContent(string secretFilePath, string secretFile)
+{
     try
     {
         var secretValue = File.ReadAllText(secretFilePath).Trim();
-        if (string.IsNullOrEmpty(secretValue) || secretValue.StartsWith("PLACEHOLDER_"))
+        
+        if (IsPlaceholderSecretValue(secretValue))
         {
             Log.Warning("Docker secret contains placeholder value: {SecretFile}", secretFile);
             return null;
@@ -1261,6 +1389,16 @@ static string? ReadSecretFile(string secretsPath, string secretFile)
         Log.Warning(ex, "Failed to read Docker secret: {SecretFile}", secretFile);
         return null;
     }
+}
+
+/// <summary>
+/// Checks if a secret value is a placeholder that should be ignored
+/// </summary>
+/// <param name="secretValue">The secret value to validate</param>
+/// <returns>True if the value is a placeholder</returns>
+static bool IsPlaceholderSecretValue(string secretValue)
+{
+    return string.IsNullOrEmpty(secretValue) || secretValue.StartsWith("PLACEHOLDER_");
 }
 
 /// <summary>
