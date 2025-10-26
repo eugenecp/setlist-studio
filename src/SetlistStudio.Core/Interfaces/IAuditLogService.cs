@@ -20,6 +20,17 @@ public interface IAuditLogService
     Task LogAuditAsync(string action, string tableName, string recordId, string userId, object? changes, string? correlationId = null);
 
     /// <summary>
+    /// Log a system audit entry allowing empty userId (enables user enhancement from HTTP context)
+    /// </summary>
+    /// <param name="action">The action performed (CREATE, UPDATE, DELETE, etc.)</param>
+    /// <param name="tableName">Name of the table/entity affected</param>
+    /// <param name="recordId">ID of the record affected</param>
+    /// <param name="changes">The changes made (will be JSON serialized)</param>
+    /// <param name="correlationId">Optional correlation ID for grouping related operations</param>
+    /// <returns>Task representing the async operation</returns>
+    Task LogSystemAuditAsync(string action, string tableName, string recordId, object? changes = null, string? correlationId = null);
+
+    /// <summary>
     /// Retrieve audit logs with filtering and pagination
     /// </summary>
     /// <param name="userId">Filter by user ID (optional)</param>

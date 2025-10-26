@@ -33,6 +33,27 @@ public class AuditLogService : IAuditLogService
     /// <inheritdoc />
     public async Task LogAuditAsync(string action, string tableName, string recordId, string userId, object? changes, string? correlationId = null)
     {
+        await LogAuditInternalAsync(action, tableName, recordId, userId, changes, correlationId, requireUserId: true);
+    }
+
+    /// <summary>
+    /// Logs an audit event allowing empty userId for system operations (enables user enhancement from HTTP context)
+    /// </summary>
+    /// <param name="action">The action performed</param>
+    /// <param name="tableName">The name of the table affected</param>
+    /// <param name="recordId">The ID of the record affected</param>
+    /// <param name="changes">The changes made (optional)</param>
+    /// <param name="correlationId">Optional correlation ID for tracking related operations</param>
+    public async Task LogSystemAuditAsync(string action, string tableName, string recordId, object? changes = null, string? correlationId = null)
+    {
+        await LogAuditInternalAsync(action, tableName, recordId, "", changes, correlationId, requireUserId: false);
+    }
+
+    /// <summary>
+    /// Internal method to handle audit logging with optional user ID validation
+    /// </summary>
+    private async Task LogAuditInternalAsync(string action, string tableName, string recordId, string userId, object? changes, string? correlationId, bool requireUserId)
+    {
         if (string.IsNullOrWhiteSpace(action))
             throw new ArgumentException("Action cannot be null or empty", nameof(action));
         
@@ -42,7 +63,7 @@ public class AuditLogService : IAuditLogService
         if (string.IsNullOrWhiteSpace(recordId))
             throw new ArgumentException("Record ID cannot be null or empty", nameof(recordId));
         
-        if (string.IsNullOrWhiteSpace(userId))
+        if (requireUserId && string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
 
         try
