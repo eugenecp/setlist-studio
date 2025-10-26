@@ -68,8 +68,7 @@ public class TestControllerTests
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        var okResult = result as OkObjectResult;
-        okResult.Should().NotBeNull();
+        var okResult = result  as OkObjectResult;okResult!.Should().NotBeNull();
 
         session.Verify(x => x.Set("TestKey", Encoding.UTF8.GetBytes(testContent)), Times.Once);
         session.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);

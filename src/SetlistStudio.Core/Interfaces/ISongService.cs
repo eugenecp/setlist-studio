@@ -65,6 +65,13 @@ public interface ISongService
     Task<IEnumerable<string>> GetGenresAsync(string userId);
 
     /// <summary>
+    /// Gets all unique artists from the user's songs
+    /// </summary>
+    /// <param name="userId">The user's ID</param>
+    /// <returns>List of unique artists</returns>
+    Task<IEnumerable<string>> GetArtistsAsync(string userId);
+
+    /// <summary>
     /// Gets all unique tags from the user's songs
     /// </summary>
     /// <param name="userId">The user's ID</param>

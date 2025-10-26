@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Security;
+using SetlistStudio.Web.Utilities;
 using System.Security.Claims;
 
 namespace SetlistStudio.Web.Security;
@@ -11,7 +12,7 @@ namespace SetlistStudio.Web.Security;
 /// Handles security event logging for authentication and authorization events.
 /// Integrates with ASP.NET Core Identity to capture security-relevant events.
 /// </summary>
-public class SecurityEventHandler
+public class SecurityEventHandler : ISecurityEventHandler
 {
     private readonly SecurityEventLogger _securityEventLogger;
     private readonly ILogger<SecurityEventHandler> _logger;
@@ -270,28 +271,12 @@ public class SecurityEventHandler
     }
 
     /// <summary>
-    /// Extracts the client IP address from the HTTP context, considering proxy scenarios.
+    /// Extracts the client IP address from the HTTP context for security logging
     /// </summary>
     /// <param name="context">The HTTP context</param>
     /// <returns>The client IP address</returns>
     private static string? GetClientIpAddress(HttpContext context)
     {
-        // Check for forwarded headers first (for load balancers/proxies)
-        var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            // Take the first IP in the chain (the original client)
-            var firstIp = forwardedFor.Split(',')[0].Trim();
-            if (!string.IsNullOrEmpty(firstIp))
-                return firstIp;
-        }
-
-        // Check X-Real-IP header (common with nginx)
-        var realIp = context.Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(realIp))
-            return realIp;
-
-        // Fall back to connection remote IP
-        return context.Connection.RemoteIpAddress?.ToString();
+        return IpAddressUtility.GetClientIpAddress(context);
     }
 }

@@ -1,0 +1,100 @@
+version: '3.8'
+
+networks:
+  setliststudio-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  setliststudio-logs:
+    driver: local
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: setliststudio-postgres
+    environment:
+      POSTGRES_DB: setliststudio
+      POSTGRES_USER: setliststudio_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setliststudio_dev_2024}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+      -c log_statement=all
+      -c log_destination=stderr
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setliststudio_user -d setliststudio"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - setliststudio-network
+
+  # Setlist Studio Web Application
+  setliststudio-web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: setliststudio-app
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      # PostgreSQL Configuration
+      - Database__Provider=PostgreSQL
+      - Database__Pool__MaxSize=100
+      - Database__Pool__MinSize=5  
+      - Database__Pool__ConnectionTimeout=30
+      # Database Connection (single connection, no read replicas)
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=setliststudio;Username=setliststudio_user;Password=${POSTGRES_PASSWORD:-setliststudio_dev_2024}
+      # Authentication Providers (Google only)
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-placeholder_google_client_id}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-placeholder_google_client_secret}
+    volumes:
+      - setliststudio-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Windows-compatible security settings
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - setliststudio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: setliststudio-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@setliststudio.dev
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_dev}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - setliststudio-network

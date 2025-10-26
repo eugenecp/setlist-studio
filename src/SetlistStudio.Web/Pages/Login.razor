@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authorization
 @layout EmptyLayout
+@inject IAuthenticationSchemeProvider SchemeProvider
 
 <PageTitle>Sign In - Setlist Studio</PageTitle>
 
@@ -20,43 +21,60 @@
             <!-- Sign In Options -->
             <div class="login-buttons">
                 <!-- Google Sign In -->
-                <MudButton 
-                    Variant="Variant.Outlined" 
-                    Color="Color.Primary"
-                    FullWidth="true" 
-                    Size="Size.Large"
-                    StartIcon="@GoogleIcon"
-                    Class="mb-3"
-                    Href="/auth/google"
-                    aria-label="Sign in with Google">
-                    Sign in with Google
-                </MudButton>
+                @if (availableSchemes.Any(s => s.Name == "Google"))
+                {
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Primary"
+                        FullWidth="true" 
+                        Size="Size.Large"
+                        StartIcon="@GoogleIcon"
+                        Class="mb-3"
+                        Href="/auth/google"
+                        aria-label="Sign in with Google">
+                        Sign in with Google
+                    </MudButton>
+                }
                 
                 <!-- Microsoft Sign In -->
-                <MudButton 
-                    Variant="Variant.Outlined" 
-                    Color="Color.Info"
-                    FullWidth="true" 
-                    Size="Size.Large"
-                    StartIcon="@MicrosoftIcon"
-                    Class="mb-3"
-                    Href="/auth/microsoft"
-                    aria-label="Sign in with Microsoft">
-                    Sign in with Microsoft
-                </MudButton>
+                @if (availableSchemes.Any(s => s.Name == "Microsoft"))
+                {
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Info"
+                        FullWidth="true" 
+                        Size="Size.Large"
+                        StartIcon="@MicrosoftIcon"
+                        Class="mb-3"
+                        Href="/auth/microsoft"
+                        aria-label="Sign in with Microsoft">
+                        Sign in with Microsoft
+                    </MudButton>
+                }
                 
                 <!-- Facebook Sign In -->
-                <MudButton 
-                    Variant="Variant.Outlined" 
-                    Color="Color.Secondary"
-                    FullWidth="true" 
-                    Size="Size.Large"
-                    StartIcon="@FacebookIcon"
-                    Class="mb-3"
-                    Href="/auth/facebook"
-                    aria-label="Sign in with Facebook">
-                    Sign in with Facebook
-                </MudButton>
+                @if (availableSchemes.Any(s => s.Name == "Facebook"))
+                {
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Secondary"
+                        FullWidth="true" 
+                        Size="Size.Large"
+                        StartIcon="@FacebookIcon"
+                        Class="mb-3"
+                        Href="/auth/facebook"
+                        aria-label="Sign in with Facebook">
+                        Sign in with Facebook
+                    </MudButton>
+                }
+                
+                <!-- Fallback message if no providers are available -->
+                @if (!availableSchemes.Any())
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3">
+                        No authentication providers are currently configured.
+                    </MudAlert>
+                }
             </div>
             
             <!-- Privacy Notice -->
@@ -135,9 +153,7 @@
 </style>
 
 @code {
-    private const string GoogleIcon = "fab fa-google";
-    private const string MicrosoftIcon = "fab fa-microsoft";
-    private const string FacebookIcon = "fab fa-facebook-f";
+    private IEnumerable<AuthenticationScheme> availableSchemes = Enumerable.Empty<AuthenticationScheme>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,8 +163,23 @@
         {
             Navigation.NavigateTo("/");
         }
+
+        // Get all configured external authentication schemes
+        var allSchemes = await SchemeProvider.GetAllSchemesAsync();
+        availableSchemes = allSchemes.Where(scheme => 
+            !string.IsNullOrEmpty(scheme.DisplayName) && 
+            scheme.Name != "Identity.Application" && 
+            scheme.Name != "Identity.External" &&
+            scheme.Name != "Identity.TwoFactorRememberMe" &&
+            scheme.Name != "Identity.TwoFactorUserId");
     }
+
+    // Icons for different providers - using MudBlazor icons
+    private string GoogleIcon => Icons.Custom.Brands.Google;
+    private string MicrosoftIcon => Icons.Custom.Brands.Microsoft;
+    private string FacebookIcon => Icons.Custom.Brands.Facebook;
 
     [Inject] private AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 }
+

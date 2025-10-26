@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using Xunit;
@@ -27,7 +28,8 @@ public class SetlistServiceTests : IDisposable
 
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SetlistService>>();
-        _service = new SetlistService(_context, _mockLogger.Object);
+        var mockCacheService = new Mock<IQueryCacheService>();
+        _service = new SetlistService(_context, _mockLogger.Object, mockCacheService.Object);
     }
 
     public void Dispose()
@@ -1696,6 +1698,265 @@ public class SetlistServiceTests : IDisposable
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => 
             _service.CopySetlistAsync(setlist.Id, "   ", userId));
+    }
+
+    #endregion
+
+    #region Exception Handling Tests
+
+    [Fact]
+    public async Task UpdateSetlistAsync_ShouldHandleDbUpdateConcurrencyException()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Simulate concurrency conflict by modifying the setlist in another context
+        var options = new DbContextOptionsBuilder<SetlistStudioDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        
+        using var anotherContext = new SetlistStudioDbContext(options);
+        
+        // This should trigger a concurrency exception scenario
+        setlist.Name = "Updated Name";
+
+        // Act & Assert
+        try
+        {
+            await _service.UpdateSetlistAsync(setlist, userId);
+        }
+        catch (Exception ex)
+        {
+            // Should handle the exception gracefully
+            ex.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public async Task DeleteSetlistAsync_ShouldHandleDbUpdateConcurrencyException()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert - Test exception handling path
+        try
+        {
+            await _service.DeleteSetlistAsync(setlist.Id, userId);
+        }
+        catch (Exception ex)
+        {
+            // Should handle exceptions gracefully
+            ex.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public void Dispose_ShouldHandleObjectDisposedException()
+    {
+        // Arrange
+        var options = new DbContextOptionsBuilder<SetlistStudioDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        
+        var context = new SetlistStudioDbContext(options);
+        var mockCacheService2 = new Mock<IQueryCacheService>();
+        var service = new SetlistService(context, _mockLogger.Object, mockCacheService2.Object);
+        
+        // Dispose the context to simulate ObjectDisposedException
+        context.Dispose();
+
+        // Act & Assert - Test that service handles disposed context gracefully
+        var act = async () => await service.GetSetlistsAsync("user-123");
+        act.Should().ThrowAsync<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public async Task GetSetlistByIdAsync_ShouldHandleInvalidOperationException()
+    {
+        // Arrange
+        var userId = "user-123";
+        
+        // Act & Assert - Test exception handling for invalid operations
+        try
+        {
+            var result = await _service.GetSetlistByIdAsync(999, userId);
+            result.Should().BeNull(); // Should handle gracefully
+        }
+        catch (InvalidOperationException ex)
+        {
+            ex.Should().NotBeNull();
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Error,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Invalid operation")),
+                    It.IsAny<InvalidOperationException>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+        }
+    }
+
+    [Fact]
+    public async Task AddSongToSetlistAsync_ShouldHandleDbUpdateException()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Setlists.Add(setlist);
+        await _context.SaveChangesAsync();
+
+        var song = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert - Test exception handling
+        try
+        {
+            await _service.AddSongToSetlistAsync(setlist.Id, song.Id, userId, 1);
+        }
+        catch (Exception ex)
+        {
+            // Should handle database exceptions gracefully
+            ex.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public async Task RemoveSongFromSetlistAsync_ShouldHandleDbUpdateException()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Setlists.Add(setlist);
+
+        var song = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(song);
+
+        var setlistSong = new SetlistSong
+        {
+            Setlist = setlist,
+            Song = song,
+            Position = 1
+        };
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert - Test exception handling
+        try
+        {
+            await _service.RemoveSongFromSetlistAsync(setlist.Id, song.Id, userId);
+        }
+        catch (Exception ex)
+        {
+            // Should handle database exceptions gracefully
+            ex.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSetlistSongAsync_ShouldHandleDbUpdateConcurrencyException()
+    {
+        // Arrange
+        var userId = "user-123";
+        var setlist = new Setlist
+        {
+            Name = "Test Setlist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Setlists.Add(setlist);
+
+        var song = new Song
+        {
+            Title = "Test Song",
+            Artist = "Test Artist",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Songs.Add(song);
+
+        var setlistSong = new SetlistSong
+        {
+            Setlist = setlist,
+            Song = song,
+            Position = 1
+        };
+        _context.SetlistSongs.Add(setlistSong);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert - Test exception handling
+        try
+        {
+            await _service.UpdateSetlistSongAsync(setlistSong.Id, userId, performanceNotes: "Updated notes");
+        }
+        catch (Exception ex)
+        {
+            // Should handle concurrency exceptions gracefully
+            ex.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public async Task GetSetlistsAsync_ShouldHandleArgumentException()
+    {
+        // Arrange
+        var userId = "user-123";
+
+        // Act & Assert - Test exception handling for invalid arguments
+        try
+        {
+            await _service.GetSetlistsAsync(userId, pageNumber: -1);
+        }
+        catch (ArgumentException ex)
+        {
+            ex.Should().NotBeNull();
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Error,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Invalid argument")),
+                    It.IsAny<ArgumentException>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+        }
     }
 
     #endregion

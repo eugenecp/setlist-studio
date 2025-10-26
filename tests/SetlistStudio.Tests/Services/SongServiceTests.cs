@@ -19,6 +19,7 @@ public class SongServiceTests : IDisposable
     private readonly SetlistStudioDbContext _context;
     private readonly Mock<ILogger<SongService>> _mockLogger;
     private readonly Mock<IAuditLogService> _mockAuditLogService;
+    private readonly Mock<IQueryCacheService> _mockCacheService;
     private readonly SongService _songService;
     private readonly string _testUserId = "test-user-123";
     private readonly string _otherUserId = "other-user-456";
@@ -32,7 +33,17 @@ public class SongServiceTests : IDisposable
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SongService>>();
         _mockAuditLogService = new Mock<IAuditLogService>();
-        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object);
+        _mockCacheService = new Mock<IQueryCacheService>();
+        
+        // Configure cache mock to always execute the callback by default
+        _mockCacheService.Setup(x => x.GetGenresAsync(It.IsAny<string>(), It.IsAny<Func<Task<IEnumerable<string>>>>()))
+            .Returns<string, Func<Task<IEnumerable<string>>>>((userId, callback) => callback());
+        _mockCacheService.Setup(x => x.GetArtistsAsync(It.IsAny<string>(), It.IsAny<Func<Task<IEnumerable<string>>>>()))
+            .Returns<string, Func<Task<IEnumerable<string>>>>((userId, callback) => callback());
+        _mockCacheService.Setup(x => x.GetSongCountAsync(It.IsAny<string>(), It.IsAny<Func<Task<int>>>()))
+            .Returns<string, Func<Task<int>>>((userId, callback) => callback());
+            
+        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object, _mockCacheService.Object);
     }
 
     #region GetSongsAsync Comprehensive Tests
@@ -1763,7 +1774,7 @@ public class SongServiceTests : IDisposable
     public async Task GetGenresAsync_ShouldThrowException_WhenDatabaseErrorOccurs()
     {
         // Arrange
-        _context.Dispose(); // Force database error
+        _context.Dispose(); // Force database error (cache mock is already configured to execute callback)
 
         // Act & Assert
         await FluentActions.Invoking(() => _songService.GetGenresAsync(_testUserId))

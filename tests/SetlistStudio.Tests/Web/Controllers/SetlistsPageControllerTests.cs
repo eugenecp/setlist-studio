@@ -145,9 +145,7 @@ public class SetlistsPageControllerTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
-        var message = okResult!.Value as string;
-        
-        message.Should().NotBeNull();
+        var message = okResult!.Value  as string;message!.Should().NotBeNull();
         message.Should().Contain("Create setlist page");
         message.Should().Contain("authenticated");
     }
@@ -181,9 +179,7 @@ public class SetlistsPageControllerTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
-        var message = okResult!.Value as string;
-        
-        message.Should().NotBeNull();
+        var message = okResult!.Value  as string;message!.Should().NotBeNull();
         message.Should().Contain("Setlists index page");
         message.Should().Contain("authenticated");
     }

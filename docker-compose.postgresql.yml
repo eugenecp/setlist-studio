@@ -1,0 +1,250 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Primary Database (Write Operations)
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: setliststudio-postgres-primary
+    environment:
+      POSTGRES_DB: setliststudio
+      POSTGRES_USER: setliststudio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setliststudio_dev}
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replication_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./scripts/postgres:/docker-entrypoint-initdb.d
+    command: >
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=3
+      -c max_replication_slots=3
+      -c hot_standby=on
+      -c archive_mode=on
+      -c archive_command='test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f'
+      -c log_statement=all
+      -c log_destination=stderr
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c ssl=on
+      -c ssl_cert_file='/var/lib/postgresql/server.crt'
+      -c ssl_key_file='/var/lib/postgresql/server.key'
+      -c ssl_ca_file='/var/lib/postgresql/ca.crt'
+      -c ssl_ciphers='HIGH:MEDIUM:+3DES:!aNULL'
+      -c ssl_prefer_server_ciphers=on
+      -c password_encryption=scram-sha-256
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_hostname=off
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setliststudio -d setliststudio"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - setliststudio-network
+
+  # PostgreSQL Read Replica 1
+  postgres-replica-1:
+    image: postgres:16-alpine
+    container_name: setliststudio-postgres-replica-1
+    environment:
+      POSTGRES_DB: setliststudio
+      POSTGRES_USER: setliststudio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setliststudio_dev}
+      PGUSER: postgres
+      POSTGRES_MASTER_USER: replicator
+      POSTGRES_MASTER_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replication_dev}
+      POSTGRES_MASTER_HOST: postgres-primary
+      POSTGRES_MASTER_PORT: 5432
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-replica-1-data:/var/lib/postgresql/data
+      - ./scripts/postgres/replica:/docker-entrypoint-initdb.d
+    command: >
+      bash -c "
+      until pg_isready -h postgres-primary -p 5432 -U replicator; do
+        echo 'Waiting for primary database to be ready...'
+        sleep 2
+      done
+      echo 'Primary database is ready. Starting replica setup...'
+      rm -rf /var/lib/postgresql/data/*
+      pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replicator -v -P -W -R
+      postgres -c hot_standby=on -c max_connections=100 -c shared_buffers=128MB -c effective_cache_size=512MB
+      "
+    depends_on:
+      - postgres-primary
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setliststudio -d setliststudio"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - setliststudio-network
+
+  # PostgreSQL Read Replica 2
+  postgres-replica-2:
+    image: postgres:16-alpine
+    container_name: setliststudio-postgres-replica-2
+    environment:
+      POSTGRES_DB: setliststudio
+      POSTGRES_USER: setliststudio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setliststudio_dev}
+      PGUSER: postgres
+      POSTGRES_MASTER_USER: replicator
+      POSTGRES_MASTER_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replication_dev}
+      POSTGRES_MASTER_HOST: postgres-primary
+      POSTGRES_MASTER_PORT: 5432
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-replica-2-data:/var/lib/postgresql/data
+      - ./scripts/postgres/replica:/docker-entrypoint-initdb.d
+    command: >
+      bash -c "
+      until pg_isready -h postgres-primary -p 5432 -U replicator; do
+        echo 'Waiting for primary database to be ready...'
+        sleep 2
+      done
+      echo 'Primary database is ready. Starting replica setup...'
+      rm -rf /var/lib/postgresql/data/*
+      pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replicator -v -P -W -R
+      postgres -c hot_standby=on -c max_connections=100 -c shared_buffers=128MB -c effective_cache_size=512MB
+      "
+    depends_on:
+      - postgres-primary
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setliststudio -d setliststudio"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - setliststudio-network
+
+  # Setlist Studio Web Application
+  setliststudio-web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      # PostgreSQL Configuration
+      - Database__Provider=PostgreSQL
+      - Database__Pool__MaxSize=100
+      - Database__Pool__MinSize=5
+      - Database__Pool__ConnectionTimeout=30
+      - Database__Pool__CommandTimeout=300
+      - Database__Pool__Enabled=true
+      # Primary database (write operations)
+      - ConnectionStrings__WriteConnection=Host=postgres-primary;Port=5432;Database=setliststudio;Username=setliststudio;Password=${POSTGRES_PASSWORD:-setliststudio_dev};SSL Mode=Prefer;Pooling=true;Maximum Pool Size=50;Minimum Pool Size=2;
+      # Read replicas
+      - Database__ReadReplicas__0=Host=postgres-replica-1;Port=5432;Database=setliststudio;Username=setliststudio;Password=${POSTGRES_PASSWORD:-setliststudio_dev};SSL Mode=Prefer;Pooling=true;Maximum Pool Size=25;Minimum Pool Size=1;
+      - Database__ReadReplicas__1=Host=postgres-replica-2;Port=5432;Database=setliststudio;Username=setliststudio;Password=${POSTGRES_PASSWORD:-setliststudio_dev};SSL Mode=Prefer;Pooling=true;Maximum Pool Size=25;Minimum Pool Size=1;
+      # Authentication
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-}
+      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID:-}
+      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET:-}
+      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID:-}
+      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET:-}
+    volumes:
+      - setliststudio-logs:/app/logs
+
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica-1:
+        condition: service_healthy
+      postgres-replica-2:
+        condition: service_healthy
+    restart: unless-stopped
+    # Security: Enhanced resource limits and constraints
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpu_quota: 100000  # 1.0 CPU cores
+    pids_limit: 200   # Limit number of processes
+    ulimits:
+      nproc: 200      # Limit number of processes
+      nofile: 2048    # Limit number of file descriptors
+    # Security: Drop ALL capabilities and add only required ones
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN     # Required for file ownership changes
+      - SETGID    # Required for group changes
+      - SETUID    # Required for user changes
+    read_only: true
+    # Security: Enhanced security options (Windows compatible)
+    security_opt:
+      - no-new-privileges:true    # Prevent privilege escalation
+    networks:
+      - setliststudio-network
+
+  # PgAdmin for database management (development only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: setliststudio-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@setliststudio.local
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_dev}
+      PGADMIN_CONFIG_SERVER_MODE: 'True'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres-primary
+    restart: unless-stopped
+    networks:
+      - setliststudio-network
+    profiles:
+      - development
+
+volumes:
+  postgres-primary-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_PATH:-./data/postgres-primary}
+  postgres-replica-1-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_REPLICA_1_PATH:-./data/postgres-replica-1}
+  postgres-replica-2-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_REPLICA_2_PATH:-./data/postgres-replica-2}
+  pgadmin-data:
+    driver: local
+  setliststudio-logs:
+    driver: local
+
+networks:
+  setliststudio-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

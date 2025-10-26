@@ -1,0 +1,226 @@
+# Prometheus Alert Rules for Setlist Studio Load Balancing and Auto-scaling
+# Defines alerts for high resource usage, performance issues, and scaling decisions
+
+groups:
+  - name: setlist-studio-performance
+    interval: 30s
+    rules:
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: scale-up
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% for more than 2 minutes on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/high-cpu"
+
+      # Critical CPU Usage Alert
+      - alert: CriticalCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: setlist-studio-web
+          action: scale-up-urgent
+        annotations:
+          summary: "Critical CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% for more than 1 minute on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/critical-cpu"
+
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: (dotnet_gc_memory_total_available_bytes - dotnet_gc_memory_total_available_bytes) / dotnet_gc_memory_total_available_bytes * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: scale-up
+        annotations:
+          summary: "High memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% for more than 2 minutes on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/high-memory"
+
+      # Critical Memory Usage Alert
+      - alert: CriticalMemoryUsage
+        expr: (dotnet_gc_memory_total_available_bytes - dotnet_gc_memory_total_available_bytes) / dotnet_gc_memory_total_available_bytes * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: setlist-studio-web
+          action: scale-up-urgent
+        annotations:
+          summary: "Critical memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% for more than 1 minute on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/critical-memory"
+
+      # Low Resource Usage (Scale Down)
+      - alert: LowResourceUsage
+        expr: rate(process_cpu_seconds_total[10m]) * 100 < 20 and (dotnet_gc_memory_total_available_bytes - dotnet_gc_memory_total_available_bytes) / dotnet_gc_memory_total_available_bytes * 100 < 30
+        for: 10m
+        labels:
+          severity: info
+          service: setlist-studio-web
+          action: scale-down
+        annotations:
+          summary: "Low resource usage detected on {{ $labels.instance }}"
+          description: "CPU and memory usage have been low for more than 10 minutes on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/scale-down"
+
+  - name: setlist-studio-availability
+    interval: 30s
+    rules:
+      # Instance Down Alert
+      - alert: InstanceDown
+        expr: up{job="setlist-studio-web"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: setlist-studio-web
+          action: investigate
+        annotations:
+          summary: "Setlist Studio instance {{ $labels.instance }} is down"
+          description: "Instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://docs.setliststudio.com/runbooks/instance-down"
+
+      # Health Check Failure
+      - alert: HealthCheckFailure
+        expr: probe_success{job="setlist-studio-health"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: investigate
+        annotations:
+          summary: "Health check failing for {{ $labels.instance }}"
+          description: "Health check has been failing for more than 2 minutes on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/health-check-failure"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 3m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: investigate
+        annotations:
+          summary: "High response time detected on {{ $labels.instance }}"
+          description: "95th percentile response time is {{ $value }}s for more than 3 minutes on instance {{ $labels.instance }}"
+          runbook_url: "https://docs.setliststudio.com/runbooks/high-response-time"
+
+  - name: setlist-studio-redis
+    interval: 30s
+    rules:
+      # Redis Down Alert
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          action: investigate-urgent
+        annotations:
+          summary: "Redis instance is down"
+          description: "Redis has been down for more than 1 minute - session storage unavailable"
+          runbook_url: "https://docs.setliststudio.com/runbooks/redis-down"
+
+      # Redis High Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+          action: investigate
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value }}% for more than 2 minutes"
+          runbook_url: "https://docs.setliststudio.com/runbooks/redis-high-memory"
+
+      # Redis High Connection Count
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          action: investigate
+        annotations:
+          summary: "Redis high connection count"
+          description: "Redis has {{ $value }} connected clients for more than 5 minutes"
+          runbook_url: "https://docs.setliststudio.com/runbooks/redis-high-connections"
+
+  - name: setlist-studio-load-balancer
+    interval: 30s
+    rules:
+      # NGINX Down Alert
+      - alert: LoadBalancerDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: nginx
+          action: investigate-urgent
+        annotations:
+          summary: "Load balancer is down"
+          description: "NGINX load balancer has been down for more than 1 minute"
+          runbook_url: "https://docs.setliststudio.com/runbooks/load-balancer-down"
+
+      # High Request Rate
+      - alert: HighRequestRate
+        expr: rate(nginx_http_requests_total[5m]) > 1000
+        for: 2m
+        labels:
+          severity: warning
+          service: nginx
+          action: monitor
+        annotations:
+          summary: "High request rate detected"
+          description: "Request rate is {{ $value }} requests/second for more than 2 minutes"
+          runbook_url: "https://docs.setliststudio.com/runbooks/high-request-rate"
+
+      # Backend Server Errors
+      - alert: BackendServerErrors
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) * 100 > 5
+        for: 1m
+        labels:
+          severity: warning
+          service: nginx
+          action: investigate
+        annotations:
+          summary: "High backend server error rate"
+          description: "Backend server error rate is {{ $value }}% for more than 1 minute"
+          runbook_url: "https://docs.setliststudio.com/runbooks/backend-server-errors"
+
+  - name: setlist-studio-blazor-signalr
+    interval: 30s
+    rules:
+      # SignalR Connection Issues
+      - alert: SignalRConnectionDrop
+        expr: rate(blazor_server_circuit_disconnect_total[5m]) > rate(blazor_server_circuit_connect_total[5m]) * 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: investigate
+        annotations:
+          summary: "High SignalR connection drop rate"
+          description: "SignalR connection drop rate is higher than expected for more than 2 minutes"
+          runbook_url: "https://docs.setliststudio.com/runbooks/signalr-connection-drops"
+
+      # Blazor Circuit Issues
+      - alert: BlazorCircuitErrors
+        expr: rate(blazor_server_circuit_error_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          service: setlist-studio-web
+          action: investigate
+        annotations:
+          summary: "High Blazor circuit error rate"
+          description: "Blazor circuit error rate is {{ $value }} errors/second for more than 1 minute"
+          runbook_url: "https://docs.setliststudio.com/runbooks/blazor-circuit-errors"

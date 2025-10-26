@@ -821,8 +821,7 @@ public class SetlistsControllerAdvancedTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = (OkObjectResult)result.Result!;
-        var setlists = okResult.Value as IEnumerable<SetlistResponse>;
-        setlists.Should().NotBeNull();
+        var setlists = okResult.Value  as IEnumerable<SetlistResponse>;setlists!.Should().NotBeNull();
         setlists!.Should().HaveCount(2);
     }
 
@@ -846,8 +845,7 @@ public class SetlistsControllerAdvancedTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = (OkObjectResult)result.Result!;
-        var setlists = okResult.Value as IEnumerable<SetlistResponse>;
-        setlists.Should().NotBeNull();
+        var setlists = okResult.Value  as IEnumerable<SetlistResponse>;setlists!.Should().NotBeNull();
         setlists!.Should().HaveCount(1);
     }
 

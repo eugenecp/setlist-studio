@@ -79,50 +79,52 @@ public class SanitizedStringAttribute : ValidationAttribute
             return false;
         }
 
-        // Check for script tags
-        if (ScriptTagPattern.IsMatch(input))
-        {
-            return true;
-        }
+        return ContainsScriptingThreats(input) ||
+               ContainsSqlInjectionPatterns(input) ||
+               ContainsUnauthorizedHtml(input) ||
+               ContainsDangerousPatterns(input) ||
+               ContainsControlCharacters(input) ||
+               ExceedsMaximumLength(input);
+    }
 
-        // Check for javascript protocols and event handlers
-        if (JavascriptPattern.IsMatch(input))
-        {
-            return true;
-        }
+    /// <summary>
+    /// Checks for script tags and JavaScript protocol threats
+    /// </summary>
+    private bool ContainsScriptingThreats(string input)
+    {
+        return ScriptTagPattern.IsMatch(input) || JavascriptPattern.IsMatch(input);
+    }
 
-        // Check for SQL injection patterns
-        if (SqlInjectionPattern.IsMatch(input))
-        {
-            return true;
-        }
+    /// <summary>
+    /// Checks for SQL injection attack patterns
+    /// </summary>
+    private bool ContainsSqlInjectionPatterns(string input)
+    {
+        return SqlInjectionPattern.IsMatch(input);
+    }
 
-        // Check for HTML tags (unless explicitly allowed)
-        // Note: HTML entities like &lt; are always safe and allowed
-        if (!AllowHtml && ContainsHtml(input) && !IsHtmlEncoded(input))
-        {
-            return true;
-        }
+    /// <summary>
+    /// Checks for unauthorized HTML content when HTML is not allowed
+    /// </summary>
+    private bool ContainsUnauthorizedHtml(string input)
+    {
+        return !AllowHtml && ContainsHtml(input) && !IsHtmlEncoded(input);
+    }
 
-        // Check for dangerous patterns
-        if (DangerousPatterns.Any(pattern => input.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
-        {
-            return true;
-        }
+    /// <summary>
+    /// Checks for dangerous string patterns that could be used in attacks
+    /// </summary>
+    private bool ContainsDangerousPatterns(string input)
+    {
+        return DangerousPatterns.Any(pattern => input.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+    }
 
-        // Check for control characters
-        if (ContainsControlCharacters(input))
-        {
-            return true;
-        }
-
-        // Check length if specified
-        if (MaxLength > 0 && input.Length > MaxLength)
-        {
-            return true;
-        }
-
-        return false;
+    /// <summary>
+    /// Checks if input exceeds the maximum allowed length
+    /// </summary>
+    private bool ExceedsMaximumLength(string input)
+    {
+        return MaxLength > 0 && input.Length > MaxLength;
     }
 
     /// <summary>
@@ -130,29 +132,41 @@ public class SanitizedStringAttribute : ValidationAttribute
     /// </summary>
     private static bool ContainsControlCharacters(string input)
     {
-        foreach (char c in input)
-        {
-            int charCode = (int)c;
-            
-            // Check for C0 control characters (0-31) except allowed ones
-            if (charCode >= 0 && charCode <= 31 && charCode != 9 && charCode != 10 && charCode != 13)
-            {
-                return true;
-            }
-            
-            // Check for C1 control characters (128-159) - these are always dangerous
-            if (charCode >= 128 && charCode <= 159)
-            {
-                return true;
-            }
-            
-            // Additional check using char.IsControl for completeness
-            if (char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')
-            {
-                return true;
-            }
-        }
-        return false;
+        return input.Any(c => IsDangerousControlCharacter(c));
+    }
+
+    /// <summary>
+    /// Determines if a character is a dangerous control character
+    /// </summary>
+    private static bool IsDangerousControlCharacter(char c)
+    {
+        return IsC0ControlCharacter(c) || IsC1ControlCharacter(c) || IsOtherControlCharacter(c);
+    }
+
+    /// <summary>
+    /// Checks for dangerous C0 control characters (0-31) excluding safe whitespace
+    /// </summary>
+    private static bool IsC0ControlCharacter(char c)
+    {
+        int charCode = (int)c;
+        return charCode >= 0 && charCode <= 31 && charCode != 9 && charCode != 10 && charCode != 13;
+    }
+
+    /// <summary>
+    /// Checks for C1 control characters (128-159) which are always dangerous
+    /// </summary>
+    private static bool IsC1ControlCharacter(char c)
+    {
+        int charCode = (int)c;
+        return charCode >= 128 && charCode <= 159;
+    }
+
+    /// <summary>
+    /// Checks for other dangerous control characters using built-in detection
+    /// </summary>
+    private static bool IsOtherControlCharacter(char c)
+    {
+        return char.IsControl(c) && c != '\r' && c != '\n' && c != '\t';
     }
 
     /// <summary>
@@ -175,56 +189,131 @@ public class SanitizedStringAttribute : ValidationAttribute
 
         var sanitized = input;
 
+        // Apply security sanitization
+        sanitized = ApplySecuritySanitization(sanitized);
+
+        // Apply content formatting rules
+        sanitized = ApplyContentFormatting(sanitized);
+
+        // Apply length constraints
+        sanitized = ApplyLengthConstraints(sanitized);
+
+        return sanitized.Trim();
+    }
+
+    /// <summary>
+    /// Applies security-focused sanitization to remove dangerous content
+    /// </summary>
+    private string ApplySecuritySanitization(string input)
+    {
+        var sanitized = input;
+
+        // Remove script tags and JavaScript protocols
+        sanitized = RemoveScriptingThreats(sanitized);
+
+        // Remove SQL injection patterns
+        sanitized = RemoveSqlInjectionPatterns(sanitized);
+
+        // Remove other dangerous patterns
+        sanitized = RemoveDangerousPatterns(sanitized);
+
+        // Handle HTML content based on settings
+        sanitized = ProcessHtmlContent(sanitized);
+
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Removes scripting threats like script tags and JavaScript protocols
+    /// </summary>
+    private string RemoveScriptingThreats(string input)
+    {
+        var sanitized = input;
+        
         // Remove script tags completely
         sanitized = ScriptTagPattern.Replace(sanitized, string.Empty);
 
         // Remove javascript: and similar dangerous protocols
         sanitized = JavascriptPattern.Replace(sanitized, string.Empty);
 
-        // Check for SQL injection patterns and remove them
-        if (SqlInjectionPattern.IsMatch(sanitized))
-        {
-            // For musical application, we're strict about SQL-like patterns
-            sanitized = SqlInjectionPattern.Replace(sanitized, "***");
-        }
+        return sanitized;
+    }
 
-        // Remove dangerous patterns
-        foreach (var pattern in DangerousPatterns)
-        {
-            sanitized = sanitized.Replace(pattern, string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
+    /// <summary>
+    /// Removes SQL injection attack patterns
+    /// </summary>
+    private string RemoveSqlInjectionPatterns(string input)
+    {
+        // For musical application, we're strict about SQL-like patterns
+        return SqlInjectionPattern.IsMatch(input) 
+            ? SqlInjectionPattern.Replace(input, "***") 
+            : input;
+    }
 
-        // Handle HTML content based on AllowHtml setting
-        if (!AllowHtml && ContainsHtml(sanitized))
-        {
-            // HTML encode the content
-            sanitized = HttpUtility.HtmlEncode(sanitized);
-        }
+    /// <summary>
+    /// Removes other dangerous patterns from the input
+    /// </summary>
+    private string RemoveDangerousPatterns(string input)
+    {
+        return DangerousPatterns.Aggregate(input, (current, pattern) => 
+            current.Replace(pattern, string.Empty, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Processes HTML content based on AllowHtml setting
+    /// </summary>
+    private string ProcessHtmlContent(string input)
+    {
+        return !AllowHtml && ContainsHtml(input) 
+            ? HttpUtility.HtmlEncode(input) 
+            : input;
+    }
+
+    /// <summary>
+    /// Applies content formatting rules for line breaks and special characters
+    /// </summary>
+    private string ApplyContentFormatting(string input)
+    {
+        var sanitized = input;
 
         // Handle line breaks
-        if (!AllowLineBreaks)
-        {
-            sanitized = sanitized.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
-        }
+        sanitized = ProcessLineBreaks(sanitized);
 
         // Handle special characters for musical content
-        if (!AllowSpecialCharacters)
-        {
-            // Keep musical notation characters but remove others
-            sanitized = Regex.Replace(sanitized, @"[^\w\s\-#♭♯°øØ\(\)\[\]\.\,\;\:\!\?\'\""""]", string.Empty,
-                RegexOptions.None, TimeSpan.FromMilliseconds(100));
-        }
-
-        // Apply length limit
-        if (MaxLength > 0 && sanitized.Length > MaxLength)
-        {
-            sanitized = sanitized.Substring(0, MaxLength).Trim();
-        }
-
-        // Final trim
-        sanitized = sanitized.Trim();
+        sanitized = ProcessSpecialCharacters(sanitized);
 
         return sanitized;
+    }
+
+    /// <summary>
+    /// Processes line breaks based on AllowLineBreaks setting
+    /// </summary>
+    private string ProcessLineBreaks(string input)
+    {
+        return !AllowLineBreaks 
+            ? input.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ")
+            : input;
+    }
+
+    /// <summary>
+    /// Processes special characters, keeping musical notation while removing others
+    /// </summary>
+    private string ProcessSpecialCharacters(string input)
+    {
+        return !AllowSpecialCharacters
+            ? Regex.Replace(input, @"[^\w\s\-#♭♯°øØ\(\)\[\]\.\,\;\:\!\?\'\""""]", string.Empty,
+                RegexOptions.None, TimeSpan.FromMilliseconds(100))
+            : input;
+    }
+
+    /// <summary>
+    /// Applies length constraints based on MaxLength setting
+    /// </summary>
+    private string ApplyLengthConstraints(string input)
+    {
+        return MaxLength > 0 && input.Length > MaxLength 
+            ? input.Substring(0, MaxLength).Trim()
+            : input;
     }
 
     private static bool ContainsHtml(string input)

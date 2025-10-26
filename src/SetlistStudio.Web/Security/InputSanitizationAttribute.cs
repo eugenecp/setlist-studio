@@ -56,76 +56,129 @@ namespace SetlistStudio.Web.Security
 
             // Handle primitive types and strings
             if (type == typeof(string))
-            {
-                var sanitizer = new SanitizedStringAttribute { AllowHtml = false, AllowSpecialCharacters = true };
-                return sanitizer.SanitizeInput((string)obj);
-            }
+                return SanitizeStringValue((string)obj);
 
             // Handle value types (int, bool, etc.)
             if (type.IsValueType || type.IsPrimitive)
-            {
                 return obj;
-            }
 
             // Handle dictionaries specially to preserve type
             if (obj is System.Collections.IDictionary dictionary)
-            {
-                var keys = new List<object>();
-                foreach (var key in dictionary.Keys)
-                {
-                    keys.Add(key);
-                }
-
-                foreach (var key in keys)
-                {
-                    var value = dictionary[key];
-                    if (value != null)
-                    {
-                        var sanitizedValue = SanitizeObject(value);
-                        dictionary[key] = sanitizedValue;
-                    }
-                }
-                return obj;
-            }
+                return SanitizeDictionary(dictionary);
 
             // Handle other collections
             if (obj is System.Collections.IEnumerable enumerable && !(obj is string))
-            {
-                var list = new List<object>();
-                foreach (var item in enumerable)
-                {
-                    var sanitizedItem = SanitizeObject(item);
-                    if (sanitizedItem != null)
-                    {
-                        list.Add(sanitizedItem);
-                    }
-                }
-                return list;
-            }
+                return SanitizeCollection(enumerable);
 
             // Handle complex objects
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.CanRead && p.CanWrite);
+            return SanitizeComplexObject(obj);
+        }
+
+        /// <summary>
+        /// Sanitizes string values using configured sanitization rules.
+        /// </summary>
+        /// <param name="value">The string to sanitize</param>
+        /// <returns>The sanitized string</returns>
+        private static string SanitizeStringValue(string value)
+        {
+            var sanitizer = new SanitizedStringAttribute { AllowHtml = false, AllowSpecialCharacters = true };
+            return sanitizer.SanitizeInput(value);
+        }
+
+        /// <summary>
+        /// Sanitizes dictionary values while preserving the dictionary structure.
+        /// </summary>
+        /// <param name="dictionary">The dictionary to sanitize</param>
+        /// <returns>The sanitized dictionary</returns>
+        private static object SanitizeDictionary(System.Collections.IDictionary dictionary)
+        {
+            var keys = new List<object>();
+            foreach (var key in dictionary.Keys)
+            {
+                keys.Add(key);
+            }
+
+            foreach (var key in keys)
+            {
+                var value = dictionary[key];
+                if (value != null)
+                {
+                    var sanitizedValue = SanitizeObject(value);
+                    dictionary[key] = sanitizedValue;
+                }
+            }
+            return dictionary;
+        }
+
+        /// <summary>
+        /// Sanitizes collection items and returns a new sanitized collection.
+        /// </summary>
+        /// <param name="enumerable">The collection to sanitize</param>
+        /// <returns>A new collection with sanitized items</returns>
+        private static List<object> SanitizeCollection(System.Collections.IEnumerable enumerable)
+        {
+            var list = new List<object>();
+            foreach (var item in enumerable)
+            {
+                var sanitizedItem = SanitizeObject(item);
+                if (sanitizedItem != null)
+                {
+                    list.Add(sanitizedItem);
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Sanitizes properties of complex objects using reflection.
+        /// </summary>
+        /// <param name="obj">The complex object to sanitize</param>
+        /// <returns>The sanitized object</returns>
+        private static object SanitizeComplexObject(object obj)
+        {
+            var type = obj.GetType();
+            var properties = GetSanitizableProperties(type);
 
             foreach (var property in properties)
             {
-                try
-                {
-                    var value = property.GetValue(obj);
-                    if (value != null)
-                    {
-                        var sanitizedValue = SanitizeObject(value);
-                        property.SetValue(obj, sanitizedValue);
-                    }
-                }
-                catch
-                {
-                    // If we can't sanitize a property, skip it
-                    continue;
-                }
+                SanitizeProperty(obj, property);
             }
 
             return obj;
+        }
+
+        /// <summary>
+        /// Gets properties that can be sanitized (readable and writable).
+        /// </summary>
+        /// <param name="type">The type to examine</param>
+        /// <returns>Collection of sanitizable properties</returns>
+        private static IEnumerable<PropertyInfo> GetSanitizableProperties(Type type)
+        {
+            return type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead && p.CanWrite);
+        }
+
+        /// <summary>
+        /// Safely sanitizes a single property value.
+        /// </summary>
+        /// <param name="obj">The object containing the property</param>
+        /// <param name="property">The property to sanitize</param>
+        private static void SanitizeProperty(object obj, PropertyInfo property)
+        {
+            try
+            {
+                var value = property.GetValue(obj);
+                if (value != null)
+                {
+                    var sanitizedValue = SanitizeObject(value);
+                    property.SetValue(obj, sanitizedValue);
+                }
+            }
+            catch
+            {
+                // If we can't sanitize a property, skip it
+                // This handles cases where properties might have complex setters or validation
+            }
         }
     }
 }

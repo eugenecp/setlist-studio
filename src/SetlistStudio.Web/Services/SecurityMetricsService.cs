@@ -233,20 +233,35 @@ public class SecurityMetricsService : ISecurityMetricsService
 
     public DetailedSecurityMetrics GetDetailedMetrics(DateTime? startTime = null, DateTime? endTime = null)
     {
-        startTime ??= DateTime.UtcNow.AddHours(-24); // Default to last 24 hours
-        endTime ??= DateTime.UtcNow;
+        var normalizedTimes = NormalizeTimeRange(startTime, endTime);
+        var filteredEvents = FilterEventsByTimeRange(normalizedTimes.start, normalizedTimes.end);
 
-        var filteredEvents = _recentEvents
+        return CreateDetailedMetrics(normalizedTimes.start, normalizedTimes.end, filteredEvents);
+    }
+
+    private static (DateTime start, DateTime end) NormalizeTimeRange(DateTime? startTime, DateTime? endTime)
+    {
+        var start = startTime ?? DateTime.UtcNow.AddHours(-24); // Default to last 24 hours
+        var end = endTime ?? DateTime.UtcNow;
+        return (start, end);
+    }
+
+    private SecurityEvent[] FilterEventsByTimeRange(DateTime startTime, DateTime endTime)
+    {
+        return _recentEvents
             .Where(e => e.Timestamp >= startTime && e.Timestamp <= endTime)
             .ToArray();
+    }
 
+    private DetailedSecurityMetrics CreateDetailedMetrics(DateTime startTime, DateTime endTime, SecurityEvent[] filteredEvents)
+    {
         return new DetailedSecurityMetrics
         {
-            StartTime = startTime ?? DateTime.UtcNow.AddHours(-24),
-            EndTime = endTime ?? DateTime.UtcNow,
+            StartTime = startTime,
+            EndTime = endTime,
             TotalEventsInPeriod = filteredEvents.Length,
             Events = filteredEvents,
-            EventsByHour = GetEventsByHour(filteredEvents, startTime ?? DateTime.UtcNow.AddHours(-24), endTime ?? DateTime.UtcNow),
+            EventsByHour = GetEventsByHour(filteredEvents, startTime, endTime),
             EventsBySeverity = GetEventsBySeverity(filteredEvents),
             EventsByType = GetEventsByType(filteredEvents),
             TopAttackingIPs = GetTopAttackingIPs(filteredEvents, 10),

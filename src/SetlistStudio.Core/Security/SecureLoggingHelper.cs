@@ -71,39 +71,40 @@ public static class SecureLoggingHelper
     {
         // Always process through sanitization to prevent user-controlled bypass
         // This addresses CWE-807: User-controlled bypass of sensitive method
+        var sanitized = NormalizeInputForSanitization(message);
+        
+        sanitized = RedactSensitiveEdgeCases(sanitized);
+        sanitized = RedactSensitivePatterns(sanitized);
+        sanitized = SanitizeXssContent(sanitized);
+        sanitized = PreventLogInjection(sanitized);
+
+        // Use TaintBarrier to ensure no taint tracking through sanitization
+        return TaintBarrier.BreakTaint(sanitized);
+    }
+
+    private static string NormalizeInputForSanitization(string? input)
+    {
         // Handle null by converting to empty string for consistent processing
-        var sanitized = message ?? string.Empty;
+        return input ?? string.Empty;
+    }
 
+    private static string RedactSensitiveEdgeCases(string input)
+    {
         // Handle the specific edge case for space-only values first
-        sanitized = Regex.Replace(sanitized, @"\b(password|token|secret|(?<!musical\s)(?<!song\s)(?<!and\s)key|api[_-]?key|client[_-]?secret)\s*:\s+$", 
+        return Regex.Replace(input, @"\b(password|token|secret|(?<!musical\s)(?<!song\s)(?<!and\s)key|api[_-]?key|client[_-]?secret)\s*:\s+$", 
             match => $"{match.Groups[1].Value}:[REDACTED]", RegexOptions.IgnoreCase);
+    }
 
+    private static string RedactSensitivePatterns(string input)
+    {
+        var sanitized = input;
+        
         // Apply sensitive pattern redaction
         foreach (var pattern in SensitivePatterns)
         {
             try
             {
-                sanitized = pattern.Replace(sanitized, match =>
-                {
-                    var groups = match.Groups;
-                    
-                    // Handle quoted values (pattern: field="value" or field='value')
-                    if (groups.Count >= 3 && groups[1].Success && (groups[1].Value == "\"" || groups[1].Value == "'"))
-                    {
-                        // For quoted patterns, preserve the opening quote but not the closing quote
-                        var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
-                        var quote = groups[1].Value;
-                        return $"{prefix}{quote}[REDACTED]";
-                    }
-                    // Handle unquoted values (pattern: field=value or field: value)
-                    else if (groups.Count >= 2 && groups[1].Success)
-                    {
-                        var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
-                        return $"{prefix}[REDACTED]";
-                    }
-                    
-                    return "[REDACTED]";
-                });
+                sanitized = pattern.Replace(sanitized, ProcessSensitivePatternMatch);
             }
             catch (RegexMatchTimeoutException)
             {
@@ -122,14 +123,29 @@ public static class SecureLoggingHelper
             }
         }
 
-        // Apply XSS and malicious content sanitization
-        sanitized = SanitizeXssContent(sanitized);
+        return sanitized;
+    }
 
-        // Apply log injection prevention
-        sanitized = PreventLogInjection(sanitized);
-
-        // Use TaintBarrier to ensure no taint tracking through sanitization
-        return TaintBarrier.BreakTaint(sanitized);
+    private static string ProcessSensitivePatternMatch(Match match)
+    {
+        var groups = match.Groups;
+        
+        // Handle quoted values (pattern: field="value" or field='value')
+        if (groups.Count >= 3 && groups[1].Success && (groups[1].Value == "\"" || groups[1].Value == "'"))
+        {
+            // For quoted patterns, preserve the opening quote but not the closing quote
+            var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
+            var quote = groups[1].Value;
+            return $"{prefix}{quote}[REDACTED]";
+        }
+        // Handle unquoted values (pattern: field=value or field: value)
+        else if (groups.Count >= 2 && groups[1].Success)
+        {
+            var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
+            return $"{prefix}[REDACTED]";
+        }
+        
+        return "[REDACTED]";
     }
 
     /// <summary>
@@ -143,35 +159,105 @@ public static class SecureLoggingHelper
         // Always process through sanitization to prevent user-controlled bypass
         var sanitized = input ?? string.Empty;
 
+        var injectionPreventer = new LogInjectionPreventer();
+        sanitized = injectionPreventer.PreventInjection(sanitized);
+        sanitized = LimitMessageLength(sanitized);
+
+        return sanitized;
+    }
+
+    private static string ApplyLogInjectionPatterns(string input)
+    {
+        var sanitized = input;
+        
         // Apply log injection prevention patterns
         foreach (var pattern in LogInjectionPatterns)
         {
-            sanitized = pattern.Replace(sanitized, match =>
-            {
-                // Replace CRLF and control characters with safe alternatives
-                if (match.Value.Contains('\r') || match.Value.Contains('\n'))
-                    return " [NEWLINE] ";
-                
-                // Replace control characters with safe representation
-                if (match.Value.Length == 1 && char.IsControl(match.Value[0]))
-                    return $"[CTRL-{(int)match.Value[0]:X2}]";
-                
-                // Replace ANSI escape sequences
-                if (match.Value.StartsWith("\x1B["))
-                    return "[ANSI]";
-                
-                // Replace potential log level injection
-                return " [LOG-INJECT] ";
-            });
-        }
-
-        // Additional safety: limit message length to prevent log flooding
-        if (sanitized.Length > 1000)
-        {
-            sanitized = sanitized.Substring(0, 997) + "...";
+            sanitized = pattern.Replace(sanitized, ProcessLogInjectionMatch);
         }
 
         return sanitized;
+    }
+
+    private static string ProcessLogInjectionMatch(Match match)
+    {
+        var processor = new LogInjectionMatchProcessor(match);
+        return processor.ProcessMatch();
+    }
+
+    /// <summary>
+    /// Helper class for preventing log injection with reduced complexity
+    /// </summary>
+    private class LogInjectionPreventer
+    {
+        public string PreventInjection(string input)
+        {
+            var sanitized = input;
+            
+            // Apply log injection prevention patterns
+            foreach (var pattern in LogInjectionPatterns)
+            {
+                sanitized = pattern.Replace(sanitized, ProcessLogInjectionMatch);
+            }
+
+            return sanitized;
+        }
+    }
+
+    /// <summary>
+    /// Helper class for processing log injection matches
+    /// </summary>
+    private class LogInjectionMatchProcessor
+    {
+        private readonly Match _match;
+
+        public LogInjectionMatchProcessor(Match match)
+        {
+            _match = match;
+        }
+
+        public string ProcessMatch()
+        {
+            if (IsNewlineCharacter())
+                return " [NEWLINE] ";
+            
+            if (IsSingleControlCharacter())
+                return FormatControlCharacter();
+            
+            if (IsAnsiEscapeSequence())
+                return "[ANSI]";
+            
+            // Default: Replace potential log level injection
+            return " [LOG-INJECT] ";
+        }
+
+        private bool IsNewlineCharacter()
+        {
+            return _match.Value.Contains('\r') || _match.Value.Contains('\n');
+        }
+
+        private bool IsSingleControlCharacter()
+        {
+            return _match.Value.Length == 1 && char.IsControl(_match.Value[0]);
+        }
+
+        private string FormatControlCharacter()
+        {
+            return $"[CTRL-{(int)_match.Value[0]:X2}]";
+        }
+
+        private bool IsAnsiEscapeSequence()
+        {
+            return _match.Value.StartsWith("\x1B[");
+        }
+    }
+
+    private static string LimitMessageLength(string input)
+    {
+        // Additional safety: limit message length to prevent log flooding
+        return input.Length > 1000 
+            ? input.Substring(0, 997) + "..." 
+            : input;
     }
 
     /// <summary>
@@ -243,62 +329,8 @@ public static class SecureLoggingHelper
                 var propertyName = property.Name;
                 var value = property.GetValue(obj);
 
-                // Special handling for emails - preserve domain but redact username
-                if (propertyName.ToLowerInvariant() == "email" && value is string emailValue)
-                {
-                    if (emailValue.Contains('@'))
-                    {
-                        var parts = emailValue.Split('@');
-                        if (parts.Length == 2)
-                        {
-                            result[propertyName] = $"[REDACTED]@{parts[1]}";
-                            continue;
-                        }
-                    }
-                    result[propertyName] = "[REDACTED]";
-                    continue;
-                }
-
-                // Check if this is a sensitive field
-                if (IsSensitiveField(propertyName))
-                {
-                    result[propertyName] = "[REDACTED]";
-                    continue;
-                }
-
-                // Handle different value types
-                if (value == null)
-                {
-                    result[propertyName] = null;
-                }
-                else if (value is string stringValue)
-                {
-                    result[propertyName] = SanitizeMessage(stringValue);
-                }
-                else if (value.GetType().IsPrimitive || value is DateTime || value is DateTimeOffset || value is TimeSpan)
-                {
-                    result[propertyName] = value;
-                }
-                else
-                {
-                    // For complex objects, use their type name to avoid exposing sensitive data
-                    // Anonymous types will show their compiler-generated type name which is safe for logging
-                    var typeName = value.GetType().ToString();
-                    
-                    // Format anonymous types to match expected test format
-                    if (typeName.Contains("AnonymousType"))
-                    {
-                        // Remove generic type parameters and wrap in brackets to match test expectation
-                        var genericIndex = typeName.IndexOf('[');
-                        if (genericIndex > 0)
-                        {
-                            typeName = typeName.Substring(0, genericIndex) + "]";
-                        }
-                        typeName = "[" + typeName;
-                    }
-                    
-                    result[propertyName] = typeName;
-                }
+                var sanitizedValue = ProcessPropertyValue(propertyName, value);
+                result[propertyName] = sanitizedValue;
             }
             catch (TargetParameterCountException)
             {
@@ -323,6 +355,130 @@ public static class SecureLoggingHelper
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Processes a property value for sanitization.
+    /// </summary>
+    /// <param name="propertyName">The name of the property</param>
+    /// <param name="value">The value of the property</param>
+    /// <returns>The sanitized value</returns>
+    private static object? ProcessPropertyValue(string propertyName, object? value)
+    {
+        // Special handling for emails - preserve domain but redact username
+        if (IsEmailProperty(propertyName, value))
+        {
+            return SanitizeEmailValue((string)value!);
+        }
+
+        // Check if this is a sensitive field
+        if (IsSensitiveField(propertyName))
+        {
+            return "[REDACTED]";
+        }
+
+        return SanitizeValueByType(value);
+    }
+
+    /// <summary>
+    /// Checks if the property is an email property.
+    /// </summary>
+    /// <param name="propertyName">The property name</param>
+    /// <param name="value">The property value</param>
+    /// <returns>True if this is an email property</returns>
+    private static bool IsEmailProperty(string propertyName, object? value)
+    {
+        return propertyName.ToLowerInvariant() == "email" && value is string;
+    }
+
+    /// <summary>
+    /// Sanitizes an email value by preserving the domain but redacting the username.
+    /// </summary>
+    /// <param name="emailValue">The email value to sanitize</param>
+    /// <returns>The sanitized email value</returns>
+    private static string SanitizeEmailValue(string emailValue)
+    {
+        if (emailValue.Contains('@'))
+        {
+            var parts = emailValue.Split('@');
+            if (parts.Length == 2)
+            {
+                return $"[REDACTED]@{parts[1]}";
+            }
+        }
+        return "[REDACTED]";
+    }
+
+    /// <summary>
+    /// Sanitizes a value based on its type.
+    /// </summary>
+    /// <param name="value">The value to sanitize</param>
+    /// <returns>The sanitized value</returns>
+    private static object? SanitizeValueByType(object? value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (value is string stringValue)
+        {
+            return SanitizeMessage(stringValue);
+        }
+
+        if (IsSimpleType(value))
+        {
+            return value;
+        }
+
+        return FormatComplexTypeForLogging(value);
+    }
+
+    /// <summary>
+    /// Checks if a value is a simple type that can be logged directly.
+    /// </summary>
+    /// <param name="value">The value to check</param>
+    /// <returns>True if the value is a simple type</returns>
+    private static bool IsSimpleType(object value)
+    {
+        return value.GetType().IsPrimitive || 
+               value is DateTime || 
+               value is DateTimeOffset || 
+               value is TimeSpan;
+    }
+
+    /// <summary>
+    /// Formats a complex type for safe logging.
+    /// </summary>
+    /// <param name="value">The complex object to format</param>
+    /// <returns>A safe string representation of the type</returns>
+    private static string FormatComplexTypeForLogging(object value)
+    {
+        var typeName = value.GetType().ToString();
+        
+        // Format anonymous types to match expected test format
+        if (typeName.Contains("AnonymousType"))
+        {
+            return FormatAnonymousType(typeName);
+        }
+        
+        return typeName;
+    }
+
+    /// <summary>
+    /// Formats an anonymous type name for logging.
+    /// </summary>
+    /// <param name="typeName">The anonymous type name</param>
+    /// <returns>The formatted type name</returns>
+    private static string FormatAnonymousType(string typeName)
+    {
+        // Remove generic type parameters and wrap in brackets to match test expectation
+        var genericIndex = typeName.IndexOf('[');
+        if (genericIndex > 0)
+        {
+            typeName = typeName.Substring(0, genericIndex) + "]";
+        }
+        return "[" + typeName;
     }
 
     /// <summary>

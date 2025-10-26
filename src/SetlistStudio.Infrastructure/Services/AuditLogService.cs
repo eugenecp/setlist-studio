@@ -33,6 +33,27 @@ public class AuditLogService : IAuditLogService
     /// <inheritdoc />
     public async Task LogAuditAsync(string action, string tableName, string recordId, string userId, object? changes, string? correlationId = null)
     {
+        await LogAuditInternalAsync(action, tableName, recordId, userId, changes, correlationId, requireUserId: true);
+    }
+
+    /// <summary>
+    /// Logs an audit event allowing empty userId for system operations (enables user enhancement from HTTP context)
+    /// </summary>
+    /// <param name="action">The action performed</param>
+    /// <param name="tableName">The name of the table affected</param>
+    /// <param name="recordId">The ID of the record affected</param>
+    /// <param name="changes">The changes made (optional)</param>
+    /// <param name="correlationId">Optional correlation ID for tracking related operations</param>
+    public async Task LogSystemAuditAsync(string action, string tableName, string recordId, object? changes = null, string? correlationId = null)
+    {
+        await LogAuditInternalAsync(action, tableName, recordId, "", changes, correlationId, requireUserId: false);
+    }
+
+    /// <summary>
+    /// Internal method to handle audit logging with optional user ID validation
+    /// </summary>
+    private async Task LogAuditInternalAsync(string action, string tableName, string recordId, string userId, object? changes, string? correlationId, bool requireUserId)
+    {
         if (string.IsNullOrWhiteSpace(action))
             throw new ArgumentException("Action cannot be null or empty", nameof(action));
         
@@ -42,7 +63,7 @@ public class AuditLogService : IAuditLogService
         if (string.IsNullOrWhiteSpace(recordId))
             throw new ArgumentException("Record ID cannot be null or empty", nameof(recordId));
         
-        if (string.IsNullOrWhiteSpace(userId))
+        if (requireUserId && string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
 
         try
@@ -102,28 +123,8 @@ public class AuditLogService : IAuditLogService
     {
         try
         {
-            var query = _context.AuditLogs.AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(userId))
-                query = query.Where(a => a != null && a.UserId == userId);
-
-            if (!string.IsNullOrWhiteSpace(action))
-                query = query.Where(a => a != null && a.Action == action);
-
-            if (!string.IsNullOrWhiteSpace(tableName))
-                query = query.Where(a => a != null && a.EntityType == tableName);
-
-            if (startDate.HasValue && startDate.Value != default(DateTime))
-                query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
-
-            if (endDate.HasValue && endDate.Value != default(DateTime))
-                query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
-
-            return await query
-                .OrderByDescending(a => a!.Timestamp)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync() ?? new List<AuditLog>();
+            var query = BuildAuditLogQuery(userId, action, tableName, startDate, endDate);
+            return await ExecutePagedQuery(query, pageNumber, pageSize);
         }
         catch (InvalidOperationException ex)
         {
@@ -135,6 +136,64 @@ public class AuditLogService : IAuditLogService
             _logger.LogError(ex, "Invalid argument retrieving audit logs");
             return Enumerable.Empty<AuditLog>();
         }
+    }
+
+    private IQueryable<AuditLog> BuildAuditLogQuery(
+        string? userId, 
+        string? action, 
+        string? tableName, 
+        DateTime? startDate, 
+        DateTime? endDate)
+    {
+        var query = _context.AuditLogs.AsQueryable();
+
+        query = ApplyUserFilter(query, userId);
+        query = ApplyActionFilter(query, action);
+        query = ApplyTableNameFilter(query, tableName);
+        query = ApplyDateRangeFilters(query, startDate, endDate);
+
+        return query;
+    }
+
+    private static IQueryable<AuditLog> ApplyUserFilter(IQueryable<AuditLog> query, string? userId)
+    {
+        return string.IsNullOrWhiteSpace(userId) 
+            ? query 
+            : query.Where(a => a != null && a.UserId == userId);
+    }
+
+    private static IQueryable<AuditLog> ApplyActionFilter(IQueryable<AuditLog> query, string? action)
+    {
+        return string.IsNullOrWhiteSpace(action) 
+            ? query 
+            : query.Where(a => a != null && a.Action == action);
+    }
+
+    private static IQueryable<AuditLog> ApplyTableNameFilter(IQueryable<AuditLog> query, string? tableName)
+    {
+        return string.IsNullOrWhiteSpace(tableName) 
+            ? query 
+            : query.Where(a => a != null && a.EntityType == tableName);
+    }
+
+    private static IQueryable<AuditLog> ApplyDateRangeFilters(IQueryable<AuditLog> query, DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate.HasValue && startDate.Value != DateTime.MinValue)
+            query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
+
+        if (endDate.HasValue && endDate.Value != DateTime.MinValue)
+            query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
+
+        return query;
+    }
+
+    private static async Task<List<AuditLog>> ExecutePagedQuery(IQueryable<AuditLog> query, int pageNumber, int pageSize)
+    {
+        return await query
+            .OrderByDescending(a => a!.Timestamp)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync() ?? new List<AuditLog>();
     }
 
     /// <inheritdoc />
@@ -238,27 +297,9 @@ public class AuditLogService : IAuditLogService
 
         try
         {
-            // Extract IP address (handle proxy scenarios)
-            auditLog.IpAddress = GetClientIpAddress(httpContext);
-
-            // Extract user agent
-            auditLog.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
-
-            // Extract session ID if available
-            if (httpContext.Session is not null)
-            {
-                auditLog.SessionId = httpContext.Session.Id;
-            }
-
-            // Enhance user ID from claims if not already set
-            if (string.IsNullOrEmpty(auditLog.UserId) && httpContext.User?.Identity?.IsAuthenticated == true)
-            {
-                var user = httpContext.User;
-                if (user is not null)
-                {
-                    auditLog.UserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
-                }
-            }
+            EnhanceWithNetworkInfo(auditLog, httpContext);
+            EnhanceWithSessionInfo(auditLog, httpContext);
+            EnhanceWithUserInfo(auditLog, httpContext);
         }
         catch (ArgumentException ex)
         {
@@ -267,6 +308,41 @@ public class AuditLogService : IAuditLogService
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "Invalid operation enhancing audit log with HTTP context information");
+        }
+    }
+
+    /// <summary>
+    /// Enhances audit log with network-related information
+    /// </summary>
+    private static void EnhanceWithNetworkInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        auditLog.IpAddress = GetClientIpAddress(httpContext);
+        auditLog.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
+    }
+
+    /// <summary>
+    /// Enhances audit log with session information
+    /// </summary>
+    private static void EnhanceWithSessionInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        if (httpContext.Session is not null)
+        {
+            auditLog.SessionId = httpContext.Session.Id;
+        }
+    }
+
+    /// <summary>
+    /// Enhances audit log with user information from claims
+    /// </summary>
+    private static void EnhanceWithUserInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        if (string.IsNullOrEmpty(auditLog.UserId) && httpContext.User?.Identity?.IsAuthenticated == true)
+        {
+            var user = httpContext.User;
+            if (user is not null)
+            {
+                auditLog.UserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
+            }
         }
     }
 

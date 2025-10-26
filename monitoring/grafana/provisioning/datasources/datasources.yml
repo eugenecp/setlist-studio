@@ -1,0 +1,73 @@
+# Grafana Data Source Configuration for Setlist Studio Monitoring
+# Automatically provisions Prometheus and Redis data sources
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      queryTimeout: 60s
+      timeInterval: 15s
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.47.0
+      cacheLevel: High
+      customQueryParameters: ""
+      incrementalQuery: false
+      exemplarTraceIdDestinations:
+        - datasourceUid: jaeger
+          name: traceID
+    secureJsonData: {}
+
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    database: 0
+    editable: true
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    secureJsonData:
+      password: ${REDIS_PASSWORD}
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      timeout: 60
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "${__value.raw}"
+    secureJsonData: {}
+
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki
+        tags: [service, instance]
+        mappedTags: [{key: service.name, value: service}]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: -1h
+        spanEndTimeShift: 1h
+      nodeGraph:
+        enabled: true
+    secureJsonData: {}

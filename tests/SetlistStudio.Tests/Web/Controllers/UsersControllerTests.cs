@@ -53,8 +53,7 @@ public class UsersControllerTests
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        var okResult = result as OkObjectResult;
-        okResult.Should().NotBeNull();
+        var okResult = result  as OkObjectResult;okResult!.Should().NotBeNull();
 
         var profile = okResult!.Value;
         profile.Should().NotBeNull();
@@ -70,8 +69,7 @@ public class UsersControllerTests
         nameProperty!.GetValue(profile).Should().Be(testUserName);
         isAuthenticatedProperty!.GetValue(profile).Should().Be(true);
         
-        var returnedClaims = claimsProperty!.GetValue(profile) as object[];
-        returnedClaims.Should().NotBeNull();
+        var returnedClaims = claimsProperty!.GetValue(profile)  as object[];returnedClaims!.Should().NotBeNull();
         returnedClaims!.Length.Should().Be(3);
     }
 
@@ -234,9 +232,7 @@ public class UsersControllerTests
 
         var profileType = profile!.GetType();
         var claimsProperty = profileType.GetProperty("claims");
-        var returnedClaims = claimsProperty!.GetValue(profile) as object[];
-
-        returnedClaims.Should().NotBeNull();
+        var returnedClaims = claimsProperty!.GetValue(profile)  as object[];returnedClaims!.Should().NotBeNull();
         returnedClaims!.Length.Should().Be(5);
 
         // Verify that claims contain the expected types and values
@@ -275,9 +271,8 @@ public class UsersControllerTests
 
         var profileType = profile!.GetType();
         var claimsProperty = profileType.GetProperty("claims");
-        var returnedClaims = claimsProperty!.GetValue(profile) as object[];
-
-        returnedClaims.Should().NotBeNull();
+        var returnedClaims = claimsProperty!.GetValue(profile)  as object[];returnedClaims!.Should().NotBeNull();
         returnedClaims!.Length.Should().Be(0);
     }
 }
+

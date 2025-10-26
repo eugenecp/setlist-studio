@@ -117,10 +117,9 @@ public class SongsPageControllerTests
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
         var message = okResult!.Value as string;
-        
-        message.Should().NotBeNull();
-        message.Should().Contain("Create song page");
-        message.Should().Contain("authenticated");
+        message!.Should().NotBeNull();
+        message!.Should().Contain("Create song page");
+        message!.Should().Contain("authenticated");
     }
 
     [Fact]
@@ -201,17 +200,16 @@ public class SongsPageControllerTests
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
         var message = okResult!.Value as string;
-        
-        message.Should().NotBeNull();
-        message.Should().Contain("Songs index page");
-        message.Should().Contain("authenticated");
+        message!.Should().NotBeNull();
+        message!.Should().Contain("Songs index page");
+        message!.Should().Contain("authenticated");
     }
 
     [Fact]
     public void Create_WithNullHttpContext_ReturnsChallengeResult()
     {
         // Arrange
-        var controller = new SongsPageController();
+        using var controller = new SongsPageController();
         var httpContext = new Mock<HttpContext>();
         var user = new Mock<ClaimsPrincipal>();
         var identity = new Mock<IIdentity>();

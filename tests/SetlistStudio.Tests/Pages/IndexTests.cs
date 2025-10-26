@@ -217,7 +217,7 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>(parameters => parameters
+        _ = RenderComponent<IndexPage>(parameters => parameters
             .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations
@@ -245,7 +245,7 @@ public class IndexTests : TestContext
             .ReturnsAsync(mockAuthState);
 
         // Act
-        var component = RenderComponent<IndexPage>(parameters => parameters
+        _ = RenderComponent<IndexPage>(parameters => parameters
             .AddCascadingValue(Task.FromResult(mockAuthState)));
         
         // Wait for async operations

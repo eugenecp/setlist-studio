@@ -465,6 +465,7 @@ paths:
 ### CI/CD Pipeline
 - **GitHub Actions**: Automated building, testing, and deployment
 - **Quality Gates**: **100% test success rate**, **zero build warnings**, **zero high/critical CodeQL issues**, and 80%+ coverage required before merge
+- **Performance Requirements**: API endpoints must respond within 500ms, database queries within 100ms under normal load
 - **CodeQL Analysis**: Mandatory static security analysis on all pull requests - **CodeQL findings override general security summaries**
 - **CodeQL Code Generation Compliance**: All generated code must pass CodeQL static analysis without high/critical security vulnerabilities
 - **CodeQL Best Practices**: Generated code must follow CodeQL quality recommendations (null safety, LINQ usage, resource disposal)
@@ -478,6 +479,35 @@ paths:
 - **Component Tests**: Blazor component rendering and interaction tests (must pass 100%)
 - **Advanced Tests**: Edge cases, error conditions, and coverage gaps (must pass 100%)
 - **Test Reliability**: All tests must be deterministic and consistently passing
+
+### Performance Monitoring
+
+**Performance Benchmarks (Must Meet)**:
+- **API Response Times**: <500ms for all endpoints under normal load
+- **Database Query Times**: <100ms for user data queries
+- **Page Load Times**: <2 seconds for Blazor Server pages
+- **Memory Usage**: <4MB per concurrent user connection
+- **Database File Size**: Monitor SQLite files >50MB for migration planning
+
+**Performance Testing Commands**:
+```bash
+# Run performance benchmarks
+dotnet run --project tests/SetlistStudio.PerformanceTests
+
+# Monitor database query performance
+dotnet ef dbcontext optimize --startup-project src/SetlistStudio.Web
+
+# Generate performance report
+./scripts/run-performance-tests.ps1
+
+# Check for N+1 query problems
+dotnet trace collect --providers Microsoft-EntityFrameworkCore
+```
+
+**Scalability Thresholds**:
+- **SQLite Limits**: 100 concurrent users, 50MB database size
+- **Blazor Server**: 200 connections per instance, 2-4MB per connection
+- **Memory Cache**: Monitor growth patterns, implement Redis at 1GB+
 
 ### Common Commands
 ```bash
@@ -703,6 +733,26 @@ codeql database analyze codeql-database --output=quality-analysis.sarif codeql/c
 "Add caching layer for frequently accessed song and artist data"
 
 "Redesign the setlist storage to support better performance with 10,000+ songs per user"
+
+"Add database indexes for user-specific queries on Songs and Setlists tables to improve query performance"
+
+"Implement distributed caching with Redis to support horizontal scaling across multiple server instances"
+
+"Migrate from SQLite to PostgreSQL for better concurrent user support and write performance"
+
+"Add connection pooling to handle 100+ concurrent database connections efficiently"
+
+"Implement response caching for expensive operations like genre listings and artist aggregations"
+
+"Design API endpoints to support bulk operations for better performance with large datasets"
+
+"Add database query optimization with proper LINQ usage to minimize N+1 query problems"
+
+"Implement background jobs for heavy operations like setlist calculations and data aggregations"
+
+"Configure load balancing with sticky sessions to support Blazor Server horizontal scaling"
+
+"Add performance monitoring and metrics collection for database query times and memory usage"
 ```
 
 ### Security & Validation
@@ -785,6 +835,50 @@ codeql database analyze codeql-database --output=quality-analysis.sarif codeql/c
 "Always verify security analysis results locally before relying on GitHub Actions comprehensive reports"
 
 "Never merge code with CodeQL high/critical issues regardless of overall security scan status"
+```
+
+### Performance & Optimization
+
+```
+"Analyze database queries for N+1 problems and optimize with proper Include() statements"
+
+"Add response caching to expensive operations like genre aggregations and artist listings"
+
+"Implement query result caching for frequently accessed data using IMemoryCache or distributed cache"
+
+"Optimize Entity Framework queries to avoid loading unnecessary navigation properties"
+
+"Add database indexes for common query patterns: UserId, Artist, Genre, PerformanceDate"
+
+"Implement pagination efficiently with Skip/Take and proper ordering to handle large datasets"
+
+"Use asynchronous operations (async/await) consistently throughout the application for I/O operations"
+
+"Add performance monitoring to track slow queries and API endpoint response times"
+
+"Implement bulk operations for inserting/updating multiple songs or setlist items"
+
+"Cache expensive calculations like setlist duration and song counts using computed properties"
+
+"Add database connection pooling configuration for high-concurrency scenarios"
+
+"Optimize JSON serialization by excluding unnecessary properties and using JsonIgnore attributes"
+
+"Implement lazy loading patterns for large collections that aren't always needed"
+
+"Add compression middleware for API responses to reduce bandwidth usage"
+
+"Monitor memory usage patterns and implement proper disposal of database contexts and resources"
+
+"Use compiled queries for frequently executed database operations to improve performance"
+
+"Implement read-through caching patterns for user-specific data like song libraries and setlists"
+
+"Add performance benchmarks and load testing to validate scalability improvements"
+
+"Configure appropriate timeout values for database operations and HTTP requests"
+
+"Implement background processing for non-critical operations that don't need immediate response"
 ```
 
 ### User Experience & Content
@@ -1006,6 +1100,16 @@ When contributing to Setlist Studio:
 - [ ] Include security test cases (authentication, authorization, validation)
 - [ ] Test with malicious inputs and edge cases
 
+**Performance & Scalability:**
+- [ ] Ensure API endpoints respond within 500ms under normal load
+- [ ] Optimize database queries to complete within 100ms
+- [ ] Implement proper pagination for large datasets (already exists)
+- [ ] Use async/await consistently for I/O operations
+- [ ] Add appropriate database indexes for user-specific queries
+- [ ] Monitor memory usage patterns and implement proper disposal
+- [ ] Consider caching for expensive operations (genres, artist aggregations)
+- [ ] Test with realistic data volumes (1000+ songs, 100+ setlists per user)
+
 **Code Review Preparation:**
 - [ ] Complete security validation checklist
 - [ ] Run security scans and address any issues
@@ -1071,4 +1175,34 @@ When contributing to Setlist Studio:
 
 ---
 
-**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, **secure**, and delightful experience for artists sharing their music with the world.
+## SCALABILITY CONSIDERATIONS
+
+**Current System Limits & Growth Planning:**
+
+### **Database Scalability**
+- **SQLite Current Limit**: ~100 concurrent users, ~50MB database files
+- **Migration Threshold**: Plan PostgreSQL migration when database >50MB or >100 concurrent users
+- **Index Strategy**: All user-specific queries have appropriate indexes (UserId, Artist, Genre, PerformanceDate)
+- **Query Performance**: All queries must complete within 100ms; optimize with proper Entity Framework usage
+
+### **Application Scalability**
+- **Blazor Server Limits**: ~200 concurrent connections per instance, 2-4MB memory per connection
+- **Horizontal Scaling**: Implement Redis distributed caching and sticky sessions for load balancing
+- **Memory Management**: Monitor memory usage patterns, implement proper resource disposal
+- **Background Processing**: Use background jobs for heavy operations (calculations, aggregations)
+
+### **Performance Monitoring**
+- **API Response Times**: <500ms for all endpoints under normal load
+- **Database Query Performance**: Monitor with Entity Framework logging and optimize N+1 problems
+- **Memory Usage**: Track per-user memory consumption and implement distributed caching at 1GB+
+- **Connection Limits**: Plan for database connection pooling when approaching 100+ concurrent users
+
+### **Scaling Roadmap**
+1. **Phase 1 (100-300 users)**: Optimize existing SQLite with indexes and caching
+2. **Phase 2 (300-1000 users)**: Migrate to PostgreSQL with connection pooling
+3. **Phase 3 (1000+ users)**: Implement Redis caching and load balancing
+4. **Phase 4 (5000+ users)**: Add read replicas and horizontal scaling
+
+---
+
+**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, **secure**, scalable, and delightful experience for artists sharing their music with the world.

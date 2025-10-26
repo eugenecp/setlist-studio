@@ -870,10 +870,237 @@ public class AuditLogServiceTests : IDisposable
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
             new Claim(ClaimTypes.NameIdentifier, userId)
-        }));
+        }, "TestAuthentication")); // Add authentication type to make IsAuthenticated = true
         _mockHttpContext.Setup(x => x.User).Returns(user);
 
         _mockHttpContext.Setup(x => x.Session.Id).Returns($"session-{userId}");
+    }
+
+
+
+    [Fact]
+    public async Task LogSystemAuditAsync_AuthenticatedUserWithNameIdentifierClaim_SetsUserIdFromHttpContext()
+    {
+        // Arrange
+        const string expectedUserId = "test-user-123";
+        SetupHttpContext("192.168.1.100", "Mozilla/5.0 Test Browser", expectedUserId);
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be(expectedUserId, "because authenticated user with NameIdentifier claim should have UserId set from HTTP context");
+        savedLog.Action.Should().Be(action);
+        savedLog.EntityType.Should().Be(entityType);
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_UnauthenticatedUser_LeavesUserIdNull()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up unauthenticated user (no identity or not authenticated)
+        var user = new ClaimsPrincipal();
+        _mockHttpContext.Setup(x => x.User).Returns(user);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-anonymous");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-unauthenticated-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("", "because unauthenticated user should leave UserId as empty string");
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_NullUser_LeavesUserIdNull()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up null user
+        _mockHttpContext.Setup(x => x.User).Returns(default(ClaimsPrincipal)!);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-null");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-null-user-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("", "because null user should leave UserId as empty string");
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_AuthenticatedUserWithoutNameIdentifierClaim_UsesUnknownFallback()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up authenticated user without NameIdentifier claim
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Name, "testuser@example.com"),
+            new Claim(ClaimTypes.Role, "User")
+        }, "TestAuthentication"));
+        _mockHttpContext.Setup(x => x.User).Returns(user);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-no-nameid");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-no-nameid-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("Unknown", "because authenticated user without NameIdentifier claim should get 'Unknown' fallback value");
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_AuthenticatedUserWithEmptyNameIdentifierClaim_LeavesUserIdNull()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up authenticated user with empty NameIdentifier claim
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, ""), // Empty value
+            new Claim(ClaimTypes.Name, "testuser@example.com")
+        }, "TestAuthentication"));
+        _mockHttpContext.Setup(x => x.User).Returns(user);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-empty-nameid");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-empty-nameid-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("", "because empty NameIdentifier claim value should be used as-is (FindFirst returns the empty claim value)");
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_AuthenticatedUserWithWhitespaceNameIdentifierClaim_LeavesUserIdNull()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up authenticated user with whitespace NameIdentifier claim
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "   "), // Whitespace only
+            new Claim(ClaimTypes.Name, "testuser@example.com")
+        }, "TestAuthentication"));
+        _mockHttpContext.Setup(x => x.User).Returns(user);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-whitespace-nameid");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-whitespace-nameid-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("   ", "because whitespace NameIdentifier claim value should be used as-is (FindFirst returns the claim value)");
+    }
+
+    [Fact]
+    public async Task LogSystemAuditAsync_WithValidNameIdentifierButNonAuthenticatedIdentity_LeavesUserIdNull()
+    {
+        // Arrange
+        _mockHttpContext.Setup(x => x.Connection.RemoteIpAddress)
+            .Returns(System.Net.IPAddress.Parse("192.168.1.100"));
+        
+        var headers = new HeaderDictionary
+        {
+            { "User-Agent", "Mozilla/5.0 Test Browser" }
+        };
+        _mockHttpRequest.Setup(x => x.Headers).Returns(headers);
+
+        // Set up user with NameIdentifier but not authenticated (Identity.IsAuthenticated = false)
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "user-not-authenticated"),
+            new Claim(ClaimTypes.Name, "testuser@example.com")
+        }); // No authenticationType, so IsAuthenticated = false
+
+        var user = new ClaimsPrincipal(identity);
+        _mockHttpContext.Setup(x => x.User).Returns(user);
+        _mockHttpContext.Setup(x => x.Session.Id).Returns("session-not-authenticated");
+
+        const string action = "SYSTEM_CREATE";
+        const string entityType = "Songs";
+        const string entityId = "song-not-authenticated-123";
+        var changes = new { Title = "Sweet Child O Mine", Artist = "Guns N' Roses" };
+
+        // Act
+        await _service.LogSystemAuditAsync(action, entityType, entityId, changes);
+
+        // Assert
+        var savedLog = await _context.AuditLogs.FirstAsync(x => x.EntityId == entityId);
+        savedLog.UserId.Should().Be("", "because user with NameIdentifier but IsAuthenticated=false should leave UserId as empty string");
     }
 
     public void Dispose()

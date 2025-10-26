@@ -234,7 +234,7 @@ public class SecureLoggingHelperTests
             DateProperty = DateTime.UtcNow,
             NumberProperty = 42,
             ComplexProperty = new { NestedPassword = "secret" },
-            NullProperty = default(string)
+            NullProperty = default(string?)
         };
 
         // Act

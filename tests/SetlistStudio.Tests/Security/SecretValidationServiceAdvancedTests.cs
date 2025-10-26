@@ -450,11 +450,222 @@ public class SecretValidationServiceAdvancedTests
             x => x.Log(
                 LogLevel.Debug,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Optional OAuth secret not configured")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Skipping validation for optional OAuth secret")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeast(1),
             "Should log debug message for optional OAuth secrets");
+    }
+
+    #endregion
+
+    #region KeyVault Configuration Validation Tests
+
+    [Fact]
+    public void ValidateSecrets_WithEmptyKeyVaultName_ShouldLogInformationAndContinue()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "" }, // Empty KeyVault name
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Azure Key Vault not configured")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once,
+            "Should log information when KeyVault is not configured");
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithInvalidKeyVaultNameFormat_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "invalid_vault_name_with_underscores" }, // Invalid format
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("Invalid KeyVault name format should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.InvalidFormat);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithKeyVaultNameTooShort_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "ab" }, // Too short (less than 3 characters)
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("KeyVault name too short should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.InvalidFormat);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithKeyVaultNameTooLong_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "this-is-a-very-long-key-vault-name-that-exceeds-twentyfour-characters" }, // Too long (>24 characters)
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("KeyVault name too long should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.InvalidFormat);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithKeyVaultPlaceholderValue_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "YOUR_KEY_VAULT_NAME" }, // Placeholder value
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("KeyVault placeholder value should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.Placeholder);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithKeyVaultNameStartingWithDigit_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "1invalid-start" }, // Cannot start with digit
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("KeyVault name starting with digit should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.InvalidFormat);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithKeyVaultNameEndingWithHyphen_ShouldAddValidationError()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "invalid-end-" }, // Cannot end with hyphen
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        var result = service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        result.IsValid.Should().BeFalse("KeyVault name ending with hyphen should make validation fail");
+        result.ValidationErrors.Should().ContainSingle(e => 
+            e.SecretKey == "KeyVault:VaultName" && e.Issue == SecretValidationIssue.InvalidFormat);
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithValidKeyVaultName_ShouldLogSuccessAndContinue()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "valid-keyvault-name" }, // Valid format
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Production");
+
+        // Act
+        service.ValidateSecrets(strictValidation: true);
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Azure Key Vault configuration validated")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once,
+            "Should log successful KeyVault validation");
+    }
+
+    [Fact]
+    public void ValidateSecrets_WithWhitespaceKeyVaultName_ShouldLogInformationInTesting()
+    {
+        // Arrange
+        var configValues = new Dictionary<string, string>
+        {
+            { "KeyVault:VaultName", "   " }, // Whitespace only
+            { "Authentication:Google:ClientId", "valid-client-id" },
+            { "ConnectionStrings:DefaultConnection", "Data Source=test.db" }
+        };
+        var service = CreateService(configValues, "Testing");
+
+        // Act
+        service.ValidateSecrets(strictValidation: true);
+
+        // Assert - Should NOT log the message in Testing environment
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Azure Key Vault not configured")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never,
+            "Should not log KeyVault message in Testing environment");
     }
 
     #endregion

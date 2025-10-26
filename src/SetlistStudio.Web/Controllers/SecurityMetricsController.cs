@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Services;
 using System.Diagnostics;
+using System.Security.Claims;
 
 namespace SetlistStudio.Web.Controllers;
 
@@ -86,25 +87,18 @@ public class SecurityMetricsController : ControllerBase
     {
         try
         {
-            // Validate time range
-            if (startTime.HasValue && endTime.HasValue && startTime > endTime)
-            {
-                return BadRequest("Start time cannot be after end time");
-            }
+            var validator = new MetricsTimeRangeValidator(_configuration);
+            var validationResult = validator.ValidateAndAdjust(startTime, endTime);
 
-            // Limit historical data to prevent performance issues
-            var maxHistoryDays = _configuration.GetValue<int>("Security:MaxHistoryDays", 30);
-            var earliestAllowed = DateTime.UtcNow.AddDays(-maxHistoryDays);
-            
-            if (startTime.HasValue && startTime < earliestAllowed)
+            if (!validationResult.IsValid)
             {
-                startTime = earliestAllowed;
+                return BadRequest(validationResult.ErrorMessage);
             }
 
             _logger.LogInformation("Detailed security metrics requested by user {UserId} for period {StartTime} to {EndTime}", 
-                User.Identity?.Name ?? "Unknown", startTime, endTime);
+                User.Identity?.Name ?? "Unknown", validationResult.StartTime, validationResult.EndTime);
 
-            var metrics = _securityMetricsService.GetDetailedMetrics(startTime, endTime);
+            var metrics = _securityMetricsService.GetDetailedMetrics(validationResult.StartTime, validationResult.EndTime);
             return Ok(metrics);
         }
         catch (ArgumentOutOfRangeException ex)
@@ -122,6 +116,79 @@ public class SecurityMetricsController : ControllerBase
         {
             _logger.LogError(ex, "Unexpected error retrieving detailed security metrics");
             return StatusCode(500, "Error retrieving detailed security metrics");
+        }
+    }
+
+    /// <summary>
+    /// Helper class for validating and adjusting metrics time ranges
+    /// </summary>
+    private class MetricsTimeRangeValidator
+    {
+        private readonly IConfiguration _configuration;
+
+        public MetricsTimeRangeValidator(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
+        public TimeRangeValidationResult ValidateAndAdjust(DateTime? startTime, DateTime? endTime)
+        {
+            if (IsInvalidTimeRange(startTime, endTime))
+            {
+                return TimeRangeValidationResult.Invalid("Start time cannot be after end time");
+            }
+
+            var adjustedStartTime = AdjustStartTimeIfNeeded(startTime);
+            
+            return TimeRangeValidationResult.Valid(adjustedStartTime, endTime);
+        }
+
+        private static bool IsInvalidTimeRange(DateTime? startTime, DateTime? endTime)
+        {
+            return startTime.HasValue && endTime.HasValue && startTime > endTime;
+        }
+
+        private DateTime? AdjustStartTimeIfNeeded(DateTime? startTime)
+        {
+            if (!startTime.HasValue)
+                return startTime;
+
+            var maxHistoryDays = _configuration.GetValue<int>("Security:MaxHistoryDays", 30);
+            var earliestAllowed = DateTime.UtcNow.AddDays(-maxHistoryDays);
+            
+            return startTime < earliestAllowed ? earliestAllowed : startTime;
+        }
+    }
+
+    /// <summary>
+    /// Result of time range validation
+    /// </summary>
+    private class TimeRangeValidationResult
+    {
+        public bool IsValid { get; private set; }
+        public string? ErrorMessage { get; private set; }
+        public DateTime? StartTime { get; private set; }
+        public DateTime? EndTime { get; private set; }
+
+        private TimeRangeValidationResult() { }
+
+        public static TimeRangeValidationResult Valid(DateTime? startTime, DateTime? endTime)
+        {
+            return new TimeRangeValidationResult
+            {
+                IsValid = true,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+
+        public static TimeRangeValidationResult Invalid(string errorMessage)
+        {
+            return new TimeRangeValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = errorMessage
+            };
         }
     }
 
@@ -186,85 +253,178 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogInformation("Security dashboard requested by user {UserId}", 
                 User.Identity?.Name ?? "Unknown");
 
-            var snapshot = _securityMetricsService.GetMetricsSnapshot();
-            var last24Hours = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(24));
-            var lastHour = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(1));
-
-            var dashboard = new SecurityDashboard
-            {
-                Timestamp = DateTime.UtcNow,
-                ThreatLevel = last24Hours.ThreatLevel,
-                SecurityScore = Math.Round(last24Hours.SecurityScore, 1),
-                ActiveThreats = snapshot.RecentEvents.Count(e => 
-                    e.Severity == "CRITICAL" || e.Severity == "HIGH"),
-                
-                // Key metrics
-                AuthFailuresLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "AUTHENTICATION_FAILURE" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-                    
-                RateLimitViolationsLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "RATE_LIMIT_VIOLATION" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-                    
-                SuspiciousActivitiesLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "SUSPICIOUS_ACTIVITY" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-
-                // Trends
-                AuthFailureTrend = CalculateTrend(snapshot.RecentEvents, "AUTHENTICATION_FAILURE"),
-                RateLimitTrend = CalculateTrend(snapshot.RecentEvents, "RATE_LIMIT_VIOLATION"),
-                ThreatTrend = CalculateOverallThrend(lastHour, last24Hours),
-
-                // Top threats
-                TopAttackingIPs = snapshot.TopFailingIps.Take(5).ToArray(),
-                TopViolatedEndpoints = snapshot.TopViolatedEndpoints.Take(5).ToArray(),
-                
-                // Alerts and recommendations
-                ActiveAlerts = GenerateActiveAlerts(snapshot, last24Hours),
-                Recommendations = last24Hours.Recommendations,
-                
-                // System status
-                SystemStatus = DetermineSystemStatus(last24Hours.ThreatLevel, last24Hours.SecurityScore),
-                LastIncidentTime = snapshot.RecentEvents
-                    .Where(e => e.Severity == "CRITICAL" || e.Severity == "HIGH")
-                    .OrderByDescending(e => e.Timestamp)
-                    .FirstOrDefault()?.Timestamp,
-                
-                // Operational metrics
-                MonitoringStatus = "ACTIVE",
-                AlertsEnabled = _configuration.GetValue<bool>("Security:AlertsEnabled", true),
-                MetricsRetentionDays = _configuration.GetValue<int>("Security:MetricsRetentionDays", 7)
-            };
+            var metricsData = CollectMetricsData();
+            var dashboard = BuildSecurityDashboard(metricsData);
 
             return Ok(dashboard);
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Unauthorized access to security dashboard by user {UserId}", User.Identity?.Name ?? "Unknown");
-            return Forbid();
+            return HandleUnauthorizedAccess(ex);
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Invalid argument in security dashboard request");
-            return BadRequest("Invalid request parameters");
+            return HandleArgumentException(ex);
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Security metrics service unavailable");
-            return StatusCode(503, "Security metrics service temporarily unavailable");
+            return HandleServiceUnavailable(ex);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout retrieving security dashboard data");
-            return StatusCode(504, "Request timeout - please try again");
+            return HandleTimeout(ex);
         }
         // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error retrieving security dashboard");
-            return StatusCode(500, "Error retrieving security dashboard");
+            return HandleUnexpectedError(ex);
         }
+    }
+
+    /// <summary>
+    /// Collects all necessary metrics data from the security service
+    /// </summary>
+    private DashboardMetricsData CollectMetricsData()
+    {
+        return new DashboardMetricsData
+        {
+            Snapshot = _securityMetricsService.GetMetricsSnapshot(),
+            Last24Hours = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(24)),
+            LastHour = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(1))
+        };
+    }
+
+    /// <summary>
+    /// Builds the complete security dashboard from collected metrics data
+    /// </summary>
+    private SecurityDashboard BuildSecurityDashboard(DashboardMetricsData data)
+    {
+        return new SecurityDashboard
+        {
+            Timestamp = DateTime.UtcNow,
+            ThreatLevel = data.Last24Hours.ThreatLevel,
+            SecurityScore = Math.Round(data.Last24Hours.SecurityScore, 1),
+            ActiveThreats = CountActiveThreats(data.Snapshot),
+                
+            // Key metrics
+            AuthFailuresLast24h = CountEventsByType(data.Snapshot, "AUTHENTICATION_FAILURE"),
+            RateLimitViolationsLast24h = CountEventsByType(data.Snapshot, "RATE_LIMIT_VIOLATION"),
+            SuspiciousActivitiesLast24h = CountEventsByType(data.Snapshot, "SUSPICIOUS_ACTIVITY"),
+
+            // Trends
+            AuthFailureTrend = CalculateTrend(data.Snapshot.RecentEvents, "AUTHENTICATION_FAILURE"),
+            RateLimitTrend = CalculateTrend(data.Snapshot.RecentEvents, "RATE_LIMIT_VIOLATION"),
+            ThreatTrend = CalculateOverallThrend(data.LastHour, data.Last24Hours),
+
+            // Top threats
+            TopAttackingIPs = GetTopAttackingIPs(data.Snapshot),
+            TopViolatedEndpoints = GetTopViolatedEndpoints(data.Snapshot),
+                
+            // Alerts and recommendations
+            ActiveAlerts = GenerateActiveAlerts(data.Snapshot, data.Last24Hours),
+            Recommendations = data.Last24Hours.Recommendations,
+                
+            // System status
+            SystemStatus = DetermineSystemStatus(data.Last24Hours.ThreatLevel, data.Last24Hours.SecurityScore),
+            LastIncidentTime = GetLastIncidentTime(data.Snapshot),
+                
+            // Operational metrics
+            MonitoringStatus = "ACTIVE",
+            AlertsEnabled = _configuration.GetValue<bool>("Security:AlertsEnabled", true),
+            MetricsRetentionDays = _configuration.GetValue<int>("Security:MetricsRetentionDays", 7)
+        };
+    }
+
+    /// <summary>
+    /// Counts active threats (critical and high severity events)
+    /// </summary>
+    private static int CountActiveThreats(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.RecentEvents.Count(e => 
+            e.Severity == "CRITICAL" || e.Severity == "HIGH");
+    }
+
+    /// <summary>
+    /// Counts events of a specific type in the last 24 hours
+    /// </summary>
+    private static int CountEventsByType(SecurityMetricsSnapshot snapshot, string eventType)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        return snapshot.RecentEvents.Count(e => 
+            e.EventType == eventType && e.Timestamp >= cutoff);
+    }
+
+    /// <summary>
+    /// Gets the top attacking IP addresses
+    /// </summary>
+    private static string[] GetTopAttackingIPs(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.TopFailingIps.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the top violated endpoints
+    /// </summary>
+    private static string[] GetTopViolatedEndpoints(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.TopViolatedEndpoints.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the timestamp of the last critical or high severity incident
+    /// </summary>
+    private static DateTime? GetLastIncidentTime(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.RecentEvents
+            .Where(e => e.Severity == "CRITICAL" || e.Severity == "HIGH")
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefault()?.Timestamp;
+    }
+
+    /// <summary>
+    /// Handles unauthorized access exceptions
+    /// </summary>
+    private ActionResult HandleUnauthorizedAccess(UnauthorizedAccessException ex)
+    {
+        _logger.LogWarning(ex, "Unauthorized access to security dashboard by user {UserId}", 
+            User.Identity?.Name ?? "Unknown");
+        return Forbid();
+    }
+
+    /// <summary>
+    /// Handles argument exceptions
+    /// </summary>
+    private ActionResult HandleArgumentException(ArgumentException ex)
+    {
+        _logger.LogWarning(ex, "Invalid argument in security dashboard request");
+        return BadRequest("Invalid request parameters");
+    }
+
+    /// <summary>
+    /// Handles service unavailable exceptions
+    /// </summary>
+    private ActionResult HandleServiceUnavailable(InvalidOperationException ex)
+    {
+        _logger.LogError(ex, "Security metrics service unavailable");
+        return StatusCode(503, "Security metrics service temporarily unavailable");
+    }
+
+    /// <summary>
+    /// Handles timeout exceptions
+    /// </summary>
+    private ActionResult HandleTimeout(TimeoutException ex)
+    {
+        _logger.LogError(ex, "Timeout retrieving security dashboard data");
+        return StatusCode(504, "Request timeout - please try again");
+    }
+
+    /// <summary>
+    /// Handles unexpected errors
+    /// </summary>
+    private ActionResult HandleUnexpectedError(Exception ex)
+    {
+        _logger.LogError(ex, "Unexpected error retrieving security dashboard");
+        return StatusCode(500, "Error retrieving security dashboard");
     }
 
     /// <summary>
@@ -343,27 +503,12 @@ public class SecurityMetricsController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.EventType))
-            {
-                return BadRequest("Event type is required");
-            }
+            var processor = new SecurityEventProcessor(_securityMetricsService, _logger, User);
+            var result = processor.ProcessEvent(request);
 
-            var sanitizedEventType = SecureLoggingHelper.PreventLogInjection(request.EventType);
-            var sanitizedSeverity = SecureLoggingHelper.PreventLogInjection(request.Severity ?? "MEDIUM");
-            var sanitizedDetails = SecureLoggingHelper.PreventLogInjection(request.Details ?? $"Manual event recorded by {User.Identity?.Name}");
-            
-            _securityMetricsService.RecordSecurityEvent(
-                sanitizedEventType, 
-                sanitizedSeverity, 
-                sanitizedDetails);
-
-            // Use TaintBarrier for complete taint isolation
-            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
-                "Manual security event recorded by user {0}: {1}",
-                User.Identity?.Name ?? "Unknown", sanitizedEventType);
-            _logger.LogInformation(safeLogMessage);
-
-            return Created("", new { Message = "Security event recorded successfully" });
+            return result.IsSuccess 
+                ? Created("", new { Message = "Security event recorded successfully" })
+                : BadRequest(result.ErrorMessage);
         }
         catch (ArgumentException ex)
         {
@@ -385,6 +530,144 @@ public class SecurityMetricsController : ControllerBase
         {
             _logger.LogError(ex, "Unexpected error recording manual security event");
             return StatusCode(500, "Error recording security event");
+        }
+    }
+
+    /// <summary>
+    /// Helper class for processing security events with reduced complexity
+    /// </summary>
+    private class SecurityEventProcessor
+    {
+        private readonly ISecurityMetricsService _securityMetricsService;
+        private readonly ILogger _logger;
+        private readonly ClaimsPrincipal _user;
+
+        public SecurityEventProcessor(ISecurityMetricsService securityMetricsService, ILogger logger, ClaimsPrincipal user)
+        {
+            _securityMetricsService = securityMetricsService;
+            _logger = logger;
+            _user = user;
+        }
+
+        public SecurityEventProcessingResult ProcessEvent(RecordSecurityEventRequest request)
+        {
+            var validationResult = ValidateRequest(request);
+            if (!validationResult.IsValid)
+            {
+                return SecurityEventProcessingResult.Failure(validationResult.ErrorMessage!);
+            }
+
+            var sanitizer = new SecurityEventSanitizer(request, _user);
+            var sanitizedData = sanitizer.SanitizeAll();
+
+            RecordEvent(sanitizedData);
+            LogEvent(sanitizedData);
+
+            return SecurityEventProcessingResult.Success();
+        }
+
+        private RequestValidationResult ValidateRequest(RecordSecurityEventRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.EventType))
+            {
+                return RequestValidationResult.Invalid("Event type is required");
+            }
+
+            return RequestValidationResult.Valid();
+        }
+
+        private void RecordEvent(SanitizedSecurityEvent sanitizedData)
+        {
+            _securityMetricsService.RecordSecurityEvent(
+                sanitizedData.EventType, 
+                sanitizedData.Severity, 
+                sanitizedData.Details);
+        }
+
+        private void LogEvent(SanitizedSecurityEvent sanitizedData)
+        {
+            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+                "Manual security event recorded by user {0}: {1}",
+                _user.Identity?.Name ?? "Unknown", 
+                sanitizedData.EventType);
+            _logger.LogInformation(safeLogMessage);
+        }
+    }
+
+    /// <summary>
+    /// Helper class for sanitizing security event data
+    /// </summary>
+    private class SecurityEventSanitizer
+    {
+        private readonly RecordSecurityEventRequest _request;
+        private readonly ClaimsPrincipal _user;
+
+        public SecurityEventSanitizer(RecordSecurityEventRequest request, ClaimsPrincipal user)
+        {
+            _request = request;
+            _user = user;
+        }
+
+        public SanitizedSecurityEvent SanitizeAll()
+        {
+            return new SanitizedSecurityEvent
+            {
+                EventType = SecureLoggingHelper.PreventLogInjection(_request.EventType),
+                Severity = SecureLoggingHelper.PreventLogInjection(_request.Severity ?? "MEDIUM"),
+                Details = SecureLoggingHelper.PreventLogInjection(_request.Details ?? $"Manual event recorded by {_user.Identity?.Name}")
+            };
+        }
+    }
+
+    /// <summary>
+    /// Sanitized security event data
+    /// </summary>
+    private class SanitizedSecurityEvent
+    {
+        public string EventType { get; set; } = string.Empty;
+        public string Severity { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Result of security event processing
+    /// </summary>
+    private class SecurityEventProcessingResult
+    {
+        public bool IsSuccess { get; private set; }
+        public string? ErrorMessage { get; private set; }
+
+        private SecurityEventProcessingResult() { }
+
+        public static SecurityEventProcessingResult Success()
+        {
+            return new SecurityEventProcessingResult { IsSuccess = true };
+        }
+
+        public static SecurityEventProcessingResult Failure(string errorMessage)
+        {
+            return new SecurityEventProcessingResult { IsSuccess = false, ErrorMessage = errorMessage };
+        }
+    }
+
+    /// <summary>
+    /// Result of request validation
+    /// </summary>
+    private class RequestValidationResult
+    {
+        public bool IsValid { get; private set; }
+        public string? ErrorMessage { get; private set; }
+
+        private RequestValidationResult() { }
+
+        public static RequestValidationResult Valid()
+        {
+            return new RequestValidationResult { IsValid = true };
+        }
+
+        public static RequestValidationResult Invalid(string errorMessage)
+        {
+            return new RequestValidationResult { IsValid = false, ErrorMessage = errorMessage };
         }
     }
 
@@ -456,24 +739,21 @@ public class SecurityMetricsController : ControllerBase
             _ => "SECURE"
         };
     }
-
-    private string GetClientIpAddress()
-    {
-        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            return forwardedFor.Split(',')[0].Trim();
-        }
-
-        var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(realIp))
-        {
-            return realIp;
-        }
-
-        return Request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
-    }
 }
+
+#region Internal Data Models
+
+/// <summary>
+/// Internal data structure for collecting metrics data from the security service
+/// </summary>
+internal class DashboardMetricsData
+{
+    public SecurityMetricsSnapshot Snapshot { get; set; } = null!;
+    public SecurityMetricsPeriod Last24Hours { get; set; } = null!;
+    public SecurityMetricsPeriod LastHour { get; set; } = null!;
+}
+
+#endregion
 
 #region Request/Response Models
 
