@@ -16,11 +16,13 @@ public class SetlistService : ISetlistService
 {
     private readonly SetlistStudioDbContext _context;
     private readonly ILogger<SetlistService> _logger;
+    private readonly IQueryCacheService _cacheService;
 
-    public SetlistService(SetlistStudioDbContext context, ILogger<SetlistService> logger)
+    public SetlistService(SetlistStudioDbContext context, ILogger<SetlistService> logger, IQueryCacheService cacheService)
     {
         _context = context;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     public async Task<(IEnumerable<Setlist> Setlists, int TotalCount)> GetSetlistsAsync(

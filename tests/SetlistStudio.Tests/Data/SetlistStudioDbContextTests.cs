@@ -73,9 +73,9 @@ public class SetlistStudioDbContextTests : IDisposable
         var tagsProperty = songEntity.FindProperty("Tags");
         tagsProperty!.GetMaxLength().Should().Be(500);
 
-        // Check indexes
+        // Check indexes (updated count due to query optimization indexes)
         var indexes = songEntity.GetIndexes().ToList();
-        indexes.Should().HaveCount(4);
+        indexes.Should().HaveCount(8); // Updated from 4 to 8 due to new performance indexes
         
         // UserId index
         indexes.Should().Contain(i => i.Properties.Count == 1 && i.Properties.First().Name == "UserId");
@@ -122,9 +122,9 @@ public class SetlistStudioDbContextTests : IDisposable
         var performanceNotesProperty = setlistEntity.FindProperty("PerformanceNotes");
         performanceNotesProperty!.GetMaxLength().Should().Be(2000);
 
-        // Check indexes
+        // Check indexes (updated count due to query optimization indexes)
         var indexes = setlistEntity.GetIndexes().ToList();
-        indexes.Should().HaveCount(4);
+        indexes.Should().HaveCount(8); // Updated from 4 to 8 due to new performance indexes
         
         // Single column indexes
         indexes.Should().Contain(i => i.Properties.Count == 1 && i.Properties.First().Name == "UserId");

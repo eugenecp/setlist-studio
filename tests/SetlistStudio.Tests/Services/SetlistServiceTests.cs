@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SetlistStudio.Core.Entities;
+using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Data;
 using SetlistStudio.Infrastructure.Services;
 using Xunit;
@@ -27,7 +28,8 @@ public class SetlistServiceTests : IDisposable
 
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SetlistService>>();
-        _service = new SetlistService(_context, _mockLogger.Object);
+        var mockCacheService = new Mock<IQueryCacheService>();
+        _service = new SetlistService(_context, _mockLogger.Object, mockCacheService.Object);
     }
 
     public void Dispose()
@@ -1773,7 +1775,8 @@ public class SetlistServiceTests : IDisposable
             .Options;
         
         var context = new SetlistStudioDbContext(options);
-        var service = new SetlistService(context, _mockLogger.Object);
+        var mockCacheService2 = new Mock<IQueryCacheService>();
+        var service = new SetlistService(context, _mockLogger.Object, mockCacheService2.Object);
         
         // Dispose the context to simulate ObjectDisposedException
         context.Dispose();

@@ -32,7 +32,8 @@ public class SongServiceAdvancedTests : IDisposable
         _context = new SetlistStudioDbContext(options);
         _mockLogger = new Mock<ILogger<SongService>>();
         _mockAuditLogService = new Mock<IAuditLogService>();
-        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object);
+        var mockCacheService = new Mock<IQueryCacheService>();
+        _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object, mockCacheService.Object);
     }
 
     #region Edge Case and Error Handling Tests

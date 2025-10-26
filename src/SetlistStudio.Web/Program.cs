@@ -540,6 +540,13 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
 /// </summary>
 static void ConfigureApplicationServices(IServiceCollection services)
 {
+    // Register caching services
+    services.AddMemoryCache();
+    services.AddScoped<IQueryCacheService, QueryCacheService>();
+    
+    // Register performance monitoring services
+    services.AddSingleton<IPerformanceMonitoringService, PerformanceMonitoringService>();
+    
     // Register application services
     services.AddScoped<ISongService, SongService>();
     services.AddScoped<ISetlistService, SetlistService>();

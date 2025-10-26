@@ -17,12 +17,14 @@ public class SongService : ISongService
     private readonly SetlistStudioDbContext _context;
     private readonly ILogger<SongService> _logger;
     private readonly IAuditLogService _auditLogService;
+    private readonly IQueryCacheService _cacheService;
 
-    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger, IAuditLogService auditLogService)
+    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger, IAuditLogService auditLogService, IQueryCacheService cacheService)
     {
         _context = context;
         _logger = logger;
         _auditLogService = auditLogService;
+        _cacheService = cacheService;
     }
 
     public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
@@ -169,6 +171,9 @@ public class SongService : ISongService
                 new { song.Title, song.Artist, song.Album, song.Genre, song.Bpm, song.MusicalKey }
             );
 
+            // Invalidate cached data for this user
+            await _cacheService.InvalidateUserCacheAsync(song.UserId);
+
             return song;
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
@@ -271,6 +276,9 @@ public class SongService : ISongService
                 newValues
             );
 
+            // Invalidate cached data for this user
+            await _cacheService.InvalidateUserCacheAsync(userId);
+
             return existingSong;
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
@@ -346,6 +354,9 @@ public class SongService : ISongService
                 deletedValues
             );
 
+            // Invalidate cached data for this user
+            await _cacheService.InvalidateUserCacheAsync(userId);
+
             return true;
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
@@ -372,14 +383,17 @@ public class SongService : ISongService
     {
         try
         {
-            var genres = await _context.Songs
-                .Where(s => s.UserId == userId && !string.IsNullOrEmpty(s.Genre))
-                .Select(s => s.Genre!)
-                .Distinct()
-                .OrderBy(g => g)
-                .ToListAsync();
+            return await _cacheService.GetGenresAsync(userId, async () =>
+            {
+                var genres = await _context.Songs
+                    .Where(s => s.UserId == userId && !string.IsNullOrEmpty(s.Genre))
+                    .Select(s => s.Genre!)
+                    .Distinct()
+                    .OrderBy(g => g)
+                    .ToListAsync();
 
-            return genres;
+                return genres;
+            });
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
@@ -391,6 +405,36 @@ public class SongService : ISongService
         {
             var sanitizedUserIdForGenreLog = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogError(ex, "Invalid operation retrieving genres for user {UserId}", sanitizedUserIdForGenreLog);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<string>> GetArtistsAsync(string userId)
+    {
+        try
+        {
+            return await _cacheService.GetArtistsAsync(userId, async () =>
+            {
+                var artists = await _context.Songs
+                    .Where(s => s.UserId == userId && !string.IsNullOrEmpty(s.Artist))
+                    .Select(s => s.Artist)
+                    .Distinct()
+                    .OrderBy(a => a)
+                    .ToListAsync();
+
+                return artists;
+            });
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            var sanitizedUserIdForArtistLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving artists for user {UserId}", sanitizedUserIdForArtistLog);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserIdForArtistLog = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving artists for user {UserId}", sanitizedUserIdForArtistLog);
             throw;
         }
     }

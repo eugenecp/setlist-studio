@@ -84,6 +84,10 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(s => new { s.UserId, s.Title });
             entity.HasIndex(s => new { s.UserId, s.Artist });
             entity.HasIndex(s => new { s.UserId, s.Genre });
+            entity.HasIndex(s => new { s.UserId, s.MusicalKey });
+            entity.HasIndex(s => new { s.UserId, s.Bpm });
+            entity.HasIndex(s => new { s.UserId, s.Album });
+            entity.HasIndex(s => new { s.UserId, s.CreatedAt });
         });
 
         // Configure Setlist entity
@@ -107,6 +111,10 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(sl => new { sl.UserId, sl.Name });
             entity.HasIndex(sl => new { sl.UserId, sl.IsTemplate });
             entity.HasIndex(sl => new { sl.UserId, sl.PerformanceDate });
+            entity.HasIndex(sl => new { sl.UserId, sl.CreatedAt });
+            entity.HasIndex(sl => new { sl.UserId, sl.IsActive });
+            entity.HasIndex(sl => new { sl.UserId, sl.Venue });
+            entity.HasIndex(sl => new { sl.UserId, sl.IsTemplate, sl.IsActive });
         });
 
         // Configure SetlistSong junction entity
