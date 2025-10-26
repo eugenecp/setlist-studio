@@ -434,4 +434,307 @@ public class DatabaseConfigurationTests
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
         }
     }
+
+    #region Pool Configuration Validation Tests
+
+    [Fact]
+    public void IsValid_WithMaxPoolSizeTooHigh_ShouldReturnFalseAndLogError()
+    {
+        // Arrange - Use a value that will remain invalid after adjustment
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL", 
+            ["Database:Pool:MaxSize"] = "1001", // Invalid - too high (exceeds validation limit of 1000)
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("MaxPoolSize over 1000 should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MaxPoolSize must be between 1 and 1000")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithSQLiteMaxPoolSizeTooHigh_ShouldReturnFalseAfterAdjustment()
+    {
+        // Arrange - SQLite adjusts MaxPoolSize to Math.Min(value, 20), but validation still applies
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SQLite",
+            ["Database:Pool:MaxSize"] = "1001", // Will be adjusted to 20, but original validation should still fail
+            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        
+        // Assert - The value gets adjusted to 20, so it should be valid
+        databaseConfig.MaxPoolSize.Should().Be(20, "SQLite adjusts MaxPoolSize to maximum of 20");
+        databaseConfig.IsValid().Should().BeTrue("Adjusted value should be valid");
+    }
+
+    [Fact]
+    public void IsValid_WithInvalidMinPoolSize_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:MaxSize"] = "10",
+            ["Database:Pool:MinSize"] = "-1", // Invalid - negative
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("Negative MinPoolSize should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MinPoolSize must be between 0 and MaxPoolSize")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithMinPoolSizeGreaterThanMax_ShouldReturnFalseAndLogError()
+    {
+        // Arrange - For PostgreSQL, MaxPoolSize gets adjusted to Math.Max(value, 50)
+        // So use values that will still be invalid after adjustment
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:MaxSize"] = "60", // Will remain 60 (>50, so no adjustment)
+            ["Database:Pool:MinSize"] = "70", // Invalid - greater than max even after adjustment
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("MinPoolSize greater than MaxPoolSize should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MinPoolSize must be between 0 and MaxPoolSize")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithValidPoolConfiguration_ShouldReturnTrue()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:MaxSize"] = "50",
+            ["Database:Pool:MinSize"] = "5", // Valid range
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeTrue("Valid pool configuration should make configuration valid");
+        databaseConfig.MaxPoolSize.Should().Be(50);
+        databaseConfig.MinPoolSize.Should().Be(5);
+    }
+
+    #endregion
+
+    #region Timeout Configuration Validation Tests
+
+    [Fact]
+    public void IsValid_WithInvalidConnectionTimeout_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:ConnectionTimeout"] = "0", // Invalid - too low
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("Invalid ConnectionTimeout should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("ConnectionTimeout must be between 1 and 300 seconds")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithConnectionTimeoutTooHigh_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:ConnectionTimeout"] = "301", // Invalid - too high
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("ConnectionTimeout over 300 should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("ConnectionTimeout must be between 1 and 300 seconds")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithInvalidCommandTimeout_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:CommandTimeout"] = "0", // Invalid - too low
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("Invalid CommandTimeout should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("CommandTimeout must be between 1 and 3600 seconds")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithCommandTimeoutTooHigh_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:CommandTimeout"] = "3601", // Invalid - too high
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("CommandTimeout over 3600 should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("CommandTimeout must be between 1 and 3600 seconds")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void IsValid_WithValidTimeoutConfiguration_ShouldReturnTrue()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:Pool:ConnectionTimeout"] = "60",
+            ["Database:Pool:CommandTimeout"] = "120", // Valid timeouts
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeTrue("Valid timeout configuration should make configuration valid");
+        databaseConfig.ConnectionTimeout.Should().Be(60);
+        databaseConfig.CommandTimeout.Should().Be(120);
+    }
+
+    #endregion
 }

@@ -577,35 +577,87 @@ static void ConfigureAntiForgeryTokens(IServiceCollection services, IWebHostEnvi
     // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
     services.AddAntiforgery(options =>
     {
-        // Detect if we're in a test environment (testing framework creates in-memory test server)
-        var isTestEnvironment = environment.IsDevelopment() || 
-                               environment.EnvironmentName == "Testing" ||
-                               // Additional test context detection for integration tests
-                               AppDomain.CurrentDomain.GetAssemblies()
-                                   .Any(a => a.FullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
-                                           a.FullName?.Contains("xunit") == true);
-        
-        // Use secure cookie names with __Host- prefix for enhanced security in production
-        if (isTestEnvironment)
-        {
-            options.Cookie.Name = "SetlistStudio-CSRF";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
-        }
-        else
-        {
-            options.Cookie.Name = "__Host-SetlistStudio-CSRF";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
-        }
-        
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
-        
-        // Custom header name for AJAX requests
-        options.HeaderName = "X-CSRF-TOKEN";
-        
-        // Suppress xframe options (already handled by security headers middleware)
-        options.SuppressXFrameOptionsHeader = true;
+        var isTestEnvironment = IsTestingEnvironment(environment);
+        ConfigureAntiForgerySecuritySettings(options, isTestEnvironment);
+        ConfigureAntiForgeryHeaders(options);
     });
+}
+
+/// <summary>
+/// Detects if the application is running in a test environment
+/// </summary>
+/// <param name="environment">The hosting environment</param>
+/// <returns>True if in test environment</returns>
+static bool IsTestingEnvironment(IWebHostEnvironment environment)
+{
+    return IsKnownTestEnvironment(environment) || HasTestingAssemblies();
+}
+
+/// <summary>
+/// Checks if the environment is explicitly configured for testing
+/// </summary>
+/// <param name="environment">The hosting environment</param>
+/// <returns>True if environment is development or testing</returns>
+static bool IsKnownTestEnvironment(IWebHostEnvironment environment)
+{
+    return environment.IsDevelopment() || environment.EnvironmentName == "Testing";
+}
+
+/// <summary>
+/// Detects if testing assemblies are loaded (for integration tests)
+/// </summary>
+/// <returns>True if testing assemblies are found</returns>
+static bool HasTestingAssemblies()
+{
+    return AppDomain.CurrentDomain.GetAssemblies()
+        .Any(assembly => IsTestingAssembly(assembly));
+}
+
+/// <summary>
+/// Checks if an assembly is related to testing frameworks
+/// </summary>
+/// <param name="assembly">The assembly to check</param>
+/// <returns>True if it's a testing assembly</returns>
+static bool IsTestingAssembly(System.Reflection.Assembly assembly)
+{
+    var fullName = assembly.FullName;
+    return fullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
+           fullName?.Contains("xunit") == true;
+}
+
+/// <summary>
+/// Configures anti-forgery cookie security settings based on environment
+/// </summary>
+/// <param name="options">Anti-forgery options</param>
+/// <param name="isTestEnvironment">Whether running in test environment</param>
+static void ConfigureAntiForgerySecuritySettings(Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions options, bool isTestEnvironment)
+{
+    if (isTestEnvironment)
+    {
+        options.Cookie.Name = "SetlistStudio-CSRF";
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
+    }
+    else
+    {
+        options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
+    }
+    
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
+}
+
+/// <summary>
+/// Configures anti-forgery header settings
+/// </summary>
+/// <param name="options">Anti-forgery options</param>
+static void ConfigureAntiForgeryHeaders(Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions options)
+{
+    // Custom header name for AJAX requests
+    options.HeaderName = "X-CSRF-TOKEN";
+    
+    // Suppress xframe options (already handled by security headers middleware)
+    options.SuppressXFrameOptionsHeader = true;
 }
 
 /// <summary>
@@ -613,86 +665,97 @@ static void ConfigureAntiForgeryTokens(IServiceCollection services, IWebHostEnvi
 /// </summary>
 static void ConfigureCookiesAndSessions(IServiceCollection services, IWebHostEnvironment environment)
 {
+    var isProduction = environment.IsProduction() || environment.IsStaging();
+    
     // SECURITY: Configure secure session and cookie settings
     services.ConfigureApplicationCookie(options =>
     {
         // Session timeout and expiration settings
         options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
         options.SlidingExpiration = true; // Reset timeout on user activity
+        
         // Use __Host- prefix in production/staging, regular name in test environments
-        options.Cookie.Name = environment.IsProduction() || environment.IsStaging()
-            ? "__Host-SetlistStudio-Identity"
-            : "SetlistStudio-Identity";
+        options.Cookie.Name = isProduction ? "__Host-SetlistStudio-Identity" : "SetlistStudio-Identity";
         
-        // Secure cookie configuration
-        options.Cookie.HttpOnly = true; // Prevent JavaScript access
-        // Use secure cookies only in production/staging, allow HTTP in test environments
-        options.Cookie.SecurePolicy = environment.IsProduction() || environment.IsStaging()
-            ? CookieSecurePolicy.Always // HTTPS only in production
-            : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
-        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
-        options.Cookie.IsEssential = true; // Required for GDPR compliance
-        
-        // Session invalidation settings
-        options.Events.OnValidatePrincipal = async context =>
-        {
-            // Validate security stamp to invalidate sessions on password change
-            var securityStampValidator = context.HttpContext.RequestServices
-                .GetRequiredService<ISecurityStampValidator>();
-            await securityStampValidator.ValidateAsync(context);
-        };
-        
-        // SECURITY: Configure proper API authentication behavior
-        options.Events.OnRedirectToLogin = context =>
-        {
-            // For API requests, return 401 instead of redirecting to login page
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return Task.CompletedTask;
-            }
-            
-            // For regular web requests, redirect to login page
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        };
-        
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            // For API requests, return 403 instead of redirecting to access denied page
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return Task.CompletedTask;
-            }
-            
-            // For regular web requests, redirect to access denied page
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        };
-        
-        // Login/logout paths
-        options.LoginPath = "/login";
-        options.LogoutPath = "/Identity/Account/Logout";
-        options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+        ConfigureCookieSecuritySettings(options.Cookie, isProduction);
+        ConfigureAuthenticationEventHandlers(options);
+        SetAuthenticationPaths(options);
     });
 
     // Configure session state with secure settings
     services.AddSession(options =>
     {
-        // Use __Host- prefix in production/staging, regular name in test environments
-        options.Cookie.Name = environment.IsProduction() || environment.IsStaging() 
-            ? "__Host-SetlistStudio-Session" 
-            : "SetlistStudio-Session";
-        options.Cookie.HttpOnly = true;
-        // Use secure cookies only in production/staging, allow HTTP in test environments
-        options.Cookie.SecurePolicy = environment.IsProduction() || environment.IsStaging()
-            ? CookieSecurePolicy.Always
-            : CookieSecurePolicy.SameAsRequest;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-        options.Cookie.IsEssential = true;
+        options.Cookie.Name = isProduction ? "__Host-SetlistStudio-Session" : "SetlistStudio-Session";
+        ConfigureCookieSecuritySettings(options.Cookie, isProduction);
         options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
     });
+}
+
+/// <summary>
+/// Configures cookie security settings based on environment
+/// </summary>
+/// <param name="cookieBuilder">Cookie builder to configure</param>
+/// <param name="isProduction">Whether in production environment</param>
+static void ConfigureCookieSecuritySettings(CookieBuilder cookieBuilder, bool isProduction)
+{
+    cookieBuilder.HttpOnly = true; // Prevent JavaScript access
+    cookieBuilder.SecurePolicy = isProduction 
+        ? CookieSecurePolicy.Always // HTTPS only in production
+        : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
+    cookieBuilder.SameSite = SameSiteMode.Strict; // Strict SameSite for security
+    cookieBuilder.IsEssential = true; // Required for GDPR compliance
+}
+
+/// <summary>
+/// Configures authentication event handlers
+/// </summary>
+/// <param name="options">Cookie authentication options</param>
+static void ConfigureAuthenticationEventHandlers(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions options)
+{
+    // Session invalidation settings
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        // Validate security stamp to invalidate sessions on password change
+        var securityStampValidator = context.HttpContext.RequestServices
+            .GetRequiredService<ISecurityStampValidator>();
+        await securityStampValidator.ValidateAsync(context);
+    };
+    
+    // SECURITY: Configure proper API authentication behavior
+    options.Events.OnRedirectToLogin = context => HandleAuthenticationRedirect(context, StatusCodes.Status401Unauthorized);
+    options.Events.OnRedirectToAccessDenied = context => HandleAuthenticationRedirect(context, StatusCodes.Status403Forbidden);
+}
+
+/// <summary>
+/// Handles authentication redirects for API vs web requests
+/// </summary>
+/// <param name="context">Redirect context</param>
+/// <param name="apiStatusCode">Status code to return for API requests</param>
+/// <returns>Completed task</returns>
+static Task HandleAuthenticationRedirect<T>(Microsoft.AspNetCore.Authentication.RedirectContext<T> context, int apiStatusCode) where T : Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions
+{
+    // For API requests, return status code instead of redirecting
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        context.Response.StatusCode = apiStatusCode;
+        return Task.CompletedTask;
+    }
+    
+    // For regular web requests, redirect
+    context.Response.Redirect(context.RedirectUri);
+    return Task.CompletedTask;
+}
+
+/// <summary>
+/// Configures authentication path settings
+/// </summary>
+/// <param name="options">Cookie authentication options</param>
+static void SetAuthenticationPaths(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions options)
+{
+    // Login/logout paths
+    options.LoginPath = "/login";
+    options.LogoutPath = "/Identity/Account/Logout";
+    options.AccessDeniedPath = "/Identity/Account/AccessDenied";
 }
 
 /// <summary>
@@ -997,20 +1060,48 @@ static bool IsValidAuthenticatedUser(System.Security.Principal.IIdentity? userId
 static string GetClientIpAddress(HttpContext httpContext)
 {
     // Try forwarded headers first (for load balancers/proxies)
-    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(forwardedFor))
-    {
-        return forwardedFor.Split(',').FirstOrDefault()?.Trim() ?? "Unknown";
-    }
+    var forwardedIp = GetForwardedIpAddress(httpContext);
+    if (forwardedIp != null) return forwardedIp;
 
     // Try X-Real-IP header
-    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(realIp))
-    {
-        return realIp.Trim();
-    }
+    var realIp = GetRealIpAddress(httpContext);
+    if (realIp != null) return realIp;
 
     // Fallback to connection remote IP
+    return GetConnectionIpAddress(httpContext);
+}
+
+/// <summary>
+/// Extracts IP address from X-Forwarded-For header
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>IP address or null if not found</returns>
+static string? GetForwardedIpAddress(HttpContext httpContext)
+{
+    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (string.IsNullOrEmpty(forwardedFor)) return null;
+
+    return forwardedFor.Split(',').FirstOrDefault()?.Trim();
+}
+
+/// <summary>
+/// Extracts IP address from X-Real-IP header
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>IP address or null if not found</returns>
+static string? GetRealIpAddress(HttpContext httpContext)
+{
+    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
+    return string.IsNullOrEmpty(realIp) ? null : realIp.Trim();
+}
+
+/// <summary>
+/// Gets IP address from direct connection
+/// </summary>
+/// <param name="httpContext">The HTTP context</param>
+/// <returns>IP address or "Unknown" if not available</returns>
+static string GetConnectionIpAddress(HttpContext httpContext)
+{
     return httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
 }
 
@@ -1334,11 +1425,23 @@ public partial class Program
     /// <param name="environment">The hosting environment</param>
     public static void ConfigureAzureKeyVault(IConfiguration configuration, IWebHostEnvironment environment)
     {
-        if (environment.IsDevelopment())
-        {
-            return;
-        }
+        if (environment.IsDevelopment()) return;
 
+        var keyVaultName = GetKeyVaultName(configuration, environment);
+        if (keyVaultName == null) return;
+
+        ValidateKeyVaultName(keyVaultName);
+        SetupKeyVaultClient(configuration, keyVaultName);
+    }
+
+    /// <summary>
+    /// Retrieves and validates Key Vault name from configuration
+    /// </summary>
+    /// <param name="configuration">The configuration</param>
+    /// <param name="environment">The hosting environment</param>
+    /// <returns>Key Vault name or null if not configured</returns>
+    private static string? GetKeyVaultName(IConfiguration configuration, IWebHostEnvironment environment)
+    {
         var keyVaultName = configuration["KeyVault:VaultName"];
         if (string.IsNullOrEmpty(keyVaultName))
         {
@@ -1346,15 +1449,31 @@ public partial class Program
             {
                 Log.Warning("Azure Key Vault name not configured for non-development environment");
             }
-            return;
+            return null;
         }
+        return keyVaultName;
+    }
 
+    /// <summary>
+    /// Validates Key Vault name format
+    /// </summary>
+    /// <param name="keyVaultName">The Key Vault name to validate</param>
+    private static void ValidateKeyVaultName(string keyVaultName)
+    {
         if (!IsValidKeyVaultName(keyVaultName))
         {
             Log.Warning("Invalid Azure Key Vault name format: {KeyVaultName}", keyVaultName);
             throw new InvalidOperationException("Invalid Azure Key Vault name format");
         }
+    }
 
+    /// <summary>
+    /// Sets up the Key Vault client and adds to configuration
+    /// </summary>
+    /// <param name="configuration">The configuration builder</param>
+    /// <param name="keyVaultName">The Key Vault name</param>
+    private static void SetupKeyVaultClient(IConfiguration configuration, string keyVaultName)
+    {
         try
         {
             var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
@@ -1388,87 +1507,148 @@ public partial class Program
     {
         services.AddCors(options =>
         {
-            options.AddPolicy("RestrictivePolicy", policy =>
-            {
-                var environmentName = environment.EnvironmentName;
-                
-                if (environmentName == "Production")
-                {
-                    // Production: Only allow specific trusted domains
-                    policy.WithOrigins(
-                        "https://setliststudio.com",
-                        "https://www.setliststudio.com",
-                        "https://api.setliststudio.com"
-                    )
-                    .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-                    .AllowCredentials()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-                }
-                else if (environmentName == "Development")
-                {
-                    // Development: Allow any origin for testing purposes
-                    policy.AllowAnyOrigin()
-                    .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-                }
-                else
-                {
-                    // Test/Staging: More restrictive than development but not production
-                    policy.WithOrigins(
-                        "https://staging.setliststudio.com",
-                        "https://test.setliststudio.com",
-                        "https://preview.setliststudio.com"
-                    )
-                    .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-                    .AllowCredentials()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-                }
-            });
-
-            // Add a more restrictive policy for API endpoints
-            options.AddPolicy("ApiPolicy", policy =>
-            {
-                var environmentName = environment.EnvironmentName;
-                
-                if (environmentName == "Production")
-                {
-                    policy.WithOrigins(
-                        "https://setliststudio.com",
-                        "https://www.setliststudio.com",
-                        "https://api.setliststudio.com"
-                    )
-                    .WithMethods("GET", "POST", "PUT", "DELETE")
-                    .WithHeaders("Content-Type", "Authorization")
-                    .AllowCredentials()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-                }
-                else if (environmentName == "Development")
-                {
-                    // Development: Allow any origin for testing purposes
-                    policy.AllowAnyOrigin()
-                    .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-                }
-                else
-                {
-                    // Test/Staging: Allow specific localhost origins
-                    policy.WithOrigins(
-                        "https://localhost:5001",
-                        "http://localhost:5000",
-                        "https://localhost:7000",
-                        "http://localhost:8000"
-                    )
-                    .WithMethods("GET", "POST", "PUT", "DELETE")
-                    .WithHeaders("Content-Type", "Authorization")
-                    .AllowCredentials()
-                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-                }
-            });
+            options.AddPolicy("RestrictivePolicy", policy => ConfigureRestrictivePolicy(policy, environment));
+            options.AddPolicy("ApiPolicy", policy => ConfigureApiPolicy(policy, environment));
         });
+    }
+
+    /// <summary>
+    /// Configures the restrictive CORS policy based on environment
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    /// <param name="environment">The hosting environment</param>
+    private static void ConfigureRestrictivePolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy, IWebHostEnvironment environment)
+    {
+        var environmentName = environment.EnvironmentName;
+        
+        if (environmentName == "Production")
+        {
+            ConfigureProductionPolicy(policy);
+        }
+        else if (environmentName == "Development")
+        {
+            ConfigureDevelopmentPolicy(policy);
+        }
+        else
+        {
+            ConfigureStagingPolicy(policy);
+        }
+    }
+
+    /// <summary>
+    /// Configures the API-specific CORS policy based on environment
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    /// <param name="environment">The hosting environment</param>
+    private static void ConfigureApiPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy, IWebHostEnvironment environment)
+    {
+        var environmentName = environment.EnvironmentName;
+        
+        if (environmentName == "Production")
+        {
+            ConfigureProductionApiPolicy(policy);
+        }
+        else if (environmentName == "Development")
+        {
+            ConfigureDevelopmentApiPolicy(policy);
+        }
+        else
+        {
+            ConfigureTestingApiPolicy(policy);
+        }
+    }
+
+    /// <summary>
+    /// Configures production CORS policy with trusted domains only
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureProductionPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.WithOrigins(
+            "https://setliststudio.com",
+            "https://www.setliststudio.com",
+            "https://api.setliststudio.com"
+        )
+        .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+        .AllowCredentials()
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    }
+
+    /// <summary>
+    /// Configures development CORS policy with relaxed restrictions
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureDevelopmentPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.AllowAnyOrigin()
+        .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+    }
+
+    /// <summary>
+    /// Configures staging/test CORS policy with moderate restrictions
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureStagingPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.WithOrigins(
+            "https://staging.setliststudio.com",
+            "https://test.setliststudio.com",
+            "https://preview.setliststudio.com"
+        )
+        .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+        .AllowCredentials()
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    }
+
+    /// <summary>
+    /// Configures production API CORS policy with restricted access
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureProductionApiPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.WithOrigins(
+            "https://setliststudio.com",
+            "https://www.setliststudio.com",
+            "https://api.setliststudio.com"
+        )
+        .WithMethods("GET", "POST", "PUT", "DELETE")
+        .WithHeaders("Content-Type", "Authorization")
+        .AllowCredentials()
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    }
+
+    /// <summary>
+    /// Configures development API CORS policy with relaxed restrictions
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureDevelopmentApiPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.AllowAnyOrigin()
+        .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+    }
+
+    /// <summary>
+    /// Configures testing API CORS policy with localhost access
+    /// </summary>
+    /// <param name="policy">The CORS policy builder</param>
+    private static void ConfigureTestingApiPolicy(Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy)
+    {
+        policy.WithOrigins(
+            "https://localhost:5001",
+            "http://localhost:5000",
+            "https://localhost:7000",
+            "http://localhost:8000"
+        )
+        .WithMethods("GET", "POST", "PUT", "DELETE")
+        .WithHeaders("Content-Type", "Authorization")
+        .AllowCredentials()
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
