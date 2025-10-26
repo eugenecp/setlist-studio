@@ -1721,8 +1721,7 @@ public class SetlistServiceTests : IDisposable
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         
-        var anotherContext = new SetlistStudioDbContext(options);
-        var anotherService = new SetlistService(anotherContext, _mockLogger.Object);
+        using var anotherContext = new SetlistStudioDbContext(options);
         
         // This should trigger a concurrency exception scenario
         setlist.Name = "Updated Name";
@@ -1736,10 +1735,6 @@ public class SetlistServiceTests : IDisposable
         {
             // Should handle the exception gracefully
             ex.Should().NotBeNull();
-        }
-        finally
-        {
-            anotherContext.Dispose();
         }
     }
 
@@ -1945,7 +1940,7 @@ public class SetlistServiceTests : IDisposable
         // Act & Assert - Test exception handling for invalid arguments
         try
         {
-            var result = await _service.GetSetlistsAsync(userId, pageNumber: -1);
+            await _service.GetSetlistsAsync(userId, pageNumber: -1);
         }
         catch (ArgumentException ex)
         {

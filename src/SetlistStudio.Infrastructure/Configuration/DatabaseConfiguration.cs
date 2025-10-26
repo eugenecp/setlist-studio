@@ -177,14 +177,12 @@ public class DatabaseConfiguration : IDatabaseConfiguration
         var readConnectionsSection = configuration.GetSection("Database:ReadReplicas");
         if (readConnectionsSection.Exists())
         {
-            foreach (var connectionSection in readConnectionsSection.GetChildren())
-            {
-                var connectionString = connectionSection.Value;
-                if (!string.IsNullOrWhiteSpace(connectionString))
-                {
-                    _readConnectionStrings.Add(connectionString);
-                }
-            }
+            var validConnectionStrings = readConnectionsSection.GetChildren()
+                .Select(section => section.Value)
+                .Where(connectionString => !string.IsNullOrWhiteSpace(connectionString))
+                .Cast<string>();
+                
+            _readConnectionStrings.AddRange(validConnectionStrings);
         }
 
         // If no read replicas configured, use write connection for reads

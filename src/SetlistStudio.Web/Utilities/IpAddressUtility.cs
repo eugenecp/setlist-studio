@@ -38,15 +38,9 @@ public static class IpAddressUtility
             return null;
 
         // Find the first non-empty IP in the chain (the original client)
-        var ips = forwardedFor.Split(',');
-        foreach (var ip in ips)
-        {
-            var trimmedIp = ip.Trim();
-            if (!string.IsNullOrWhiteSpace(trimmedIp))
-                return trimmedIp;
-        }
-
-        return null;
+        return forwardedFor.Split(',')
+            .Select(ip => ip.Trim())
+            .FirstOrDefault(trimmedIp => !string.IsNullOrWhiteSpace(trimmedIp));
     }
 
     /// <summary>

@@ -50,7 +50,7 @@ public class HealthControllerTests : IDisposable
         okResult!.Value.Should().NotBeNull();
         
         // Use reflection to check the anonymous object properties
-        var healthStatus = okResult!.Value!;
+        var healthStatus = okResult.Value!;
         var statusProperty = healthStatus.GetType().GetProperty("Status");
         var timestampProperty = healthStatus.GetType().GetProperty("Timestamp");
         var serviceProperty = healthStatus.GetType().GetProperty("Service");
@@ -143,7 +143,7 @@ public class HealthControllerTests : IDisposable
         okResult.Should().NotBeNull();
         okResult!.Value.Should().NotBeNull();
         
-        var healthStatus = okResult!.Value!;
+        var healthStatus = okResult.Value!;
         var statusProperty = healthStatus.GetType().GetProperty("Status");
         var timestampProperty = healthStatus.GetType().GetProperty("Timestamp");
         var serviceProperty = healthStatus.GetType().GetProperty("Service");

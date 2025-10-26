@@ -21,10 +21,6 @@ public class ReadOnlySetlistStudioDbContext : IdentityDbContext<ApplicationUser>
         : base(options)
     {
         _providerService = providerService;
-        
-        // Configure as read-only
-        ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
-        ChangeTracker.AutoDetectChangesEnabled = false;
     }
 
     /// <summary>
@@ -53,6 +49,10 @@ public class ReadOnlySetlistStudioDbContext : IdentityDbContext<ApplicationUser>
         {
             _providerService.ConfigureReadContext(optionsBuilder);
         }
+        
+        // Configure as read-only (moved from constructor to avoid virtual calls)
+        ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        ChangeTracker.AutoDetectChangesEnabled = false;
         
         base.OnConfiguring(optionsBuilder);
     }
