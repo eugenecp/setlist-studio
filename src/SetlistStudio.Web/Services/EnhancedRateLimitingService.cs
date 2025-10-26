@@ -303,36 +303,57 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
         if (httpContext?.Request == null)
             return "GlobalPolicy";
 
-        var endpoint = httpContext.Request.Path.Value?.ToLowerInvariant();
-        var method = httpContext.Request.Method;
-        var isAuthenticated = httpContext.User?.Identity?.IsAuthenticated == true;
+        var policySelector = new RateLimitPolicySelector(this, httpContext);
+        return policySelector.SelectPolicy();
+    }
 
-        // Authentication endpoints - strictest limits
-        if (IsAuthenticationEndpoint(endpoint))
+    /// <summary>
+    /// Helper class for selecting appropriate rate limit policy with reduced complexity
+    /// </summary>
+    private class RateLimitPolicySelector
+    {
+        private readonly EnhancedRateLimitingService _service;
+        private readonly HttpContext _httpContext;
+        private readonly string? _endpoint;
+        private readonly string _method;
+        private readonly bool _isAuthenticated;
+
+        public RateLimitPolicySelector(EnhancedRateLimitingService service, HttpContext httpContext)
         {
-            return "AuthPolicy";
+            _service = service;
+            _httpContext = httpContext;
+            _endpoint = httpContext.Request.Path.Value?.ToLowerInvariant();
+            _method = httpContext.Request.Method;
+            _isAuthenticated = httpContext.User?.Identity?.IsAuthenticated == true;
         }
 
-        // Sensitive operations - enhanced limits (check before general API endpoints)
-        if (IsSensitiveOperation(endpoint, method))
+        public string SelectPolicy()
         {
-            return "SensitivePolicy";
+            // Check in order of priority (most restrictive first)
+            if (_service.IsAuthenticationEndpoint(_endpoint))
+                return "AuthPolicy";
+
+            if (_service.IsSensitiveOperation(_endpoint, _method))
+                return "SensitivePolicy";
+
+            if (_service.IsHighRiskEndpoint(_endpoint))
+                return "StrictPolicy";
+
+            if (_service.IsApiEndpoint(_endpoint))
+                return SelectApiPolicy();
+
+            return SelectDefaultPolicy();
         }
 
-        // High-risk endpoints - strict limits
-        if (IsHighRiskEndpoint(endpoint))
+        private string SelectApiPolicy()
         {
-            return "StrictPolicy";
+            return _isAuthenticated ? "AuthenticatedApiPolicy" : "ApiPolicy";
         }
 
-        // API endpoints - moderate limits (general check after specific operations)
-        if (IsApiEndpoint(endpoint))
+        private string SelectDefaultPolicy()
         {
-            return isAuthenticated ? "AuthenticatedApiPolicy" : "ApiPolicy";
+            return _isAuthenticated ? "AuthenticatedPolicy" : "GlobalPolicy";
         }
-
-        // Default policy
-        return isAuthenticated ? "AuthenticatedPolicy" : "GlobalPolicy";
     }
 
     public async Task<bool> ValidateCaptchaAsync(string captchaResponse, string clientIp)

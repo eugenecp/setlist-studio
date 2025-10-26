@@ -508,40 +508,81 @@ public class SecretValidationService
     /// </summary>
     private SecretValidationError? ValidateSecretFormat(string secretKey, string secretValue, string description)
     {
-        // Validate OAuth Client ID format
-        if (IsOAuthClientId(secretKey) && !string.IsNullOrEmpty(secretValue) && secretValue.Length < 10)
+        var validator = new SecretFormatValidator(secretKey, secretValue, description);
+        return validator.Validate();
+    }
+
+    /// <summary>
+    /// Helper class for validating secret formats with reduced complexity
+    /// </summary>
+    private class SecretFormatValidator
+    {
+        private readonly string _secretKey;
+        private readonly string _secretValue;
+        private readonly string _description;
+
+        public SecretFormatValidator(string secretKey, string secretValue, string description)
         {
+            _secretKey = secretKey;
+            _secretValue = secretValue;
+            _description = description;
+        }
+
+        public SecretValidationError? Validate()
+        {
+            var oauthClientIdError = ValidateOAuthClientId();
+            if (oauthClientIdError != null)
+                return oauthClientIdError;
+
+            var oauthClientSecretError = ValidateOAuthClientSecret();
+            if (oauthClientSecretError != null)
+                return oauthClientSecretError;
+
+            var connectionStringError = ValidateConnectionString();
+            if (connectionStringError != null)
+                return connectionStringError;
+
+            return null;
+        }
+
+        private SecretValidationError? ValidateOAuthClientId()
+        {
+            if (!IsOAuthClientId(_secretKey) || string.IsNullOrEmpty(_secretValue) || _secretValue.Length >= 10)
+                return null;
+
             return new SecretValidationError(
-                secretKey,
-                description,
+                _secretKey,
+                _description,
                 SecretValidationIssue.InvalidFormat,
                 "OAuth Client ID appears to be too short"
             );
         }
 
-        // Validate OAuth Client Secret format
-        if (IsOAuthClientSecret(secretKey) && !string.IsNullOrEmpty(secretValue) && secretValue.Length < 16)
+        private SecretValidationError? ValidateOAuthClientSecret()
         {
+            if (!IsOAuthClientSecret(_secretKey) || string.IsNullOrEmpty(_secretValue) || _secretValue.Length >= 16)
+                return null;
+
             return new SecretValidationError(
-                secretKey,
-                description,
+                _secretKey,
+                _description,
                 SecretValidationIssue.InvalidFormat,
                 "OAuth Client Secret appears to be too short"
             );
         }
 
-        // Validate connection string format
-        if (secretKey.Contains("ConnectionString") && !IsValidConnectionString(secretValue))
+        private SecretValidationError? ValidateConnectionString()
         {
+            if (!_secretKey.Contains("ConnectionString") || IsValidConnectionString(_secretValue))
+                return null;
+
             return new SecretValidationError(
-                secretKey,
-                description,
+                _secretKey,
+                _description,
                 SecretValidationIssue.InvalidFormat,
                 "Connection string format appears invalid"
             );
         }
-
-        return null;
     }
 
     /// <summary>

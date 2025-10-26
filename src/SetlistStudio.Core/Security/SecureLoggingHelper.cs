@@ -159,7 +159,8 @@ public static class SecureLoggingHelper
         // Always process through sanitization to prevent user-controlled bypass
         var sanitized = input ?? string.Empty;
 
-        sanitized = ApplyLogInjectionPatterns(sanitized);
+        var injectionPreventer = new LogInjectionPreventer();
+        sanitized = injectionPreventer.PreventInjection(sanitized);
         sanitized = LimitMessageLength(sanitized);
 
         return sanitized;
@@ -180,20 +181,75 @@ public static class SecureLoggingHelper
 
     private static string ProcessLogInjectionMatch(Match match)
     {
-        // Replace CRLF and control characters with safe alternatives
-        if (match.Value.Contains('\r') || match.Value.Contains('\n'))
-            return " [NEWLINE] ";
-        
-        // Replace control characters with safe representation
-        if (match.Value.Length == 1 && char.IsControl(match.Value[0]))
-            return $"[CTRL-{(int)match.Value[0]:X2}]";
-        
-        // Replace ANSI escape sequences
-        if (match.Value.StartsWith("\x1B["))
-            return "[ANSI]";
-        
-        // Replace potential log level injection
-        return " [LOG-INJECT] ";
+        var processor = new LogInjectionMatchProcessor(match);
+        return processor.ProcessMatch();
+    }
+
+    /// <summary>
+    /// Helper class for preventing log injection with reduced complexity
+    /// </summary>
+    private class LogInjectionPreventer
+    {
+        public string PreventInjection(string input)
+        {
+            var sanitized = input;
+            
+            // Apply log injection prevention patterns
+            foreach (var pattern in LogInjectionPatterns)
+            {
+                sanitized = pattern.Replace(sanitized, ProcessLogInjectionMatch);
+            }
+
+            return sanitized;
+        }
+    }
+
+    /// <summary>
+    /// Helper class for processing log injection matches
+    /// </summary>
+    private class LogInjectionMatchProcessor
+    {
+        private readonly Match _match;
+
+        public LogInjectionMatchProcessor(Match match)
+        {
+            _match = match;
+        }
+
+        public string ProcessMatch()
+        {
+            if (IsNewlineCharacter())
+                return " [NEWLINE] ";
+            
+            if (IsSingleControlCharacter())
+                return FormatControlCharacter();
+            
+            if (IsAnsiEscapeSequence())
+                return "[ANSI]";
+            
+            // Default: Replace potential log level injection
+            return " [LOG-INJECT] ";
+        }
+
+        private bool IsNewlineCharacter()
+        {
+            return _match.Value.Contains('\r') || _match.Value.Contains('\n');
+        }
+
+        private bool IsSingleControlCharacter()
+        {
+            return _match.Value.Length == 1 && char.IsControl(_match.Value[0]);
+        }
+
+        private string FormatControlCharacter()
+        {
+            return $"[CTRL-{(int)_match.Value[0]:X2}]";
+        }
+
+        private bool IsAnsiEscapeSequence()
+        {
+            return _match.Value.StartsWith("\x1B[");
+        }
     }
 
     private static string LimitMessageLength(string input)

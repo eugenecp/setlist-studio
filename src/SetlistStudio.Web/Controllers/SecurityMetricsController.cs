@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Services;
 using System.Diagnostics;
+using System.Security.Claims;
 
 namespace SetlistStudio.Web.Controllers;
 
@@ -86,25 +87,18 @@ public class SecurityMetricsController : ControllerBase
     {
         try
         {
-            // Validate time range
-            if (startTime.HasValue && endTime.HasValue && startTime > endTime)
-            {
-                return BadRequest("Start time cannot be after end time");
-            }
+            var validator = new MetricsTimeRangeValidator(_configuration);
+            var validationResult = validator.ValidateAndAdjust(startTime, endTime);
 
-            // Limit historical data to prevent performance issues
-            var maxHistoryDays = _configuration.GetValue<int>("Security:MaxHistoryDays", 30);
-            var earliestAllowed = DateTime.UtcNow.AddDays(-maxHistoryDays);
-            
-            if (startTime.HasValue && startTime < earliestAllowed)
+            if (!validationResult.IsValid)
             {
-                startTime = earliestAllowed;
+                return BadRequest(validationResult.ErrorMessage);
             }
 
             _logger.LogInformation("Detailed security metrics requested by user {UserId} for period {StartTime} to {EndTime}", 
-                User.Identity?.Name ?? "Unknown", startTime, endTime);
+                User.Identity?.Name ?? "Unknown", validationResult.StartTime, validationResult.EndTime);
 
-            var metrics = _securityMetricsService.GetDetailedMetrics(startTime, endTime);
+            var metrics = _securityMetricsService.GetDetailedMetrics(validationResult.StartTime, validationResult.EndTime);
             return Ok(metrics);
         }
         catch (ArgumentOutOfRangeException ex)
@@ -122,6 +116,79 @@ public class SecurityMetricsController : ControllerBase
         {
             _logger.LogError(ex, "Unexpected error retrieving detailed security metrics");
             return StatusCode(500, "Error retrieving detailed security metrics");
+        }
+    }
+
+    /// <summary>
+    /// Helper class for validating and adjusting metrics time ranges
+    /// </summary>
+    private class MetricsTimeRangeValidator
+    {
+        private readonly IConfiguration _configuration;
+
+        public MetricsTimeRangeValidator(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
+        public TimeRangeValidationResult ValidateAndAdjust(DateTime? startTime, DateTime? endTime)
+        {
+            if (IsInvalidTimeRange(startTime, endTime))
+            {
+                return TimeRangeValidationResult.Invalid("Start time cannot be after end time");
+            }
+
+            var adjustedStartTime = AdjustStartTimeIfNeeded(startTime);
+            
+            return TimeRangeValidationResult.Valid(adjustedStartTime, endTime);
+        }
+
+        private static bool IsInvalidTimeRange(DateTime? startTime, DateTime? endTime)
+        {
+            return startTime.HasValue && endTime.HasValue && startTime > endTime;
+        }
+
+        private DateTime? AdjustStartTimeIfNeeded(DateTime? startTime)
+        {
+            if (!startTime.HasValue)
+                return startTime;
+
+            var maxHistoryDays = _configuration.GetValue<int>("Security:MaxHistoryDays", 30);
+            var earliestAllowed = DateTime.UtcNow.AddDays(-maxHistoryDays);
+            
+            return startTime < earliestAllowed ? earliestAllowed : startTime;
+        }
+    }
+
+    /// <summary>
+    /// Result of time range validation
+    /// </summary>
+    private class TimeRangeValidationResult
+    {
+        public bool IsValid { get; private set; }
+        public string? ErrorMessage { get; private set; }
+        public DateTime? StartTime { get; private set; }
+        public DateTime? EndTime { get; private set; }
+
+        private TimeRangeValidationResult() { }
+
+        public static TimeRangeValidationResult Valid(DateTime? startTime, DateTime? endTime)
+        {
+            return new TimeRangeValidationResult
+            {
+                IsValid = true,
+                StartTime = startTime,
+                EndTime = endTime
+            };
+        }
+
+        public static TimeRangeValidationResult Invalid(string errorMessage)
+        {
+            return new TimeRangeValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = errorMessage
+            };
         }
     }
 
@@ -436,27 +503,12 @@ public class SecurityMetricsController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.EventType))
-            {
-                return BadRequest("Event type is required");
-            }
+            var processor = new SecurityEventProcessor(_securityMetricsService, _logger, User);
+            var result = processor.ProcessEvent(request);
 
-            var sanitizedEventType = SecureLoggingHelper.PreventLogInjection(request.EventType);
-            var sanitizedSeverity = SecureLoggingHelper.PreventLogInjection(request.Severity ?? "MEDIUM");
-            var sanitizedDetails = SecureLoggingHelper.PreventLogInjection(request.Details ?? $"Manual event recorded by {User.Identity?.Name}");
-            
-            _securityMetricsService.RecordSecurityEvent(
-                sanitizedEventType, 
-                sanitizedSeverity, 
-                sanitizedDetails);
-
-            // Use TaintBarrier for complete taint isolation
-            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
-                "Manual security event recorded by user {0}: {1}",
-                User.Identity?.Name ?? "Unknown", sanitizedEventType);
-            _logger.LogInformation(safeLogMessage);
-
-            return Created("", new { Message = "Security event recorded successfully" });
+            return result.IsSuccess 
+                ? Created("", new { Message = "Security event recorded successfully" })
+                : BadRequest(result.ErrorMessage);
         }
         catch (ArgumentException ex)
         {
@@ -478,6 +530,144 @@ public class SecurityMetricsController : ControllerBase
         {
             _logger.LogError(ex, "Unexpected error recording manual security event");
             return StatusCode(500, "Error recording security event");
+        }
+    }
+
+    /// <summary>
+    /// Helper class for processing security events with reduced complexity
+    /// </summary>
+    private class SecurityEventProcessor
+    {
+        private readonly ISecurityMetricsService _securityMetricsService;
+        private readonly ILogger _logger;
+        private readonly ClaimsPrincipal _user;
+
+        public SecurityEventProcessor(ISecurityMetricsService securityMetricsService, ILogger logger, ClaimsPrincipal user)
+        {
+            _securityMetricsService = securityMetricsService;
+            _logger = logger;
+            _user = user;
+        }
+
+        public SecurityEventProcessingResult ProcessEvent(RecordSecurityEventRequest request)
+        {
+            var validationResult = ValidateRequest(request);
+            if (!validationResult.IsValid)
+            {
+                return SecurityEventProcessingResult.Failure(validationResult.ErrorMessage!);
+            }
+
+            var sanitizer = new SecurityEventSanitizer(request, _user);
+            var sanitizedData = sanitizer.SanitizeAll();
+
+            RecordEvent(sanitizedData);
+            LogEvent(sanitizedData);
+
+            return SecurityEventProcessingResult.Success();
+        }
+
+        private RequestValidationResult ValidateRequest(RecordSecurityEventRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.EventType))
+            {
+                return RequestValidationResult.Invalid("Event type is required");
+            }
+
+            return RequestValidationResult.Valid();
+        }
+
+        private void RecordEvent(SanitizedSecurityEvent sanitizedData)
+        {
+            _securityMetricsService.RecordSecurityEvent(
+                sanitizedData.EventType, 
+                sanitizedData.Severity, 
+                sanitizedData.Details);
+        }
+
+        private void LogEvent(SanitizedSecurityEvent sanitizedData)
+        {
+            var safeLogMessage = TaintBarrier.CreateSafeLogMessage(
+                "Manual security event recorded by user {0}: {1}",
+                _user.Identity?.Name ?? "Unknown", 
+                sanitizedData.EventType);
+            _logger.LogInformation(safeLogMessage);
+        }
+    }
+
+    /// <summary>
+    /// Helper class for sanitizing security event data
+    /// </summary>
+    private class SecurityEventSanitizer
+    {
+        private readonly RecordSecurityEventRequest _request;
+        private readonly ClaimsPrincipal _user;
+
+        public SecurityEventSanitizer(RecordSecurityEventRequest request, ClaimsPrincipal user)
+        {
+            _request = request;
+            _user = user;
+        }
+
+        public SanitizedSecurityEvent SanitizeAll()
+        {
+            return new SanitizedSecurityEvent
+            {
+                EventType = SecureLoggingHelper.PreventLogInjection(_request.EventType),
+                Severity = SecureLoggingHelper.PreventLogInjection(_request.Severity ?? "MEDIUM"),
+                Details = SecureLoggingHelper.PreventLogInjection(_request.Details ?? $"Manual event recorded by {_user.Identity?.Name}")
+            };
+        }
+    }
+
+    /// <summary>
+    /// Sanitized security event data
+    /// </summary>
+    private class SanitizedSecurityEvent
+    {
+        public string EventType { get; set; } = string.Empty;
+        public string Severity { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Result of security event processing
+    /// </summary>
+    private class SecurityEventProcessingResult
+    {
+        public bool IsSuccess { get; private set; }
+        public string? ErrorMessage { get; private set; }
+
+        private SecurityEventProcessingResult() { }
+
+        public static SecurityEventProcessingResult Success()
+        {
+            return new SecurityEventProcessingResult { IsSuccess = true };
+        }
+
+        public static SecurityEventProcessingResult Failure(string errorMessage)
+        {
+            return new SecurityEventProcessingResult { IsSuccess = false, ErrorMessage = errorMessage };
+        }
+    }
+
+    /// <summary>
+    /// Result of request validation
+    /// </summary>
+    private class RequestValidationResult
+    {
+        public bool IsValid { get; private set; }
+        public string? ErrorMessage { get; private set; }
+
+        private RequestValidationResult() { }
+
+        public static RequestValidationResult Valid()
+        {
+            return new RequestValidationResult { IsValid = true };
+        }
+
+        public static RequestValidationResult Invalid(string errorMessage)
+        {
+            return new RequestValidationResult { IsValid = false, ErrorMessage = errorMessage };
         }
     }
 
@@ -552,21 +742,30 @@ public class SecurityMetricsController : ControllerBase
 
     private string GetClientIpAddress()
     {
-        // Try to get real IP from forwarded headers (for reverse proxy scenarios)
+        // Try forwarded headers first (for reverse proxy scenarios)
+        var clientIp = GetForwardedIpAddress() ?? GetRealIpAddress() ?? GetDirectIpAddress();
+        return clientIp ?? "unknown";
+    }
+
+    private string? GetForwardedIpAddress()
+    {
         var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
-            return ips[0].Trim(); // First IP is the original client
-        }
+        if (string.IsNullOrEmpty(forwardedFor))
+            return null;
 
+        var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        return ips.Length > 0 ? ips[0].Trim() : null;
+    }
+
+    private string? GetRealIpAddress()
+    {
         var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(realIp))
-        {
-            return realIp;
-        }
+        return string.IsNullOrEmpty(realIp) ? null : realIp;
+    }
 
-        return HttpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+    private string? GetDirectIpAddress()
+    {
+        return HttpContext.Connection?.RemoteIpAddress?.ToString();
     }
 }
 

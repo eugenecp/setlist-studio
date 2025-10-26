@@ -109,16 +109,49 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized email address safe for logging</returns>
         public static string GetSanitizedUserEmail(ClaimsPrincipal? user)
         {
-            if (user?.Identity?.IsAuthenticated != true)
+            var extractor = new UserEmailExtractor(user);
+            return extractor.ExtractAndSanitizeEmail();
+        }
+
+        /// <summary>
+        /// Helper class for extracting and sanitizing user email with reduced complexity
+        /// </summary>
+        private class UserEmailExtractor
+        {
+            private readonly ClaimsPrincipal? _user;
+
+            public UserEmailExtractor(ClaimsPrincipal? user)
             {
-                return "anonymous@localhost";
+                _user = user;
             }
 
-            var email = user.FindFirst(ClaimTypes.Email)?.Value 
-                ?? user.FindFirst("email")?.Value 
-                ?? "unknown@localhost";
+            public string ExtractAndSanitizeEmail()
+            {
+                if (!IsUserAuthenticated())
+                {
+                    return "anonymous@localhost";
+                }
 
-            return SecureLoggingHelper.SanitizeMessage(email) ?? "unknown@localhost";
+                var email = ExtractEmailFromClaims();
+                return SanitizeEmail(email);
+            }
+
+            private bool IsUserAuthenticated()
+            {
+                return _user?.Identity?.IsAuthenticated == true;
+            }
+
+            private string ExtractEmailFromClaims()
+            {
+                return _user!.FindFirst(ClaimTypes.Email)?.Value 
+                    ?? _user.FindFirst("email")?.Value 
+                    ?? "unknown@localhost";
+            }
+
+            private static string SanitizeEmail(string email)
+            {
+                return SecureLoggingHelper.SanitizeMessage(email) ?? "unknown@localhost";
+            }
         }
 
         /// <summary>
