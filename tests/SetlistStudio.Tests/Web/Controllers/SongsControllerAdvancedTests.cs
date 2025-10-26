@@ -69,17 +69,17 @@ public class SongsControllerAdvancedTests
     }
 
     [Fact]
-    public async Task GetSongs_WithEmptyNameIdentifier_ShouldUseAnonymous()
+    public async Task GetSongs_WithEmptyNameIdentifier_ShouldUseIdentityNameFallback()
     {
-        // Arrange - When NameIdentifier is empty string (not null), it should be sanitized to anonymous
+        // Arrange - When NameIdentifier is empty but Identity.Name exists, should use Identity.Name as fallback
         SetupUserWithEmptyNameIdentifierButValidName("identity-user");
         var testSongs = new List<Song>
         {
-            new Song { Id = 1, Title = "Test Song", Artist = "Test Artist", UserId = "anonymous" }
+            new Song { Id = 1, Title = "Test Song", Artist = "Test Artist", UserId = "identity-user" }
         };
         
         _mockSongService
-            .Setup(s => s.GetSongsAsync("anonymous", null, null, null, 1, 20))
+            .Setup(s => s.GetSongsAsync("identity-user", null, null, null, 1, 20))
             .ReturnsAsync((testSongs, testSongs.Count));
 
         // Act
@@ -87,7 +87,7 @@ public class SongsControllerAdvancedTests
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        _mockSongService.Verify(s => s.GetSongsAsync("anonymous", null, null, null, 1, 20), Times.Once);
+        _mockSongService.Verify(s => s.GetSongsAsync("identity-user", null, null, null, 1, 20), Times.Once);
     }
 
     [Fact]

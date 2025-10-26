@@ -128,86 +128,150 @@ public class SecretValidationService
 
         _logger.LogInformation("Validating secrets for environment: {Environment}", environmentName);
 
-        // Check if Azure Key Vault is configured for production
-        if (!IsNonProductionEnvironment())
-        {
-            var keyVaultValidation = ValidateKeyVaultConfiguration(environmentName);
-            result.ValidationErrors.AddRange(keyVaultValidation);
-        }
+        ValidateKeyVaultForProduction(result, environmentName);
 
-        // Skip validation in development or testing unless explicitly requested
-        if (IsNonProductionEnvironment() && !strictValidation)
+        if (ShouldSkipValidation(strictValidation))
         {
             _logger.LogInformation("Skipping strict secret validation in development environment");
             return result;
         }
 
-        // Validate each required secret
+        ValidateAllRequiredSecrets(result, environmentName);
+        LogValidationSummary(result, environmentName);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Validates Key Vault configuration for production environments
+    /// </summary>
+    private void ValidateKeyVaultForProduction(SecretValidationResult result, string environmentName)
+    {
+        if (!IsNonProductionEnvironment())
+        {
+            var keyVaultValidation = ValidateKeyVaultConfiguration(environmentName);
+            result.ValidationErrors.AddRange(keyVaultValidation);
+        }
+    }
+
+    /// <summary>
+    /// Determines if validation should be skipped based on environment and settings
+    /// </summary>
+    private bool ShouldSkipValidation(bool strictValidation)
+    {
+        return IsNonProductionEnvironment() && !strictValidation;
+    }
+
+    /// <summary>
+    /// Validates all required secrets and handles OAuth-specific logic
+    /// </summary>
+    private void ValidateAllRequiredSecrets(SecretValidationResult result, string environmentName)
+    {
         foreach (var (secretKey, description) in RequiredSecrets)
         {
             var secretValue = _configuration[secretKey];
             
-            // For OAuth secrets, we need to be more nuanced about when to skip:
-            // 1. Skip empty/null secrets when the provider is not configured
-            // 2. But always validate non-empty secrets (including placeholders) 
-            if (IsOptionalOAuthSecret(secretKey))
+            if (ShouldSkipOptionalOAuthSecret(secretKey, secretValue))
             {
-                if (string.IsNullOrWhiteSpace(secretValue))
-                {
-                    _logger.LogDebug("Skipping validation for optional OAuth secret: {SecretKey}", secretKey);
-                    continue;
-                }
-                // If the secret has a value (including placeholders), validate it
-                _logger.LogDebug("Validating optional OAuth secret with value: {SecretKey}", secretKey);
+                _logger.LogDebug("Skipping validation for optional OAuth secret: {SecretKey}", secretKey);
+                continue;
             }
-            
-            var validationIssue = ValidateIndividualSecret(secretKey, secretValue, description);
-            
-            if (validationIssue != null)
-            {
-                result.ValidationErrors.Add(validationIssue);
-                
-                // Log security event for missing production secrets
-                if (_environment.IsProduction())
-                {
-                    _securityEventLogger.LogSecurityEvent(
-                        SecurityEventType.ConfigurationChange,
-                        SecurityEventSeverity.High,
-                        $"Production secret validation failed: {description}",
-                        resourceType: "Configuration",
-                        resourceId: secretKey,
-                        additionalData: new { Environment = environmentName, Issue = validationIssue.Issue }
-                    );
-                }
-            }
-        }
 
-        // Log validation summary
+            ValidateSecretAndLogErrors(result, environmentName, secretKey, secretValue, description);
+        }
+    }
+
+    /// <summary>
+    /// Determines if an optional OAuth secret should be skipped
+    /// </summary>
+    private bool ShouldSkipOptionalOAuthSecret(string secretKey, string? secretValue)
+    {
+        if (!IsOptionalOAuthSecret(secretKey))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(secretValue))
+            return true;
+
+        _logger.LogDebug("Validating optional OAuth secret with value: {SecretKey}", secretKey);
+        return false;
+    }
+
+    /// <summary>
+    /// Validates an individual secret and logs any validation errors
+    /// </summary>
+    private void ValidateSecretAndLogErrors(SecretValidationResult result, string environmentName, 
+        string secretKey, string? secretValue, string description)
+    {
+        var validationIssue = ValidateIndividualSecret(secretKey, secretValue, description);
+        
+        if (validationIssue != null)
+        {
+            result.ValidationErrors.Add(validationIssue);
+            LogSecurityEventForProductionFailure(environmentName, secretKey, description, validationIssue);
+        }
+    }
+
+    /// <summary>
+    /// Logs security events for production secret validation failures
+    /// </summary>
+    private void LogSecurityEventForProductionFailure(string environmentName, string secretKey, 
+        string description, SecretValidationError validationIssue)
+    {
+        if (_environment.IsProduction())
+        {
+            _securityEventLogger.LogSecurityEvent(
+                SecurityEventType.ConfigurationChange,
+                SecurityEventSeverity.High,
+                $"Production secret validation failed: {description}",
+                resourceType: "Configuration",
+                resourceId: secretKey,
+                additionalData: new { Environment = environmentName, Issue = validationIssue.Issue }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Logs the validation summary based on results
+    /// </summary>
+    private void LogValidationSummary(SecretValidationResult result, string environmentName)
+    {
         if (result.IsValid)
         {
-            _logger.LogInformation("All secrets validated successfully for environment: {Environment}", environmentName);
-            
-            // Log Key Vault usage for production
-            if (!IsNonProductionEnvironment())
-            {
-                var keyVaultName = _configuration["KeyVault:VaultName"];
-                if (!string.IsNullOrEmpty(keyVaultName))
-                {
-                    _logger.LogInformation("Using Azure Key Vault for secret management: {KeyVaultName}", keyVaultName);
-                }
-            }
+            LogSuccessfulValidation(environmentName);
         }
         else
         {
-            // Only log warning for non-test environments
-            if (!environmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+            LogValidationFailures(result, environmentName);
+        }
+    }
+
+    /// <summary>
+    /// Logs successful validation and Key Vault usage
+    /// </summary>
+    private void LogSuccessfulValidation(string environmentName)
+    {
+        _logger.LogInformation("All secrets validated successfully for environment: {Environment}", environmentName);
+        
+        if (!IsNonProductionEnvironment())
+        {
+            var keyVaultName = _configuration["KeyVault:VaultName"];
+            if (!string.IsNullOrEmpty(keyVaultName))
             {
-                _logger.LogWarning("Secret validation failed with {ErrorCount} errors in environment: {Environment}", 
-                    result.ValidationErrors.Count, environmentName);
+                _logger.LogInformation("Using Azure Key Vault for secret management: {KeyVaultName}", keyVaultName);
             }
         }
+    }
 
-        return result;
+    /// <summary>
+    /// Logs validation failures for non-test environments
+    /// </summary>
+    private void LogValidationFailures(SecretValidationResult result, string environmentName)
+    {
+        if (!environmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Secret validation failed with {ErrorCount} errors in environment: {Environment}", 
+                result.ValidationErrors.Count, environmentName);
+        }
     }
 
     /// <summary>

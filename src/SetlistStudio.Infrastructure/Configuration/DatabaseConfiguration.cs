@@ -232,6 +232,19 @@ public class DatabaseConfiguration : IDatabaseConfiguration
 
     private string GeneratePostgreSqlConnectionString(IConfiguration configuration, string environment, bool isContainerized)
     {
+        var connectionParams = ExtractPostgreSqlConnectionParameters(configuration, isContainerized);
+        var baseConnectionString = BuildPostgreSqlBaseConnectionString(connectionParams);
+        var sslSettings = GetPostgreSqlSslSettings(environment);
+        
+        return baseConnectionString + sslSettings;
+    }
+
+    /// <summary>
+    /// Extracts PostgreSQL connection parameters from configuration and environment variables
+    /// </summary>
+    private static (string host, string port, string database, string username, string password) ExtractPostgreSqlConnectionParameters(
+        IConfiguration configuration, bool isContainerized)
+    {
         var host = configuration["Database:PostgreSQL:Host"] ?? 
                    Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? 
                    (isContainerized ? "postgres" : "localhost");
@@ -252,19 +265,26 @@ public class DatabaseConfiguration : IDatabaseConfiguration
                        Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? 
                        "setliststudio";
 
-        var connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};";
-        
-        // Add SSL and security settings for production
-        if (!environment.Equals("Development", StringComparison.OrdinalIgnoreCase))
-        {
-            connectionString += "SSL Mode=Require;Trust Server Certificate=false;";
-        }
-        else
-        {
-            connectionString += "SSL Mode=Prefer;";
-        }
+        return (host, port, database, username, password);
+    }
 
-        return connectionString;
+    /// <summary>
+    /// Builds the base PostgreSQL connection string from connection parameters
+    /// </summary>
+    private static string BuildPostgreSqlBaseConnectionString(
+        (string host, string port, string database, string username, string password) parameters)
+    {
+        return $"Host={parameters.host};Port={parameters.port};Database={parameters.database};Username={parameters.username};Password={parameters.password};";
+    }
+
+    /// <summary>
+    /// Gets appropriate SSL settings based on environment
+    /// </summary>
+    private static string GetPostgreSqlSslSettings(string environment)
+    {
+        return environment.Equals("Development", StringComparison.OrdinalIgnoreCase) 
+            ? "SSL Mode=Prefer;" 
+            : "SSL Mode=Require;Trust Server Certificate=false;";
     }
 
     private string GenerateSqlServerConnectionString(IConfiguration configuration, string environment, bool isContainerized)

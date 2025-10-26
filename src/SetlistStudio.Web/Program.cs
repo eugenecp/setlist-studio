@@ -18,7 +18,7 @@ using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Infrastructure.Configuration;
 using SetlistStudio.Web.Services;
 using SetlistStudio.Web.Middleware;
-using SetlistStudio.Web.Utilities;
+
 using SetlistStudio.Web.Security;
 using System.Threading.RateLimiting;
 using System.Text.Json;
@@ -156,160 +156,11 @@ try
 
     var app = builder.Build();
 
-    // SECURITY: Configure forwarded headers for production reverse proxy scenarios
-    if (!app.Environment.IsDevelopment())
-    {
-        app.UseForwardedHeaders();
-    }
-
-    // Configure the HTTP request pipeline
-    if (!app.Environment.IsDevelopment())
-    {
-        app.UseExceptionHandler("/Error");
-        app.UseHsts();
-    }
-
-    // Only use HTTPS redirection if not in test environment
-    if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
-    {
-        app.UseHttpsRedirection();
-    }
-    
-    // Security Headers Middleware - CRITICAL SECURITY ENHANCEMENT
-    app.Use(async (context, next) =>
-    {
-        // Prevent MIME type sniffing attacks
-        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-        
-        // Prevent clickjacking attacks
-        context.Response.Headers.Append("X-Frame-Options", "DENY");
-        
-        // Enable XSS protection (legacy browsers)
-        context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
-        
-        // Referrer policy for privacy protection
-        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-        
-        // Content Security Policy - enhanced with nonce-based security
-        var cspReportingEnabled = builder.Configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
-        var cspPolicyBuilder = new StringBuilder();
-        cspPolicyBuilder.Append("default-src 'self'; ");
-        
-        // Get nonces from the current request context
-        var scriptNonce = context.Items["ScriptNonce"]?.ToString();
-        var styleNonce = context.Items["StyleNonce"]?.ToString();
-        
-        // Enhanced script-src with nonce fallback
-        if (!string.IsNullOrEmpty(scriptNonce))
-        {
-            cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
-        }
-        else
-        {
-            // Fallback for development/testing or when nonces aren't available
-            cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
-        }
-        
-        // Enhanced style-src with nonce fallback
-        if (!string.IsNullOrEmpty(styleNonce))
-        {
-            cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
-        }
-        else
-        {
-            // Fallback for development/testing or when nonces aren't available
-            cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
-        }
-        
-        cspPolicyBuilder.Append("img-src 'self' data: https:; ");
-        cspPolicyBuilder.Append("font-src 'self'; ");
-        cspPolicyBuilder.Append("connect-src 'self'; ");
-        cspPolicyBuilder.Append("frame-ancestors 'none'; ");
-        cspPolicyBuilder.Append("base-uri 'self'; ");
-        cspPolicyBuilder.Append("form-action 'self'");
-        
-        // Add CSP violation reporting if enabled
-        if (cspReportingEnabled)
-        {
-            cspPolicyBuilder.Append("; report-uri /api/cspreport/report");
-        }
-        
-        var cspPolicy = cspPolicyBuilder.ToString();
-        
-        context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
-        
-        // Permissions Policy - disable unnecessary browser features
-        context.Response.Headers.Append("Permissions-Policy", 
-            "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
-        
-        // HSTS - only in production and when using HTTPS
-        if (!context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() && 
-            context.Request.IsHttps)
-        {
-            context.Response.Headers.Append("Strict-Transport-Security", 
-                "max-age=31536000; includeSubDomains; preload");
-        }
-        
-        await next();
-    });
-    
-    // CSP Nonce Middleware - Generate nonces for enhanced Content Security Policy
-    app.UseCspNonce();
-    
-    // Rate Limiting Headers Middleware - Environment-specific configuration
-    var enableRateLimiting = Program.ShouldEnableRateLimiting(app.Environment);
-    if (enableRateLimiting)
-    {
-        app.UseRateLimitHeaders();
-        
-        // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT with environment-specific limits
-        app.UseRateLimiter();
-        
-        var rateLimitConfig = Program.GetRateLimitConfiguration(app.Environment);
-        Log.Information("Rate limiting enabled with {Environment} configuration: Global={GlobalLimit}, API={ApiLimit}, Auth={AuthLimit}", 
-            app.Environment.EnvironmentName, rateLimitConfig.GlobalLimit, rateLimitConfig.ApiLimit, rateLimitConfig.AuthLimit);
-    }
-    else
-    {
-        Log.Information("Rate limiting disabled for {Environment} environment", app.Environment.EnvironmentName);
-    }
-    
-    // CAPTCHA Middleware - Prevent automated attacks and rate limit bypass
-    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
-        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
-    {
-        app.UseCaptchaMiddleware();
-    }
-    
-    // Security Event Logging Middleware - Monitor and log security events (disabled in test environment)
-    if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
-        !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
-    {
-        app.UseMiddleware<SetlistStudio.Web.Middleware.SecurityEventMiddleware>();
-    }
-    
-    app.UseStaticFiles();
-
-    app.UseRouting();
-
-    // SECURITY: Enable CORS with restrictive policy
-    app.UseCors("RestrictivePolicy");
-
-    // SECURITY: Enable secure session management
-    app.UseSession();
-
-    // Add localization
-    app.UseRequestLocalization();
-
-    app.UseAuthentication();
-    app.UseAuthorization();
-
-    // Map API controllers before fallback routing
-    app.MapControllers();
-    
-    app.MapRazorPages();
-    app.MapBlazorHub();
-    app.MapFallbackToPage("/_Host");
+    // Configure HTTP pipeline and security middleware
+    ConfigureBasicHttpPipeline(app);
+    ConfigureSecurityHeaders(app, builder.Configuration);
+    ConfigureSecurityMiddleware(app);
+    ConfigureCoreMiddlewarePipeline(app);
 
     // SECURITY: Validate production secrets before starting application
     await ValidateSecretsAsync(app);
@@ -317,10 +168,8 @@ try
     // Initialize database
     await InitializeDatabaseAsync(app);
 
-    Log.Information("Setlist Studio application starting");
-    Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
-    Log.Information("URLs: {Urls}", Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
-    Log.Information("Container: {IsContainer}", Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
+    // Log application startup information
+    LogApplicationStartupInfo(app);
     
     app.Run();
 }
@@ -1147,7 +996,22 @@ static bool IsValidAuthenticatedUser(System.Security.Principal.IIdentity? userId
 
 static string GetClientIpAddress(HttpContext httpContext)
 {
-    return IpAddressUtility.GetClientIpAddress(httpContext);
+    // Try forwarded headers first (for load balancers/proxies)
+    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedFor))
+    {
+        return forwardedFor.Split(',').FirstOrDefault()?.Trim() ?? "Unknown";
+    }
+
+    // Try X-Real-IP header
+    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(realIp))
+    {
+        return realIp.Trim();
+    }
+
+    // Fallback to connection remote IP
+    return httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
 }
 
 
@@ -1721,5 +1585,294 @@ public partial class Program
                     errorNumbersToAdd: null);
             });
         }
+    }
+
+    /// <summary>
+    /// Configures basic HTTP pipeline settings for error handling and HTTPS
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureBasicHttpPipeline(WebApplication app)
+    {
+        // SECURITY: Configure forwarded headers for production reverse proxy scenarios
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseForwardedHeaders();
+        }
+
+        // Configure the HTTP request pipeline
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseExceptionHandler("/Error");
+            app.UseHsts();
+        }
+
+        // Only use HTTPS redirection if not in test environment
+        if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        {
+            app.UseHttpsRedirection();
+        }
+    }
+
+    /// <summary>
+    /// Configures security headers middleware for comprehensive security protection
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    /// <param name="configuration">The application configuration</param>
+    static void ConfigureSecurityHeaders(WebApplication app, IConfiguration configuration)
+    {
+        // Security Headers Middleware - CRITICAL SECURITY ENHANCEMENT
+        app.Use(async (context, next) =>
+        {
+            ApplyBasicSecurityHeaders(context);
+            ApplyCspHeaders(context, configuration);
+            ApplyPermissionsPolicyHeaders(context);
+            ApplyHstsHeaders(context);
+            
+            await next();
+        });
+    }
+
+    /// <summary>
+    /// Applies basic security headers to prevent common attacks
+    /// </summary>
+    /// <param name="context">The HTTP context</param>
+    static void ApplyBasicSecurityHeaders(HttpContext context)
+    {
+        // Prevent MIME type sniffing attacks
+        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        
+        // Prevent clickjacking attacks
+        context.Response.Headers.Append("X-Frame-Options", "DENY");
+        
+        // Enable XSS protection (legacy browsers)
+        context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+        
+        // Referrer policy for privacy protection
+        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+
+    /// <summary>
+    /// Applies Content Security Policy headers with nonce support
+    /// </summary>
+    /// <param name="context">The HTTP context</param>
+    /// <param name="configuration">The application configuration</param>
+    static void ApplyCspHeaders(HttpContext context, IConfiguration configuration)
+    {
+        // Content Security Policy - enhanced with nonce-based security
+        var cspReportingEnabled = configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
+        var cspPolicyBuilder = new StringBuilder();
+        cspPolicyBuilder.Append("default-src 'self'; ");
+        
+        // Get nonces from the current request context
+        var scriptNonce = context.Items["ScriptNonce"]?.ToString();
+        var styleNonce = context.Items["StyleNonce"]?.ToString();
+        
+        AppendScriptCspPolicy(cspPolicyBuilder, scriptNonce);
+        AppendStyleCspPolicy(cspPolicyBuilder, styleNonce);
+        AppendResourceCspPolicies(cspPolicyBuilder);
+        AppendCspReporting(cspPolicyBuilder, cspReportingEnabled);
+        
+        var cspPolicy = cspPolicyBuilder.ToString();
+        context.Response.Headers.Append("Content-Security-Policy", cspPolicy);
+    }
+
+    /// <summary>
+    /// Appends script-src CSP policy with nonce fallback
+    /// </summary>
+    /// <param name="cspPolicyBuilder">The CSP policy builder</param>
+    /// <param name="scriptNonce">The script nonce if available</param>
+    static void AppendScriptCspPolicy(StringBuilder cspPolicyBuilder, string? scriptNonce)
+    {
+        // Enhanced script-src with nonce fallback
+        if (!string.IsNullOrEmpty(scriptNonce))
+        {
+            cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
+        }
+    }
+
+    /// <summary>
+    /// Appends style-src CSP policy with nonce fallback
+    /// </summary>
+    /// <param name="cspPolicyBuilder">The CSP policy builder</param>
+    /// <param name="styleNonce">The style nonce if available</param>
+    static void AppendStyleCspPolicy(StringBuilder cspPolicyBuilder, string? styleNonce)
+    {
+        // Enhanced style-src with nonce fallback
+        if (!string.IsNullOrEmpty(styleNonce))
+        {
+            cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
+        }
+        else
+        {
+            // Fallback for development/testing or when nonces aren't available
+            cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
+        }
+    }
+
+    /// <summary>
+    /// Appends resource-related CSP policies for images, fonts, connections, etc.
+    /// </summary>
+    /// <param name="cspPolicyBuilder">The CSP policy builder</param>
+    static void AppendResourceCspPolicies(StringBuilder cspPolicyBuilder)
+    {
+        cspPolicyBuilder.Append("img-src 'self' data: https:; ");
+        cspPolicyBuilder.Append("font-src 'self'; ");
+        cspPolicyBuilder.Append("connect-src 'self'; ");
+        cspPolicyBuilder.Append("frame-ancestors 'none'; ");
+        cspPolicyBuilder.Append("base-uri 'self'; ");
+        cspPolicyBuilder.Append("form-action 'self'");
+    }
+
+    /// <summary>
+    /// Appends CSP violation reporting if enabled
+    /// </summary>
+    /// <param name="cspPolicyBuilder">The CSP policy builder</param>
+    /// <param name="cspReportingEnabled">Whether CSP reporting is enabled</param>
+    static void AppendCspReporting(StringBuilder cspPolicyBuilder, bool cspReportingEnabled)
+    {
+        // Add CSP violation reporting if enabled
+        if (cspReportingEnabled)
+        {
+            cspPolicyBuilder.Append("; report-uri /api/cspreport/report");
+        }
+    }
+
+    /// <summary>
+    /// Applies Permissions Policy headers to disable unnecessary browser features
+    /// </summary>
+    /// <param name="context">The HTTP context</param>
+    static void ApplyPermissionsPolicyHeaders(HttpContext context)
+    {
+        // Permissions Policy - disable unnecessary browser features
+        context.Response.Headers.Append("Permissions-Policy", 
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+    }
+
+    /// <summary>
+    /// Applies HSTS headers for production HTTPS environments
+    /// </summary>
+    /// <param name="context">The HTTP context</param>
+    static void ApplyHstsHeaders(HttpContext context)
+    {
+        // HSTS - only in production and when using HTTPS
+        if (!context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() && 
+            context.Request.IsHttps)
+        {
+            context.Response.Headers.Append("Strict-Transport-Security", 
+                "max-age=31536000; includeSubDomains; preload");
+        }
+    }
+
+    /// <summary>
+    /// Configures security-specific middleware for protection and monitoring
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureSecurityMiddleware(WebApplication app)
+    {
+        // CSP Nonce Middleware - Generate nonces for enhanced Content Security Policy
+        app.UseCspNonce();
+        
+        ConfigureRateLimitingMiddleware(app);
+        ConfigureAttackPreventionMiddleware(app);
+        ConfigureSecurityMonitoringMiddleware(app);
+    }
+
+    /// <summary>
+    /// Configures rate limiting middleware with environment-specific settings
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureRateLimitingMiddleware(WebApplication app)
+    {
+        // Rate Limiting Headers Middleware - Environment-specific configuration
+        var enableRateLimiting = Program.ShouldEnableRateLimiting(app.Environment);
+        if (enableRateLimiting)
+        {
+            app.UseRateLimitHeaders();
+            
+            // Rate Limiting Middleware - CRITICAL SECURITY ENHANCEMENT with environment-specific limits
+            app.UseRateLimiter();
+            
+            var rateLimitConfig = Program.GetRateLimitConfiguration(app.Environment);
+            Log.Information("Rate limiting enabled with {Environment} configuration: Global={GlobalLimit}, API={ApiLimit}, Auth={AuthLimit}", 
+                app.Environment.EnvironmentName, rateLimitConfig.GlobalLimit, rateLimitConfig.ApiLimit, rateLimitConfig.AuthLimit);
+        }
+        else
+        {
+            Log.Information("Rate limiting disabled for {Environment} environment", app.Environment.EnvironmentName);
+        }
+    }
+
+    /// <summary>
+    /// Configures middleware to prevent automated attacks and rate limit bypass
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureAttackPreventionMiddleware(WebApplication app)
+    {
+        // CAPTCHA Middleware - Prevent automated attacks and rate limit bypass
+        if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+            !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        {
+            app.UseCaptchaMiddleware();
+        }
+    }
+
+    /// <summary>
+    /// Configures security event monitoring middleware for threat detection
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureSecurityMonitoringMiddleware(WebApplication app)
+    {
+        // Security Event Logging Middleware - Monitor and log security events (disabled in test environment)
+        if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
+            !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        {
+            app.UseMiddleware<SetlistStudio.Web.Middleware.SecurityEventMiddleware>();
+        }
+    }
+
+    /// <summary>
+    /// Configures the core middleware pipeline for routing, authentication, and authorization
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void ConfigureCoreMiddlewarePipeline(WebApplication app)
+    {
+        app.UseStaticFiles();
+        app.UseRouting();
+
+        // SECURITY: Enable CORS with restrictive policy
+        app.UseCors("RestrictivePolicy");
+
+        // SECURITY: Enable secure session management
+        app.UseSession();
+
+        // Add localization
+        app.UseRequestLocalization();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // Map API controllers before fallback routing
+        app.MapControllers();
+        
+        app.MapRazorPages();
+        app.MapBlazorHub();
+        app.MapFallbackToPage("/_Host");
+    }
+
+    /// <summary>
+    /// Logs application startup information
+    /// </summary>
+    /// <param name="app">The web application instance</param>
+    static void LogApplicationStartupInfo(WebApplication app)
+    {
+        Log.Information("Setlist Studio application starting");
+        Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
+        Log.Information("URLs: {Urls}", Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
+        Log.Information("Container: {IsContainer}", Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
     }
 }

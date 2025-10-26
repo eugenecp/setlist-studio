@@ -18,22 +18,68 @@ namespace SetlistStudio.Web.Security
         /// <returns>A sanitized user ID safe for logging and storage</returns>
         public static string GetSanitizedUserId(ClaimsPrincipal? user)
         {
-            if (user?.Identity?.IsAuthenticated != true)
+            if (!IsUserAuthenticated(user))
             {
-                return "anonymous";
+                return GetAnonymousUserId();
             }
 
-            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                ?? user.Identity?.Name 
-                ?? "anonymous";
-            
-            if (user.Identity is not null)
+            var rawUserId = ExtractRawUserId(user!);
+            return SanitizeExtractedUserId(rawUserId);
+        }
+
+        /// <summary>
+        /// Checks if the user is authenticated and valid for ID extraction
+        /// </summary>
+        /// <param name="user">The user claims principal to validate</param>
+        /// <returns>True if the user is authenticated, false otherwise</returns>
+        private static bool IsUserAuthenticated(ClaimsPrincipal? user)
+        {
+            return user?.Identity?.IsAuthenticated == true;
+        }
+
+        /// <summary>
+        /// Returns the standard anonymous user identifier
+        /// </summary>
+        /// <returns>The anonymous user ID constant</returns>
+        private static string GetAnonymousUserId()
+        {
+            return "anonymous";
+        }
+
+        /// <summary>
+        /// Extracts the raw user ID from an authenticated user's claims or identity
+        /// </summary>
+        /// <param name="user">The authenticated user claims principal</param>
+        /// <returns>The raw (unsanitized) user ID</returns>
+        private static string ExtractRawUserId(ClaimsPrincipal user)
+        {
+            // Try NameIdentifier claim first (most reliable)
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userIdClaim))
             {
-                userId = userId ?? user.Identity.Name ?? "anonymous";
+                return userIdClaim;
             }
 
+            // Fallback to Identity.Name
+            var identityName = user.Identity?.Name;
+            if (!string.IsNullOrEmpty(identityName))
+            {
+                return identityName;
+            }
+
+            // Final fallback
+            return GetAnonymousUserId();
+        }
+
+        /// <summary>
+        /// Sanitizes the extracted user ID to break taint chains and ensure safe logging
+        /// </summary>
+        /// <param name="rawUserId">The raw user ID to sanitize</param>
+        /// <returns>A sanitized user ID safe for logging</returns>
+        private static string SanitizeExtractedUserId(string rawUserId)
+        {
             // Immediately sanitize the user ID to break taint chains
-            return SecureLoggingHelper.SanitizeUserId(userId) ?? "anonymous";
+            return SecureLoggingHelper.SanitizeUserId(rawUserId) ?? GetAnonymousUserId();
         }
 
         /// <summary>

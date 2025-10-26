@@ -61,26 +61,79 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
 
     public Task<string> GetCompositePartitionKeyAsync(HttpContext httpContext)
     {
-        if (httpContext?.Request == null)
+        if (IsInvalidHttpContext(httpContext))
             return Task.FromResult("anonymous");
 
-        var factors = new List<string>();
+        var factors = CollectPartitionFactors(httpContext);
+        var compositeKey = CreateCompositeKey(factors);
+        var hashedKey = GenerateHashedPartitionKey(compositeKey);
+        
+        return Task.FromResult(hashedKey);
+    }
 
-        // Factor 1: User Identity (highest priority for authenticated users)
+    /// <summary>
+    /// Validates if the HTTP context is suitable for partition key generation
+    /// </summary>
+    /// <param name="httpContext">The HTTP context to validate</param>
+    /// <returns>True if context is invalid, false if valid</returns>
+    private static bool IsInvalidHttpContext(HttpContext? httpContext)
+    {
+        return httpContext?.Request == null;
+    }
+
+    /// <summary>
+    /// Collects all security factors for partition key generation
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing request data</param>
+    /// <returns>List of security factors for partition key composition</returns>
+    private List<string> CollectPartitionFactors(HttpContext httpContext)
+    {
+        var factors = new List<string>();
+        
+        AddUserIdentityFactor(httpContext, factors);
+        AddIpAddressFactor(httpContext, factors);
+        AddSessionIdFactor(httpContext, factors);
+        AddUserAgentFactor(httpContext, factors);
+        AddNetworkSegmentFactor(httpContext, factors);
+        
+        return factors;
+    }
+
+    /// <summary>
+    /// Adds user identity factor to partition key if user is authenticated
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing user information</param>
+    /// <param name="factors">The list of factors to add to</param>
+    private static void AddUserIdentityFactor(HttpContext httpContext, List<string> factors)
+    {
         var userIdentity = httpContext.User?.Identity;
         if (userIdentity?.IsAuthenticated == true && !string.IsNullOrEmpty(userIdentity.Name))
         {
             factors.Add($"user:{userIdentity.Name}");
         }
+    }
 
-        // Factor 2: IP Address (always include for geographical/network tracking)
+    /// <summary>
+    /// Adds IP address factor to partition key for geographical/network tracking
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing connection information</param>
+    /// <param name="factors">The list of factors to add to</param>
+    private void AddIpAddressFactor(HttpContext httpContext, List<string> factors)
+    {
         var clientIp = GetClientIpAddress(httpContext);
         if (!string.IsNullOrEmpty(clientIp))
         {
             factors.Add($"ip:{clientIp}");
         }
+    }
 
-        // Factor 3: Session ID (for session-based tracking)
+    /// <summary>
+    /// Adds session ID factor to partition key with error handling
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing session information</param>
+    /// <param name="factors">The list of factors to add to</param>
+    private static void AddSessionIdFactor(HttpContext httpContext, List<string> factors)
+    {
         try
         {
             var sessionId = httpContext.Session?.Id;
@@ -94,29 +147,58 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
             // Session not configured - skip session-based tracking
             // This is acceptable for enhanced security as we have other factors
         }
+    }
 
-        // Factor 4: User Agent fingerprint (to detect automation/bots)
+    /// <summary>
+    /// Adds User Agent fingerprint factor to detect automation/bots
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing request headers</param>
+    /// <param name="factors">The list of factors to add to</param>
+    private void AddUserAgentFactor(HttpContext httpContext, List<string> factors)
+    {
         var userAgentHash = GetUserAgentFingerprint(httpContext);
         if (!string.IsNullOrEmpty(userAgentHash))
         {
             factors.Add($"ua:{userAgentHash}");
         }
+    }
 
-        // Factor 5: Network segment (subnet-based limiting)
+    /// <summary>
+    /// Adds network segment factor for subnet-based limiting
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing connection information</param>
+    /// <param name="factors">The list of factors to add to</param>
+    private void AddNetworkSegmentFactor(HttpContext httpContext, List<string> factors)
+    {
+        var clientIp = GetClientIpAddress(httpContext);
         var networkSegment = GetNetworkSegment(clientIp);
         if (!string.IsNullOrEmpty(networkSegment))
         {
             factors.Add($"net:{networkSegment}");
         }
+    }
 
-        // Create composite key
-        var compositeKey = string.Join("|", factors);
-        
-        // Hash the composite key for consistent length and privacy
+    /// <summary>
+    /// Creates a composite key from security factors
+    /// </summary>
+    /// <param name="factors">List of security factors to combine</param>
+    /// <returns>Pipe-delimited composite key string</returns>
+    private static string CreateCompositeKey(List<string> factors)
+    {
+        return string.Join("|", factors);
+    }
+
+    /// <summary>
+    /// Generates a hashed partition key for consistent length and privacy
+    /// </summary>
+    /// <param name="compositeKey">The raw composite key to hash</param>
+    /// <returns>Base64-encoded hash truncated for readability</returns>
+    private static string GenerateHashedPartitionKey(string compositeKey)
+    {
         using var sha256 = SHA256.Create();
         var hashedKey = Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(compositeKey)));
         
-        return Task.FromResult(hashedKey[..16]); // Use first 16 characters for readability in logs
+        return hashedKey[..16]; // Use first 16 characters for readability in logs
     }
 
     public async Task<bool> ShouldRequireCaptchaAsync(HttpContext httpContext)
