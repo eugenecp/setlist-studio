@@ -71,7 +71,7 @@ jobs:
     
     # Step 4: .NET-specific vulnerability scanning for NuGet packages
     # Analyzes dependencies for known security vulnerabilities
-    - name: � .NET Vulnerability Scan
+    - name: 🔍 .NET Vulnerability Scan
       run: |
         echo "## 🔒 Security Vulnerability Scan" >> security-report.md
         echo "" >> security-report.md
@@ -151,7 +151,7 @@ jobs:
     
     # Step 9: Filesystem security scanning with Trivy
     # Analyzes project files and dependencies for vulnerabilities
-    - name: � Filesystem Security Scan with Trivy
+    - name: 🗂️ Filesystem Security Scan with Trivy
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'fs'                   # Filesystem scan mode
@@ -202,108 +202,100 @@ jobs:
           --out reports/                 # Output directory for reports
       continue-on-error: true            # Continue to allow threshold enforcement step to handle failures
 
-    # Step 11.1: OWASP ZAP Dynamic Security Scan
-    # Dynamic application security testing against running application
-    - name: 🕷️ OWASP ZAP Dynamic Security Scan
+    # Step 11.1: Start Application for Dynamic Testing
+    # Prepare application for OWASP ZAP dynamic security testing
+    - name: � Start Application for Security Testing
       if: github.event_name != 'schedule' # Skip for scheduled runs to avoid resource usage
       run: |
-        echo "Starting OWASP ZAP dynamic security scan..."
+        echo "Starting application for OWASP ZAP security testing..."
         
         # Start the application in background for testing
-        echo "Starting application for security testing..."
         cd src/SetlistStudio.Web
         # Set security testing environment to bypass strict secret validation
         export ASPNETCORE_ENVIRONMENT=SecurityTesting
         export SECURITY_TESTING=true
         export SKIP_SECRET_VALIDATION=true
-        dotnet run --configuration Release --urls=http://localhost:5000 &
+        nohup dotnet run --configuration Release --urls=http://localhost:5000 > /dev/null 2>&1 &
         APP_PID=$!
+        echo $APP_PID > /tmp/app.pid
         cd ../..
         
         # Wait for application to start and verify it's responding
-        sleep 5
+        sleep 10
         APP_STARTED=false
-        for i in {1..10}; do
+        for i in {1..12}; do
           if curl -f http://localhost:5000/health > /dev/null 2>&1 || curl -f http://localhost:5000/ > /dev/null 2>&1; then
-            echo "Application is ready for testing"
+            echo "✅ Application is ready for testing on http://localhost:5000"
             APP_STARTED=true
+            echo "APP_STARTED=true" >> $GITHUB_ENV
             break
           fi
-          echo "Waiting for application... ($i/10)"
+          echo "Waiting for application... ($i/12)"
           sleep 5
         done
         
-        # Install OWASP ZAP with proper error handling
-        echo "Installing OWASP ZAP..."
-        ZAP_INSTALL_SUCCESS=false
+        if [ "$APP_STARTED" = false ]; then
+          echo "❌ Application failed to start within timeout period"
+          echo "APP_STARTED=false" >> $GITHUB_ENV
+        fi
+      continue-on-error: true
+
+    # Step 11.2: OWASP ZAP Dynamic Security Scan  
+    # Dynamic application security testing using official OWASP ZAP Action
+    - name: 🕷️ OWASP ZAP Dynamic Security Scan
+      if: github.event_name != 'schedule'
+      uses: zaproxy/action-baseline@v0.12.0
+      with:
+        target: 'http://localhost:5000'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a -j -m 2 -T 5 -z "-silent"'
+        allow_issue_writing: false
+        fail_action: false
+      continue-on-error: true
+
+    # Step 11.3: Process ZAP Results and Stop Application
+    # Clean up application process and extract security findings
+    - name: 🧹 Process ZAP Results and Cleanup
+      if: github.event_name != 'schedule'
+      run: |
+        # Stop the application if it was started
+        if [ -f "/tmp/app.pid" ]; then
+          APP_PID=$(cat /tmp/app.pid)
+          kill $APP_PID 2>/dev/null || true
+          rm -f /tmp/app.pid
+          echo "Application stopped (PID: $APP_PID)"
+        fi
         
-        # Download ZAP with detailed error checking and logging
-        echo "Attempting to download ZAP v2.14.0 from GitHub releases..."
-        if wget -v https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz 2>&1 | tee zap-download.log; then
-          echo "✅ ZAP download completed successfully"
-          ls -la ZAP_2.14.0_Linux.tar.gz
+        # Process ZAP results if available
+        if [ -f "report_html.html" ]; then
+          CRITICAL_ISSUES=$(grep -o -i "High\|Critical" report_html.html | wc -l || echo "0")
+          echo "ZAP scan completed. Critical/High issues found: $CRITICAL_ISSUES"
+          echo "ZAP_ISSUES=$CRITICAL_ISSUES" >> $GITHUB_ENV
+          echo "ZAP_STATUS=completed" >> $GITHUB_ENV
           
-          # Extract ZAP with error checking and logging
-          echo "Attempting to extract ZAP archive..."
-          if tar -xzf ZAP_2.14.0_Linux.tar.gz 2>&1 | tee zap-extract.log; then
-            echo "✅ ZAP extraction completed successfully"
-            ls -la ZAP_2.14.0/
-            ZAP_INSTALL_SUCCESS=true
-          else
-            echo "❌ ERROR: Failed to extract ZAP archive (exit code: $?)"
-            echo "Archive file info:"
-            ls -la ZAP_2.14.0_Linux.tar.gz || echo "Archive file not found"
-            echo "Extraction log:"
-            cat zap-extract.log || echo "No extraction log available"
-            echo "ZAP_ISSUES=0" >> $GITHUB_ENV
-            echo "ZAP_STATUS=install_failed" >> $GITHUB_ENV
-          fi
+          # Create summary report
+          echo "### 🕷️ OWASP ZAP Security Scan Results" >> security-report.md
+          echo "- **Critical/High Issues**: $CRITICAL_ISSUES" >> security-report.md
+          echo "- **Target**: http://localhost:5000" >> security-report.md
+          echo "- **Status**: Completed successfully" >> security-report.md
+          echo "" >> security-report.md
+          
+          # Save report as artifact
+          mkdir -p zap-reports
+          cp report_html.html zap-reports/zap-security-report.html 2>/dev/null || echo "No ZAP HTML report to copy"
+          cp report_json.json zap-reports/zap-security-report.json 2>/dev/null || echo "No ZAP JSON report to copy"
         else
-          download_exit_code=$?
-          echo "❌ ERROR: Failed to download ZAP from GitHub releases (exit code: $download_exit_code)"
-          echo "Download attempt details:"
-          echo "- URL: https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz"
-          echo "- Exit code: $download_exit_code"
-          echo "- Working directory: $(pwd)"
-          echo "- Available disk space:"
-          df -h .
-          echo "- Network connectivity test:"
-          curl -I https://github.com || echo "GitHub connectivity failed"
-          echo "Download log:"
-          cat zap-download.log || echo "No download log available"
+          echo "ZAP report not found - scan may not have completed"
           echo "ZAP_ISSUES=0" >> $GITHUB_ENV
-          echo "ZAP_STATUS=download_failed" >> $GITHUB_ENV
-        fi
-        
-        # Only proceed with scan if both app started and ZAP installed successfully
-        if [ "$APP_STARTED" = true ] && [ "$ZAP_INSTALL_SUCCESS" = true ]; then
-          echo "Running ZAP baseline security scan..."
-          ./ZAP_2.14.0/zap.sh -cmd -quickurl http://localhost:5000 -quickout zap-report.html -quickprogress > zap-scan.log 2>&1 || echo "ZAP scan completed with findings"
+          echo "ZAP_STATUS=no_report" >> $GITHUB_ENV
           
-          # Process ZAP results and set environment variable for later use
-          if [ -f "zap-report.html" ]; then
-            CRITICAL_ISSUES=$(grep -o -i "High\|Critical" zap-report.html | wc -l || echo "0")
-            echo "ZAP scan completed. Critical/High issues found: $CRITICAL_ISSUES"
-            echo "ZAP_ISSUES=$CRITICAL_ISSUES" >> $GITHUB_ENV
-            echo "ZAP_STATUS=completed" >> $GITHUB_ENV
-          else
-            echo "ZAP report not generated, scan may have failed"
-            echo "ZAP_ISSUES=0" >> $GITHUB_ENV
-            echo "ZAP_STATUS=scan_failed" >> $GITHUB_ENV
-          fi
-        elif [ "$APP_STARTED" = false ] && [ "$ZAP_INSTALL_SUCCESS" = true ]; then
-          echo "Application failed to start - cannot run ZAP scan"
-          echo "ZAP_ISSUES=0" >> $GITHUB_ENV
-          echo "ZAP_STATUS=app_failed" >> $GITHUB_ENV
-        elif [ "$APP_STARTED" = true ] && [ "$ZAP_INSTALL_SUCCESS" = false ]; then
-          echo "ZAP installation failed - cannot run security scan"
-        # If neither started properly, status already set above during installation
+          echo "### 🕷️ OWASP ZAP Security Scan Results" >> security-report.md
+          echo "- **Status**: Scan did not complete or report not generated" >> security-report.md
+          echo "" >> security-report.md
         fi
         
-        # Stop the application
-        kill $APP_PID 2>/dev/null || true
-        echo "OWASP ZAP scan process completed"
-      continue-on-error: true # Continue to allow summary step to handle failures properly
+        echo "OWASP ZAP security testing process completed"
+      continue-on-error: true
 
     # Step 11.2: Security Configuration Compliance Audit
     # Verify implementation of security best practices in source code
@@ -554,8 +546,9 @@ jobs:
           ./security-report.md
           ./security-summary.md
           ./trufflehog-results.json
-          ./zap-report.html
-          ./zap-scan.log
+          ./zap-reports/
+          ./report_html.html
+          ./report_json.json
           ./zap-download.log
           ./zap-extract.log
           ./config-audit.log

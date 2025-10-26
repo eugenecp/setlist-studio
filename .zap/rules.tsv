@@ -1,0 +1,133 @@
+# OWASP ZAP Security Rules Configuration for Setlist Studio
+# 
+# This file configures security scanning rules for the Setlist Studio application.
+# Rules are defined in TSV (Tab-Separated Values) format.
+# 
+# Format: RULE_ID	THRESHOLD	[DESCRIPTION]
+# 
+# Common Rule IDs:
+# 10016	- Web Browser XSS Protection Not Enabled  
+# 10017	- Cross-Domain JavaScript Source File Inclusion
+# 10019	- Content-Type Header Missing
+# 10020	- X-Frame-Options Header Scanner
+# 10021	- X-Content-Type-Options Header Missing
+# 10023	- Information Disclosure - Debug Error Messages
+# 10024	- Information Disclosure - Sensitive Information in URL
+# 10025	- Information Disclosure - Sensitive Information in HTTP Referrer Header
+# 10026	- HTTP Parameter Override
+# 10027	- Information Disclosure - Suspicious Comments
+# 10028	- Open Redirect
+# 10029	- Cookie No HttpOnly Flag
+# 10030	- User Controllable Charset
+# 10031	- User Controllable HTML Element Attribute (Potential XSS)
+# 10032	- Viewstate Scanner
+# 10033	- Directory Browsing
+# 10034	- Heartbleed OpenSSL Vulnerability
+# 10035	- Strict-Transport-Security Header Scanner
+# 10036	- Server Leaks Version Information via "Server" HTTP Response Header Field
+# 10037	- Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s)
+# 10038	- Content Security Policy (CSP) Header Not Set
+# 10040	- Secure Pages Include Mixed Content
+# 10041	- HTTP to HTTPS Insecure Transition in Form Post
+# 10042	- HTTPS to HTTP Insecure Transition in Form Post
+# 10043	- User Controllable JavaScript Event (XSS)
+# 10044	- Big Redirect Detected (Potential Sensitive Information Leak)
+# 10045	- Source Code Disclosure - /WEB-INF folder
+# 10046	- Source Code Disclosure - Git
+# 10047	- Source Code Disclosure - SVN
+# 10048	- Remote Code Execution - Shell Shock
+# 10049	- Content Cacheability
+# 10050	- Retrieved from Cache
+# 10051	- Relative Path Confusion
+# 10052	- X-ChromeLogger-Data (XCOLD) Header Information Leak
+# 10053	- Apache Range Header DoS (CVE-2011-3192)
+# 10054	- Cookie Without SameSite Attribute
+# 10055	- CSP Scanner
+# 10056	- X-Debug-Token Information Leak
+# 10057	- Username Hash Found
+# 10058	- GET for POST
+# 10059	- PII Scanner
+# 10060	- Permissions Policy Header Not Set
+# 10061	- X-AspNet-Version Response Header Scanner
+# 10062	- PII Disclosure
+# 10063	- Permissions Policy Header Scanner
+# 10095	- Backup File Disclosure
+# 10096	- Timestamp Disclosure
+# 10097	- Hash Disclosure
+# 10098	- Cross-Domain Misconfiguration
+# 10099	- Source Code Disclosure
+
+# Threshold Levels:
+# OFF    - Disable this rule completely
+# LOW    - Low threshold (more sensitive, more false positives)  
+# MEDIUM - Medium threshold (balanced)
+# HIGH   - High threshold (less sensitive, fewer false positives)
+
+# Security Headers - High Priority (MEDIUM threshold for balanced detection)
+10020	MEDIUM	# X-Frame-Options Header Scanner
+10021	MEDIUM	# X-Content-Type-Options Header Missing  
+10038	MEDIUM	# Content Security Policy (CSP) Header Not Set
+10035	MEDIUM	# Strict-Transport-Security Header Scanner
+10054	MEDIUM	# Cookie Without SameSite Attribute
+10060	MEDIUM	# Permissions Policy Header Not Set
+
+# Information Disclosure - High Priority (MEDIUM threshold)
+10023	MEDIUM	# Information Disclosure - Debug Error Messages
+10027	MEDIUM	# Information Disclosure - Suspicious Comments
+10036	MEDIUM	# Server Leaks Version Information
+10037	MEDIUM	# Server Leaks Information via X-Powered-By
+10061	MEDIUM	# X-AspNet-Version Response Header Scanner
+10056	MEDIUM	# X-Debug-Token Information Leak
+
+# XSS and Injection - Critical Priority (LOW threshold for maximum detection)
+10031	LOW	# User Controllable HTML Element Attribute (Potential XSS)
+10043	LOW	# User Controllable JavaScript Event (XSS)
+10016	MEDIUM	# Web Browser XSS Protection Not Enabled
+
+# Authentication and Session Management - High Priority (MEDIUM threshold)
+10029	MEDIUM	# Cookie No HttpOnly Flag
+10030	MEDIUM	# User Controllable Charset
+
+# File and Source Disclosure - High Priority (MEDIUM threshold)  
+10033	MEDIUM	# Directory Browsing
+10045	MEDIUM	# Source Code Disclosure - /WEB-INF folder
+10046	MEDIUM	# Source Code Disclosure - Git
+10095	MEDIUM	# Backup File Disclosure
+10099	MEDIUM	# Source Code Disclosure
+
+# Transport Security - Critical Priority (LOW threshold)
+10040	LOW	# Secure Pages Include Mixed Content
+10041	LOW	# HTTP to HTTPS Insecure Transition in Form Post
+10042	LOW	# HTTPS to HTTP Insecure Transition in Form Post
+
+# Open Redirect and CSRF - High Priority (MEDIUM threshold)
+10028	MEDIUM	# Open Redirect  
+10058	MEDIUM	# GET for POST
+
+# Privacy and Data Protection - Medium Priority (HIGH threshold to reduce noise)
+10059	HIGH	# PII Scanner
+10062	HIGH	# PII Disclosure
+10096	HIGH	# Timestamp Disclosure
+10097	HIGH	# Hash Disclosure
+
+# Caching and Performance - Low Priority (HIGH threshold)
+10049	HIGH	# Content Cacheability
+10050	HIGH	# Retrieved from Cache
+
+# Less Critical Issues - Low Priority (HIGH threshold to reduce noise)
+10019	HIGH	# Content-Type Header Missing
+10024	HIGH	# Information Disclosure - Sensitive Information in URL
+10025	HIGH	# Information Disclosure - Sensitive Information in HTTP Referrer Header
+10026	HIGH	# HTTP Parameter Override
+10032	HIGH	# Viewstate Scanner
+10044	HIGH	# Big Redirect Detected
+10051	HIGH	# Relative Path Confusion
+10052	HIGH	# X-ChromeLogger-Data Header Information Leak
+10057	HIGH	# Username Hash Found
+10098	HIGH	# Cross-Domain Misconfiguration
+
+# Disable noisy/less relevant rules for this application type
+10017	OFF	# Cross-Domain JavaScript Source File Inclusion (can be noisy for legitimate CDN usage)
+10034	OFF	# Heartbleed OpenSSL Vulnerability (handled at infrastructure level)
+10048	OFF	# Remote Code Execution - Shell Shock (not applicable to .NET applications)
+10053	OFF	# Apache Range Header DoS (not applicable to .NET applications)
