@@ -1,0 +1,309 @@
+# Docker Swarm Stack Configuration for Setlist Studio
+# Provides load balancing and auto-scaling with Docker Swarm mode
+# Deploy with: docker stack deploy -c docker-swarm.yml setlist-studio
+
+version: '3.8'
+
+services:
+  # Redis for distributed session storage
+  redis:
+    image: redis:7.2.4-alpine
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-setlist-redis-swarm-password}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    networks:
+      - setlist-backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      labels:
+        - "com.setliststudio.service=redis"
+        - "com.setliststudio.component=cache"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Setlist Studio Web Application
+  web:
+    image: setlist-studio:latest
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - LoadBalancing__IsLoadBalanced=true
+      - Session__Provider=Redis
+      - ConnectionStrings__Redis=redis:6379,password=${REDIS_PASSWORD:-setlist-redis-swarm-password}
+      - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION:-Data Source=/app/data/setliststudio.db}
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
+      - Authentication__Microsoft__ClientId=${MICROSOFT_CLIENT_ID}
+      - Authentication__Microsoft__ClientSecret=${MICROSOFT_CLIENT_SECRET}
+      - Authentication__Facebook__AppId=${FACEBOOK_APP_ID}
+      - Authentication__Facebook__AppSecret=${FACEBOOK_APP_SECRET}
+    volumes:
+      - app-data:/app/data
+    networks:
+      - setlist-backend
+      - setlist-frontend
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    depends_on:
+      - redis
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.role == worker
+        preferences:
+          - spread: node.id
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        delay: 30s
+        monitor: 60s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.setlist-studio.rule=Host(`setliststudio.com`) || Host(`www.setliststudio.com`)"
+        - "traefik.http.routers.setlist-studio.entrypoints=websecure"
+        - "traefik.http.routers.setlist-studio.tls.certresolver=letsencrypt"
+        - "traefik.http.services.setlist-studio.loadbalancer.server.port=8080"
+        - "traefik.http.services.setlist-studio.loadbalancer.sticky.cookie=true"
+        - "traefik.http.services.setlist-studio.loadbalancer.sticky.cookie.name=setlist-studio-server"
+        - "traefik.http.services.setlist-studio.loadbalancer.sticky.cookie.secure=true"
+        - "traefik.http.services.setlist-studio.loadbalancer.sticky.cookie.httponly=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.frameDeny=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.contentTypeNosniff=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.browserXssFilter=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.forceSTSHeader=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.stsSeconds=31536000"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.stsIncludeSubdomains=true"
+        - "traefik.http.middlewares.setlist-studio-headers.headers.stsPreload=true"
+        - "traefik.http.routers.setlist-studio.middlewares=setlist-studio-headers"
+        - "com.setliststudio.service=web-app"
+        - "com.setliststudio.environment=production"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Traefik Load Balancer and Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=setlist-frontend
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=security@setliststudio.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --log.level=WARN
+      - --accesslog=false
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addEntryPointsLabels=true
+      - --metrics.prometheus.addServicesLabels=true
+      - --global.sendAnonymousUsage=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-ssl:/letsencrypt"
+    networks:
+      - setlist-frontend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=false"
+        - "com.setliststudio.service=load-balancer"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus for monitoring and auto-scaling metrics
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    configs:
+      - source: prometheus-config
+        target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheus-data:/prometheus
+    networks:
+      - setlist-backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "com.setliststudio.service=monitoring"
+
+  # Docker Swarm Auto-scaler (custom service for scaling based on metrics)
+  autoscaler:
+    image: alpine:3.18
+    command: >
+      sh -c '
+      apk add --no-cache curl jq &&
+      while true; do
+        # Get current replica count
+        CURRENT_REPLICAS=$$(docker service inspect setlist-studio_web --format "{{.Spec.Mode.Replicated.Replicas}}")
+        
+        # Get CPU and memory metrics from Prometheus (simplified example)
+        CPU_USAGE=$$(curl -s "http://prometheus:9090/api/v1/query?query=avg(rate(container_cpu_usage_seconds_total[5m]))*100" | jq -r ".data.result[0].value[1] // 0")
+        MEMORY_USAGE=$$(curl -s "http://prometheus:9090/api/v1/query?query=avg(container_memory_usage_bytes/container_spec_memory_limit_bytes)*100" | jq -r ".data.result[0].value[1] // 0")
+        
+        echo "Current replicas: $$CURRENT_REPLICAS, CPU: $$CPU_USAGE%, Memory: $$MEMORY_USAGE%"
+        
+        # Scale up if CPU > 70% or Memory > 80%
+        if [ "$$(echo "$$CPU_USAGE > 70 || $$MEMORY_USAGE > 80" | bc -l)" = "1" ] && [ "$$CURRENT_REPLICAS" -lt "10" ]; then
+          NEW_REPLICAS=$$((CURRENT_REPLICAS + 1))
+          echo "Scaling up to $$NEW_REPLICAS replicas"
+          docker service scale setlist-studio_web=$$NEW_REPLICAS
+        # Scale down if CPU < 30% and Memory < 40%
+        elif [ "$$(echo "$$CPU_USAGE < 30 && $$MEMORY_USAGE < 40" | bc -l)" = "1" ] && [ "$$CURRENT_REPLICAS" -gt "2" ]; then
+          NEW_REPLICAS=$$((CURRENT_REPLICAS - 1))
+          echo "Scaling down to $$NEW_REPLICAS replicas"
+          docker service scale setlist-studio_web=$$NEW_REPLICAS
+        fi
+        
+        sleep 60
+      done'
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - setlist-backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+      labels:
+        - "com.setliststudio.service=autoscaler"
+    depends_on:
+      - prometheus
+      - web
+
+networks:
+  setlist-frontend:
+    driver: overlay
+    attachable: true
+  setlist-backend:
+    driver: overlay
+    internal: true
+
+volumes:
+  app-data:
+    driver: local
+  redis-data:
+    driver: local
+  traefik-ssl:
+    driver: local
+  prometheus-data:
+    driver: local
+
+configs:
+  prometheus-config:
+    external: true

@@ -1,0 +1,120 @@
+# Prometheus Configuration for Setlist Studio Load Balancing Monitoring
+# Collects metrics from application instances, Redis, and NGINX for auto-scaling decisions
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'setlist-studio'
+    environment: 'production'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alert_rules.yml"
+  - "recording_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Setlist Studio Web Application instances
+  - job_name: 'setlist-studio-web'
+    static_configs:
+      - targets: 
+        - 'setliststudio-web-1:8080'
+        - 'setliststudio-web-2:8080'
+        - 'setliststudio-web-3:8080'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__address__]
+        regex: '(.*):(.*)'
+        target_label: __address__
+        replacement: '${1}:${2}'
+      - target_label: service
+        replacement: 'setlist-studio-web'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'dotnet_.*'
+        target_label: __name__
+        replacement: 'setlist_studio_${1}'
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # NGINX monitoring (if nginx-prometheus-exporter is used)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-lb:9113']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Docker container metrics (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Node exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Traefik load balancer metrics (for Docker Swarm setup)
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 15d
+    retention.size: 10GB
+    wal-compression: true
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: "https://prometheus-remote-storage.example.com/api/v1/write"
+#     basic_auth:
+#       username: "setlist-studio"
+#       password: "your-password"
+
+# Remote read configuration (optional)
+# remote_read:
+#   - url: "https://prometheus-remote-storage.example.com/api/v1/read"
+#     basic_auth:
+#       username: "setlist-studio"
+#       password: "your-password"

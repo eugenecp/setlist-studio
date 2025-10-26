@@ -1,0 +1,224 @@
+# PostgreSQL Deployment for Setlist Studio Load Balancing
+# Provides scalable database backend with connection pooling
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: setlist-studio-postgres
+  namespace: setlist-studio
+  labels:
+    app: setlist-studio-postgres
+    component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: setlist-studio-postgres
+  template:
+    metadata:
+      labels:
+        app: setlist-studio-postgres
+        component: database
+    spec:
+      serviceAccountName: setlist-studio-postgres-sa
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: postgres:16.1-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+          protocol: TCP
+        env:
+        - name: POSTGRES_DB
+          value: "setliststudio"
+        - name: POSTGRES_USER
+          value: "setlist_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: setlist-studio-secrets
+              key: postgres-password
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+        - name: POSTGRES_MAX_CONNECTIONS
+          value: "200"
+        - name: POSTGRES_SHARED_BUFFERS
+          value: "256MB"
+        - name: POSTGRES_EFFECTIVE_CACHE_SIZE
+          value: "1GB"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+            ephemeral-storage: "10Gi"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - setlist_user
+            - -d
+            - setliststudio
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - setlist_user
+            - -d
+            - setliststudio
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+          readOnly: true
+        - name: postgres-config
+          mountPath: /etc/postgresql/pg_hba.conf
+          subPath: pg_hba.conf
+          readOnly: true
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d/init-db.sql
+          subPath: init-db.sql
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # PostgreSQL needs write access to data directory
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: setlist-studio-postgres-pvc
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+          defaultMode: 0444
+      - name: postgres-init
+        configMap:
+          name: postgres-init
+          defaultMode: 0444
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      nodeSelector:
+        kubernetes.io/os: linux
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: setlist-studio-postgres-service
+  namespace: setlist-studio
+  labels:
+    app: setlist-studio-postgres
+    component: database
+spec:
+  selector:
+    app: setlist-studio-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: setlist-studio-postgres-sa
+  namespace: setlist-studio
+  labels:
+    app: setlist-studio-postgres
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: setlist-studio-postgres-pvc
+  namespace: setlist-studio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: setlist-studio
+data:
+  postgresql.conf: |
+    # PostgreSQL Configuration for Setlist Studio
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    wal_buffers = 16MB
+    checkpoint_completion_target = 0.9
+    wal_compression = on
+    max_wal_size = 1GB
+    min_wal_size = 80MB
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    log_connections = on
+    log_disconnections = on
+    log_min_duration_statement = 1000
+    deadlock_timeout = 1s
+    timezone = 'UTC'
+    shared_preload_libraries = 'pg_stat_statements'
+    pg_stat_statements.track = all
+    ssl = off
+    password_encryption = 'scram-sha-256'
+    
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            scram-sha-256
+    host    all             all             ::1/128                 scram-sha-256
+    host    all             all             10.0.0.0/8              scram-sha-256
+    host    setliststudio   setlist_user    10.0.0.0/8             scram-sha-256
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: setlist-studio
+data:
+  init-db.sql: |
+    -- PostgreSQL Initialization for Setlist Studio
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+    CREATE EXTENSION IF NOT EXISTS "btree_gin";
+    
+    ALTER DATABASE setliststudio SET timezone = 'UTC';
+    GRANT ALL PRIVILEGES ON DATABASE setliststudio TO setlist_user;
+    GRANT ALL PRIVILEGES ON SCHEMA public TO setlist_user;
+    ALTER USER setlist_user CONNECTION LIMIT 50;

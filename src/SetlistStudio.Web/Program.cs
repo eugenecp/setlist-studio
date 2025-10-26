@@ -75,7 +75,10 @@ try
 
     // Add services to the container
     builder.Services.AddRazorPages();
-    builder.Services.AddServerSideBlazor();
+    
+    // Configure Blazor Server with load balancing support
+    ConfigureBlazorServerLoadBalancing(builder.Services, builder.Configuration);
+    
     builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -2061,5 +2064,103 @@ public partial class Program
         Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
         Log.Information("URLs: {Urls}", Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
         Log.Information("Container: {IsContainer}", Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
+    }
+
+    /// <summary>
+    /// Configures Blazor Server with load balancing support using Redis for session storage
+    /// </summary>
+    /// <param name="services">The service collection</param>
+    /// <param name="configuration">The configuration instance</param>
+    static void ConfigureBlazorServerLoadBalancing(IServiceCollection services, IConfiguration configuration)
+    {
+        var redisConnection = configuration.GetConnectionString("Redis");
+        var isLoadBalanced = configuration.GetValue<bool>("LoadBalancing__IsLoadBalanced", false);
+        
+        Log.Information("Configuring Blazor Server - Load Balanced: {IsLoadBalanced}, Redis: {HasRedis}", 
+            isLoadBalanced, !string.IsNullOrEmpty(redisConnection));
+
+        if (isLoadBalanced && !string.IsNullOrEmpty(redisConnection))
+        {
+            // Configure Redis for distributed session storage
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+                options.InstanceName = "SetlistStudio";
+            });
+
+            // Configure session with Redis backing
+            services.AddSession(options =>
+            {
+                options.IdleTimeout = TimeSpan.FromMinutes(30);
+                options.Cookie.Name = ".SetlistStudio.Session";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.IsEssential = true;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+            });
+
+            // Configure SignalR with Redis backplane for load balancing
+            services.AddSignalR(options =>
+            {
+                options.EnableDetailedErrors = false;
+                options.MaximumReceiveMessageSize = 32 * 1024; // 32KB max message size
+                options.StreamBufferCapacity = 10;
+                options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+                options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+                options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            })
+            .AddStackExchangeRedis(redisConnection, options =>
+            {
+                options.Configuration.ChannelPrefix = "SetlistStudio";
+            });
+
+            // Configure Blazor Server with sticky sessions
+            services.AddServerSideBlazor(options =>
+            {
+                options.DetailedErrors = false;
+                options.DisconnectedCircuitMaxRetained = 100;
+                options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+                options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
+                options.MaxBufferedUnacknowledgedRenderBatches = 10;
+            });
+
+            Log.Information("Blazor Server configured with Redis backplane for load balancing");
+        }
+        else
+        {
+            // Standard single-instance configuration
+            services.AddSignalR(options =>
+            {
+                options.EnableDetailedErrors = false;
+                options.MaximumReceiveMessageSize = 32 * 1024;
+                options.StreamBufferCapacity = 10;
+                options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+                options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+                options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            });
+
+            services.AddServerSideBlazor(options =>
+            {
+                options.DetailedErrors = false;
+                options.DisconnectedCircuitMaxRetained = 100;
+                options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+                options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
+                options.MaxBufferedUnacknowledgedRenderBatches = 10;
+            });
+
+            // Use in-memory session for single instance
+            services.AddDistributedMemoryCache();
+            services.AddSession(options =>
+            {
+                options.IdleTimeout = TimeSpan.FromMinutes(30);
+                options.Cookie.Name = ".SetlistStudio.Session";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.IsEssential = true;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+            });
+
+            Log.Information("Blazor Server configured for single instance operation");
+        }
     }
 }
