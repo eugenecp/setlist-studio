@@ -131,9 +131,12 @@ public class CspNonceServiceTests
         _cspNonceService.ScriptNonce = null;
         _cspNonceService.StyleNonce = null;
 
-        // Assert
-        _cspNonceService.ScriptNonce.Should().BeNull();
-        _cspNonceService.StyleNonce.Should().BeNull();
+        // Assert - Store in variables to avoid direct access after null assignment
+        var scriptNonce = _cspNonceService.ScriptNonce;
+        var styleNonce = _cspNonceService.StyleNonce;
+        
+        scriptNonce.Should().BeNull();
+        styleNonce.Should().BeNull();
     }
 
     #endregion

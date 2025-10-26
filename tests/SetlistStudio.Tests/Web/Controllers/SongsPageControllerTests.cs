@@ -116,9 +116,10 @@ public class SongsPageControllerTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
-        var message = okResult!.Value  as string;message!.Should().NotBeNull();
-        message.Should().Contain("Create song page");
-        message.Should().Contain("authenticated");
+        var message = okResult!.Value as string;
+        message!.Should().NotBeNull();
+        message!.Should().Contain("Create song page");
+        message!.Should().Contain("authenticated");
     }
 
     [Fact]
@@ -198,9 +199,10 @@ public class SongsPageControllerTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
-        var message = okResult!.Value  as string;message!.Should().NotBeNull();
-        message.Should().Contain("Songs index page");
-        message.Should().Contain("authenticated");
+        var message = okResult!.Value as string;
+        message!.Should().NotBeNull();
+        message!.Should().Contain("Songs index page");
+        message!.Should().Contain("authenticated");
     }
 
     [Fact]

@@ -138,7 +138,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             okResult!.Value.Should().NotBeNull();
             
             // Use reflection to access the anonymous type properties
-            var responseValue = okResult.Value!;
+            var responseValue = okResult!.Value!;
             var responseType = responseValue.GetType();
             
             var queryProperty = responseType.GetProperty("query");
@@ -192,7 +192,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<OkObjectResult>();
             var okResult = result as OkObjectResult;
-            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult.Value);
+            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult!.Value);
             totalCount.Should().Be(1); // Should find "The Beatles"
         }
 
@@ -208,7 +208,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<OkObjectResult>();
             var okResult = result as OkObjectResult;
-            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult.Value);
+            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult!.Value);
             totalCount.Should().Be(0);
         }
 
@@ -224,7 +224,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<OkObjectResult>();
             var okResult = result as OkObjectResult;
-            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult.Value);
+            var totalCount = okResult!.Value!.GetType().GetProperty("totalCount")!.GetValue(okResult!.Value);
             totalCount.Should().Be(2); // Should find "The Beatles" and "The Rolling Stones"
         }
 

@@ -65,6 +65,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(500);
             objectResult.Value.Should().BeEquivalentTo(new { error = "Service temporarily unavailable" });
         }
@@ -115,6 +116,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(500);
             objectResult.Value.Should().BeEquivalentTo(new { error = "An error occurred while retrieving songs" });
         }
@@ -214,6 +216,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(503);
             objectResult.Value.Should().BeEquivalentTo(new { error = "Song service temporarily unavailable" });
         }
@@ -240,6 +243,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(500);
             objectResult.Value.Should().BeEquivalentTo(new { error = "An error occurred while creating the song" });
         }
@@ -311,6 +315,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(503);
             objectResult.Value.Should().BeEquivalentTo(new { error = "Search service temporarily unavailable" });
         }
@@ -329,6 +334,7 @@ namespace SetlistStudio.Tests.Web.Controllers
             // Assert
             result.Should().BeOfType<ObjectResult>();
             var objectResult = result as ObjectResult;
+            objectResult.Should().NotBeNull();
             objectResult!.StatusCode.Should().Be(500);
             objectResult.Value.Should().BeEquivalentTo(new { error = "An error occurred while searching songs" });
         }

@@ -482,9 +482,11 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
 
         // Assert
         result.Should().NotBeNull();
-        var okResult = result.Result  as Microsoft.AspNetCore.Mvc.OkObjectResult;okResult!.Should().NotBeNull();
+        var okResult = result.Result as Microsoft.AspNetCore.Mvc.OkObjectResult;
+        okResult!.Should().NotBeNull();
 
-        var dashboard = okResult!.Value  as SecurityDashboard;dashboard!.Should().NotBeNull();
+        var dashboard = okResult!.Value as SecurityDashboard;
+        dashboard!.Should().NotBeNull();
         dashboard!.ThreatLevel.Should().Be("MEDIUM");
         dashboard.SecurityScore.Should().Be(78.5);
         dashboard.TopAttackingIPs.Should().Contain("192.168.1.100");
@@ -614,7 +616,9 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
 
         // Assert
         result.Should().NotBeNull();
-        var badRequestResult = result.Result as BadRequestObjectResult;badRequestResult.Should().NotBeNull();badRequestResult!.Value.Should().Be("Start time cannot be after end time");
+        var badRequestResult = result.Result as BadRequestObjectResult;
+        badRequestResult.Should().NotBeNull();
+        badRequestResult!.Value.Should().Be("Start time cannot be after end time");
 
         _output.WriteLine("✓ Invalid time range properly rejected");
     }
@@ -649,10 +653,12 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
 
         // Assert
         result.Should().NotBeNull();
-        var objectResult = result.Result  as ObjectResult;objectResult!.Should().NotBeNull();
+        var objectResult = result.Result as ObjectResult;
+        objectResult!.Should().NotBeNull();
         objectResult!.StatusCode.Should().Be(200);
 
-        var metrics = objectResult.Value  as DetailedSecurityMetrics;metrics!.Should().NotBeNull();
+        var metrics = objectResult.Value as DetailedSecurityMetrics;
+        metrics!.Should().NotBeNull();
 
         // Verify service was called with adjusted time
         mockService.Verify(s => s.GetDetailedMetrics(
@@ -760,9 +766,11 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
             return;
         }
         
-        var okResult = result.Result  as OkObjectResult;okResult!.Should().NotBeNull();
+        var okResult = result.Result as OkObjectResult;
+        okResult!.Should().NotBeNull();
         
-        var dashboard = okResult!.Value  as SecurityDashboard;dashboard!.Should().NotBeNull();
+        var dashboard = okResult!.Value as SecurityDashboard;
+        dashboard!.Should().NotBeNull();
         dashboard!.ThreatLevel.Should().Be("CRITICAL");
         dashboard.SecurityScore.Should().Be(65.0);
         dashboard.SystemStatus.Should().Be("UNDER_ATTACK");
@@ -963,11 +971,13 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
         _output.WriteLine($"Result type: {result.Result?.GetType()?.Name}");
         
         // Health endpoint allows anonymous access, so should return OK result directly
-        var objectResult = result.Result  as ObjectResult;objectResult!.Should().NotBeNull("Expected ObjectResult but got " + result?.Result?.GetType()?.Name);
+        var objectResult = result.Result as ObjectResult;
+        objectResult!.Should().NotBeNull("Expected ObjectResult but got " + result?.Result?.GetType()?.Name);
         objectResult!.StatusCode.Should().Be(200);
         
         // The type is from the Web.Controllers namespace, not locally defined
-        var health = objectResult.Value  as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;health!.Should().NotBeNull();
+        var health = objectResult.Value as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;
+        health!.Should().NotBeNull();
         health!.Status.Should().Be("Warning");
         health.Details.Should().Contain("No recent security events detected");
 
@@ -999,10 +1009,12 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
         var result = controller.GetHealth();
 
         // Assert
-        var statusCodeResult = result.Result  as ObjectResult;statusCodeResult!.Should().NotBeNull();
+        var statusCodeResult = result.Result as ObjectResult;
+        statusCodeResult!.Should().NotBeNull();
         statusCodeResult!.StatusCode.Should().Be(503);
         
-        var health = statusCodeResult.Value  as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;health!.Should().NotBeNull();
+        var health = statusCodeResult.Value as SetlistStudio.Web.Controllers.SecurityMonitoringHealth;
+        health!.Should().NotBeNull();
         health!.Status.Should().Be("Degraded");
         health.Details.Should().Be("Security metrics service temporarily unavailable");
 
@@ -1146,7 +1158,8 @@ public class SecurityMetricsControllerTests : IClassFixture<TestWebApplicationFa
         var result = controller.RecordSecurityEvent(request);
 
         // Assert
-        var statusCodeResult = result  as ObjectResult;statusCodeResult!.Should().NotBeNull();
+        var statusCodeResult = result as ObjectResult;
+        statusCodeResult!.Should().NotBeNull();
         statusCodeResult!.StatusCode.Should().Be(503);
         statusCodeResult.Value.Should().Be("Security event recording temporarily unavailable");
 

@@ -99,6 +99,7 @@ public class UsersControllerAdvancedTests
         // Assert
         result.Should().BeOfType<ObjectResult>();
         var objectResult = result as ObjectResult;
+        objectResult.Should().NotBeNull();
         objectResult!.StatusCode.Should().Be(503);
         objectResult.Value.Should().Be("Service temporarily unavailable");
         
@@ -138,6 +139,7 @@ public class UsersControllerAdvancedTests
         // Assert
         result.Should().BeOfType<ObjectResult>();
         var objectResult = result as ObjectResult;
+        objectResult.Should().NotBeNull();
         objectResult!.StatusCode.Should().Be(500);
         objectResult.Value.Should().Be("Internal server error");
         
@@ -193,7 +195,7 @@ public class UsersControllerAdvancedTests
         mockIdentity.SetupGet(i => i.IsAuthenticated).Returns(true);
         
         var mockClaimsPrincipal = new Mock<ClaimsPrincipal>(mockIdentity.Object);
-        mockClaimsPrincipal.SetupGet(p => p.Claims).Returns((IEnumerable<Claim>)null!);
+        mockClaimsPrincipal.SetupGet(p => p.Claims).Returns((IEnumerable<Claim>?)null!);
 
         _controller.ControllerContext = new ControllerContext
         {
@@ -239,6 +241,7 @@ public class UsersControllerAdvancedTests
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
         var profile = okResult!.Value;
 
         var profileType = profile!.GetType();

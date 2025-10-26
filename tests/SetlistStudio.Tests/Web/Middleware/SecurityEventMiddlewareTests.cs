@@ -482,10 +482,8 @@ public class SecurityEventMiddlewareTests
     {
         // This test is skipped because it requires a genuine 10+ second delay to trigger the slow request detection.
         // The slow request functionality is covered by integration tests instead.
-        // Arrange
-        var context = CreateHttpContext("/slow");
         
-        // Act & Assert - Test skipped
+        // Act & Assert - Test skipped (no setup needed for skipped test)
         await Task.CompletedTask;
     }
 
