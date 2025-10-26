@@ -117,81 +117,7 @@ try
     ConfigureCors(builder.Services, builder.Environment);
 
     // Configure database with connection pooling and read replica support
-    builder.Services.AddSingleton<IDatabaseConfiguration>(provider =>
-    {
-        var config = provider.GetRequiredService<IConfiguration>();
-        var logger = provider.GetRequiredService<ILogger<DatabaseConfiguration>>();
-        return new DatabaseConfiguration(config, logger);
-    });
-
-    builder.Services.AddSingleton<DatabaseProviderService>(provider =>
-    {
-        var config = provider.GetRequiredService<IDatabaseConfiguration>();
-        var logger = provider.GetRequiredService<ILogger<DatabaseProviderService>>();
-        return new DatabaseProviderService(config, logger);
-    });
-
-    // Configure write context (primary database)
-    builder.Services.AddDbContext<SetlistStudioDbContext>((serviceProvider, options) =>
-    {
-        var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
-        var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
-        
-        // Handle different providers appropriately
-        if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
-        {
-            // For SQLite/InMemory, use traditional configuration since Web project has these packages
-            var connectionString = databaseConfig.WriteConnectionString;
-            ConfigureDatabaseProvider(options, connectionString);
-        }
-        else
-        {
-            // For PostgreSQL/SQL Server, configure with migrations assembly
-            if (databaseConfig.Provider == DatabaseProvider.PostgreSQL)
-            {
-                options.UseNpgsql(databaseConfig.WriteConnectionString, npgsqlOptions =>
-                {
-                    npgsqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
-                    npgsqlOptions.MigrationsAssembly("SetlistStudio.Web");
-                    npgsqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 3,
-                        maxRetryDelay: TimeSpan.FromSeconds(5),
-                        errorCodesToAdd: null);
-                });
-            }
-            else if (databaseConfig.Provider == DatabaseProvider.SqlServer)
-            {
-                options.UseSqlServer(databaseConfig.WriteConnectionString, sqlOptions =>
-                {
-                    sqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
-                    sqlOptions.MigrationsAssembly("SetlistStudio.Web");
-                    sqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 3,
-                        maxRetryDelay: TimeSpan.FromSeconds(5),
-                        errorNumbersToAdd: null);
-                });
-            }
-        }
-    });
-
-    // Configure read-only context (read replicas)
-    builder.Services.AddDbContext<ReadOnlySetlistStudioDbContext>((serviceProvider, options) =>
-    {
-        var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
-        var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
-        
-        if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
-        {
-            // For SQLite/InMemory, use same connection as write (no read replicas)
-            var connectionString = databaseConfig.WriteConnectionString;
-            ConfigureDatabaseProvider(options, connectionString);
-        }
-        else
-        {
-            // For PostgreSQL/SQL Server, use read replica configuration
-            providerService.ConfigureReadContext(options);
-        }
-    });
+    ConfigureDatabase(builder.Services);
 
     // Configure Identity
     builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
@@ -224,314 +150,8 @@ try
     var authBuilder = builder.Services.AddAuthentication();
     ConfigureExternalAuthentication(authBuilder, builder.Configuration);
 
-    // Register application services
-    builder.Services.AddScoped<ISongService, SongService>();
-    builder.Services.AddScoped<ISetlistService, SetlistService>();
-    
-    // Register CSP nonce service for enhanced Content Security Policy
-    builder.Services.AddCspNonce();
-    
-    // Register security services
-    builder.Services.AddScoped<SecretValidationService>();
-    builder.Services.AddScoped<IAuditLogService, AuditLogService>();
-    
-    // Register enhanced authorization services for comprehensive resource-based security
-    builder.Services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
-    
-    // Register security logging services for centralized security event management
-    builder.Services.AddScoped<SecurityEventLogger>();
-    builder.Services.AddScoped<ISecurityEventHandler, SecurityEventHandler>();
-    builder.Services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
-    
-    // Register security metrics service as singleton for centralized metrics collection
-    builder.Services.AddSingleton<ISecurityMetricsService, SecurityMetricsService>();
-
-    // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
-    builder.Services.AddAntiforgery(options =>
-    {
-        // Detect if we're in a test environment (testing framework creates in-memory test server)
-        var isTestEnvironment = builder.Environment.IsDevelopment() || 
-                               builder.Environment.EnvironmentName == "Testing" ||
-                               // Additional test context detection for integration tests
-                               AppDomain.CurrentDomain.GetAssemblies()
-                                   .Any(a => a.FullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
-                                           a.FullName?.Contains("xunit") == true);
-        
-        // Use secure cookie names with __Host- prefix for enhanced security in production
-        if (isTestEnvironment)
-        {
-            options.Cookie.Name = "SetlistStudio-CSRF";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
-        }
-        else
-        {
-            options.Cookie.Name = "__Host-SetlistStudio-CSRF";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
-        }
-        
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
-        
-        // Custom header name for AJAX requests
-        options.HeaderName = "X-CSRF-TOKEN";
-        
-        // Suppress xframe options (already handled by security headers middleware)
-        options.SuppressXFrameOptionsHeader = true;
-    });
-
-    // SECURITY: Configure secure session and cookie settings
-    builder.Services.ConfigureApplicationCookie(options =>
-    {
-        // Session timeout and expiration settings
-        options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
-        options.SlidingExpiration = true; // Reset timeout on user activity
-        // Use __Host- prefix in production/staging, regular name in test environments
-        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging()
-            ? "__Host-SetlistStudio-Identity"
-            : "SetlistStudio-Identity";
-        
-        // Secure cookie configuration
-        options.Cookie.HttpOnly = true; // Prevent JavaScript access
-        // Use secure cookies only in production/staging, allow HTTP in test environments
-        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
-            ? CookieSecurePolicy.Always // HTTPS only in production
-            : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
-        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
-        options.Cookie.IsEssential = true; // Required for GDPR compliance
-        
-        // Session invalidation settings
-        options.Events.OnValidatePrincipal = async context =>
-        {
-            // Validate security stamp to invalidate sessions on password change
-            var securityStampValidator = context.HttpContext.RequestServices
-                .GetRequiredService<ISecurityStampValidator>();
-            await securityStampValidator.ValidateAsync(context);
-        };
-        
-        // SECURITY: Configure proper API authentication behavior
-        options.Events.OnRedirectToLogin = context =>
-        {
-            // For API requests, return 401 instead of redirecting to login page
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return Task.CompletedTask;
-            }
-            
-            // For regular web requests, redirect to login page
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        };
-        
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            // For API requests, return 403 instead of redirecting to access denied page
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return Task.CompletedTask;
-            }
-            
-            // For regular web requests, redirect to access denied page
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        };
-        
-        // Login/logout paths
-        options.LoginPath = "/login";
-        options.LogoutPath = "/Identity/Account/Logout";
-        options.AccessDeniedPath = "/Identity/Account/AccessDenied";
-    });
-
-    // Configure session state with secure settings
-    builder.Services.AddSession(options =>
-    {
-        // Use __Host- prefix in production/staging, regular name in test environments
-        options.Cookie.Name = builder.Environment.IsProduction() || builder.Environment.IsStaging() 
-            ? "__Host-SetlistStudio-Session" 
-            : "SetlistStudio-Session";
-        options.Cookie.HttpOnly = true;
-        // Use secure cookies only in production/staging, allow HTTP in test environments
-        options.Cookie.SecurePolicy = builder.Environment.IsProduction() || builder.Environment.IsStaging()
-            ? CookieSecurePolicy.Always
-            : CookieSecurePolicy.SameAsRequest;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-        options.Cookie.IsEssential = true;
-        options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
-    });
-
-    // Configure data protection with secure settings
-    builder.Services.AddDataProtection(options =>
-    {
-        options.ApplicationDiscriminator = "SetlistStudio";
-    })
-    .SetApplicationName("SetlistStudio")
-    .PersistKeysToFileSystem(new DirectoryInfo(
-        Path.GetFullPath(Path.Join(builder.Environment.ContentRootPath, "DataProtection-Keys"))))
-    .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
-
-    // Configure Enhanced Rate Limiting - CRITICAL SECURITY ENHANCEMENT
-    builder.Services.AddSingleton<IEnhancedRateLimitingService, EnhancedRateLimitingService>();
-    
-    builder.Services.AddRateLimiter(options =>
-    {
-        // Environment-specific rate limiting configuration
-        var rateLimitConfig = Program.GetRateLimitConfiguration(builder.Environment);
-        
-        // Global rate limiter - applies to all endpoints unless overridden
-        // Uses enhanced partitioning for better security with environment-specific limits
-        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        {
-            var rateLimitingService = httpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
-            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(httpContext).Result ?? GetSafePartitionKey(httpContext);
-            
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: partitionKey,
-                factory: partition => new FixedWindowRateLimiterOptions
-                {
-                    AutoReplenishment = true,
-                    PermitLimit = rateLimitConfig.GlobalLimit,
-                    Window = rateLimitConfig.Window
-                });
-        });
-
-        // API endpoints - environment-specific limits
-        options.AddFixedWindowLimiter("ApiPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.ApiLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.ApiQueueLimit;
-        });
-
-        // Enhanced API policy for authenticated users
-        options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
-        });
-
-        // Authentication endpoints - strict limits to prevent brute force
-        options.AddFixedWindowLimiter("AuthPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthQueueLimit;
-        });
-
-        // Authenticated users - higher limits
-        options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
-        });
-
-        // Strict policy for sensitive operations
-        options.AddFixedWindowLimiter("StrictPolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.StrictLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.StrictQueueLimit;
-        });
-
-        // Sensitive operations - enhanced security
-        options.AddFixedWindowLimiter("SensitivePolicy", options =>
-        {
-            options.PermitLimit = rateLimitConfig.SensitiveLimit;
-            options.Window = rateLimitConfig.Window;
-            options.AutoReplenishment = true;
-            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
-        });
-
-        // Configure rejection response with enhanced logging
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.OnRejected = async (context, token) =>
-        {
-            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            
-            // Enhanced logging with security context
-            var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
-            var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
-            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
-            
-            var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
-            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
-            logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
-                sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
-
-            // Record the violation for enhanced monitoring
-            if (rateLimitingService != null)
-            {
-                await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
-            }
-
-            // Return appropriate response based on request type
-            if (IsApiRequest(context.HttpContext))
-            {
-                context.HttpContext.Response.ContentType = "application/json";
-                var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    error = "rate_limit_exceeded",
-                    message = "Rate limit exceeded. Please try again later.",
-                    retry_after = 60
-                });
-                await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
-            }
-            else
-            {
-                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
-            }
-        };
-    });
-
-    // SECURITY: Configure production security settings
-    if (!builder.Environment.IsDevelopment())
-    {
-        // Configure forwarded headers for reverse proxy scenarios
-        builder.Services.Configure<ForwardedHeadersOptions>(options =>
-        {
-            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor 
-                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
-                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
-            
-            // Clear default known networks and proxies for security
-            options.KnownNetworks.Clear();
-            options.KnownProxies.Clear();
-        });
-
-        // Configure data protection for production
-        builder.Services.AddDataProtection();
-
-        // Configure HSTS for production
-        builder.Services.AddHsts(options =>
-        {
-            options.Preload = true;
-            options.IncludeSubDomains = true;
-            options.MaxAge = TimeSpan.FromDays(365);
-        });
-    }
-
-    // Configure localization
-    builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
-    builder.Services.Configure<RequestLocalizationOptions>(options =>
-    {
-        var supportedCultures = new[] { "en-US", "es-ES", "fr-FR", "de-DE" };
-        options.SetDefaultCulture(supportedCultures[0])
-               .AddSupportedCultures(supportedCultures)
-               .AddSupportedUICultures(supportedCultures);
-    });
+    // Configure services and security
+    ConfigureServices(builder.Services, builder.Environment, builder.Configuration);
 
     var app = builder.Build();
 
@@ -765,77 +385,6 @@ static void HandleDatabaseInitializationError(IWebHostEnvironment environment, E
 }
 
 
-
-/// <summary>
-/// Configures the database provider based on the connection string format
-/// SECURITY: Enforces encryption for SQL Server connections to prevent man-in-the-middle attacks
-/// </summary>
-static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
-{
-    if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
-    {
-        // SQLite connection string
-        options.UseSqlite(connectionString);
-    }
-    else if (connectionString.Contains("Host=") || connectionString.Contains("host="))
-    {
-        // PostgreSQL connection string
-        options.UseNpgsql(connectionString);
-    }
-    else
-    {
-        // SQL Server connection string - SECURITY: Enforce encryption
-        var secureConnectionString = EnsureSqlServerConnectionSecurity(connectionString);
-        options.UseSqlServer(secureConnectionString);
-    }
-}
-
-/// <summary>
-/// Ensures SQL Server connection strings have proper security settings
-/// SECURITY: Adds encryption and certificate validation to prevent credential interception
-/// </summary>
-static string EnsureSqlServerConnectionSecurity(string connectionString)
-{
-    try
-    {
-        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
-        
-        // SECURITY: Force encryption for all SQL Server connections
-        if (!builder.ContainsKey("Encrypt") || !builder.Encrypt)
-        {
-            builder.Encrypt = true;
-            Log.Information("Added encryption enforcement to SQL Server connection string");
-        }
-        
-        // SECURITY: Validate server certificates in production
-        // Allow self-signed certificates only in development/testing environments
-        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase);
-        
-        if (!builder.ContainsKey("TrustServerCertificate"))
-        {
-            // In production, validate certificates; in development, allow self-signed
-            builder.TrustServerCertificate = isDevelopment;
-            Log.Information("Set certificate validation policy for {Environment} environment: TrustServerCertificate={TrustCertificate}", 
-                environment, builder.TrustServerCertificate);
-        }
-        
-        // SECURITY: Set connection timeout to prevent indefinite hangs
-        if (builder.ConnectTimeout == 0)
-        {
-            builder.ConnectTimeout = 30; // 30 second timeout
-        }
-        
-        return builder.ConnectionString;
-    }
-    catch (ArgumentException ex)
-    {
-        // If connection string parsing fails, log warning and return original
-        Log.Warning(ex, "Failed to parse SQL Server connection string for security enhancement. Using original connection string.");
-        return connectionString;
-    }
-}
 
 /// <summary>
 /// Configures external authentication providers (Google, Microsoft, Facebook)
@@ -1119,6 +668,360 @@ static List<SetlistSong> CreateJazzSetlistSongs(int setlistId, Dictionary<string
         new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "Take Five"), Position = 2, PerformanceNotes = "Feature odd time signature" },
         new SetlistSong { SetlistId = setlistId, SongId = GetSongId(songByTitle, "The Thrill Is Gone"), Position = 3, PerformanceNotes = "Blues influence" }
     };
+}
+
+/// <summary>
+/// Configures application services and security settings
+/// </summary>
+static void ConfigureServices(IServiceCollection services, IWebHostEnvironment environment, IConfiguration configuration)
+{
+    // Register application services
+    services.AddScoped<ISongService, SongService>();
+    services.AddScoped<ISetlistService, SetlistService>();
+    
+    // Register CSP nonce service for enhanced Content Security Policy
+    services.AddCspNonce();
+    
+    // Register security services
+    services.AddScoped<SecretValidationService>();
+    services.AddScoped<IAuditLogService, AuditLogService>();
+    
+    // Register enhanced authorization services for comprehensive resource-based security
+    services.AddScoped<SetlistStudio.Infrastructure.Security.EnhancedAuthorizationService>();
+    
+    // Register security logging services for centralized security event management
+    services.AddScoped<SecurityEventLogger>();
+    services.AddScoped<ISecurityEventHandler, SecurityEventHandler>();
+    services.AddScoped<SetlistStudio.Web.Security.EnhancedAccountLockoutService>();
+    
+    // Register security metrics service as singleton for centralized metrics collection
+    services.AddSingleton<ISecurityMetricsService, SecurityMetricsService>();
+
+    // Configure Anti-Forgery Tokens - CRITICAL CSRF PROTECTION
+    services.AddAntiforgery(options =>
+    {
+        // Detect if we're in a test environment (testing framework creates in-memory test server)
+        var isTestEnvironment = environment.IsDevelopment() || 
+                               environment.EnvironmentName == "Testing" ||
+                               // Additional test context detection for integration tests
+                               AppDomain.CurrentDomain.GetAssemblies()
+                                   .Any(a => a.FullName?.Contains("Microsoft.AspNetCore.Mvc.Testing") == true ||
+                                           a.FullName?.Contains("xunit") == true);
+        
+        // Use secure cookie names with __Host- prefix for enhanced security in production
+        if (isTestEnvironment)
+        {
+            options.Cookie.Name = "SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development/testing
+        }
+        else
+        {
+            options.Cookie.Name = "__Host-SetlistStudio-CSRF";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Require HTTPS in production
+        }
+        
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for CSRF protection
+        
+        // Custom header name for AJAX requests
+        options.HeaderName = "X-CSRF-TOKEN";
+        
+        // Suppress xframe options (already handled by security headers middleware)
+        options.SuppressXFrameOptionsHeader = true;
+    });
+
+    // SECURITY: Configure secure session and cookie settings
+    services.ConfigureApplicationCookie(options =>
+    {
+        // Session timeout and expiration settings
+        options.ExpireTimeSpan = TimeSpan.FromHours(2); // 2 hour absolute timeout
+        options.SlidingExpiration = true; // Reset timeout on user activity
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = environment.IsProduction() || environment.IsStaging()
+            ? "__Host-SetlistStudio-Identity"
+            : "SetlistStudio-Identity";
+        
+        // Secure cookie configuration
+        options.Cookie.HttpOnly = true; // Prevent JavaScript access
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = environment.IsProduction() || environment.IsStaging()
+            ? CookieSecurePolicy.Always // HTTPS only in production
+            : CookieSecurePolicy.SameAsRequest; // Allow HTTP in test environments
+        options.Cookie.SameSite = SameSiteMode.Strict; // Strict SameSite for security
+        options.Cookie.IsEssential = true; // Required for GDPR compliance
+        
+        // Session invalidation settings
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            // Validate security stamp to invalidate sessions on password change
+            var securityStampValidator = context.HttpContext.RequestServices
+                .GetRequiredService<ISecurityStampValidator>();
+            await securityStampValidator.ValidateAsync(context);
+        };
+        
+        // SECURITY: Configure proper API authentication behavior
+        options.Events.OnRedirectToLogin = context =>
+        {
+            // For API requests, return 401 instead of redirecting to login page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to login page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            // For API requests, return 403 instead of redirecting to access denied page
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+            
+            // For regular web requests, redirect to access denied page
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        
+        // Login/logout paths
+        options.LoginPath = "/login";
+        options.LogoutPath = "/Identity/Account/Logout";
+        options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+    });
+
+    // Configure session state with secure settings
+    services.AddSession(options =>
+    {
+        // Use __Host- prefix in production/staging, regular name in test environments
+        options.Cookie.Name = environment.IsProduction() || environment.IsStaging() 
+            ? "__Host-SetlistStudio-Session" 
+            : "SetlistStudio-Session";
+        options.Cookie.HttpOnly = true;
+        // Use secure cookies only in production/staging, allow HTTP in test environments
+        options.Cookie.SecurePolicy = environment.IsProduction() || environment.IsStaging()
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.IsEssential = true;
+        options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout after inactivity
+    });
+
+    // Configure data protection with secure settings
+    services.AddDataProtection(options =>
+    {
+        options.ApplicationDiscriminator = "SetlistStudio";
+    })
+    .SetApplicationName("SetlistStudio")
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.GetFullPath(Path.Join(environment.ContentRootPath, "DataProtection-Keys"))))
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Rotate keys every 90 days
+
+    // Configure Enhanced Rate Limiting - CRITICAL SECURITY ENHANCEMENT
+    services.AddSingleton<IEnhancedRateLimitingService, EnhancedRateLimitingService>();
+    
+    services.AddRateLimiter(options =>
+    {
+        // Environment-specific rate limiting configuration
+        var rateLimitConfig = Program.GetRateLimitConfiguration(environment);
+        
+        // Global rate limiter - applies to all endpoints unless overridden
+        // Uses enhanced partitioning for better security with environment-specific limits
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var rateLimitingService = httpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(httpContext).Result ?? GetSafePartitionKey(httpContext);
+            
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: partitionKey,
+                factory: partition => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = rateLimitConfig.GlobalLimit,
+                    Window = rateLimitConfig.Window
+                });
+        });
+
+        // API endpoints - environment-specific limits
+        options.AddFixedWindowLimiter("ApiPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.ApiLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.ApiQueueLimit;
+        });
+
+        // Enhanced API policy for authenticated users
+        options.AddFixedWindowLimiter("AuthenticatedApiPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthenticatedApiLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthenticatedApiQueueLimit;
+        });
+
+        // Authentication endpoints - strict limits to prevent brute force
+        options.AddFixedWindowLimiter("AuthPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthQueueLimit;
+        });
+
+        // Authenticated users - higher limits
+        options.AddFixedWindowLimiter("AuthenticatedPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.AuthenticatedLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.AuthenticatedQueueLimit;
+        });
+
+        // Strict policy for sensitive operations
+        options.AddFixedWindowLimiter("StrictPolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.StrictLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.StrictQueueLimit;
+        });
+
+        // Sensitive operations - enhanced security
+        options.AddFixedWindowLimiter("SensitivePolicy", options =>
+        {
+            options.PermitLimit = rateLimitConfig.SensitiveLimit;
+            options.Window = rateLimitConfig.Window;
+            options.AutoReplenishment = true;
+            options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            options.QueueLimit = rateLimitConfig.SensitiveQueueLimit;
+        });
+
+        // Configure rejection response with enhanced logging
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            
+            // Enhanced logging with security context
+            var logger = context.HttpContext.RequestServices.GetService<ILogger<Program>>();
+            var rateLimitingService = context.HttpContext.RequestServices.GetService<IEnhancedRateLimitingService>();
+            var partitionKey = rateLimitingService?.GetCompositePartitionKeyAsync(context.HttpContext).Result ?? GetSafePartitionKey(context.HttpContext);
+            
+            var sanitizedPartitionKey = SecureLoggingHelper.SanitizeMessage(partitionKey);
+            var sanitizedClientIp = SecureLoggingHelper.SanitizeIpAddress(GetClientIpAddress(context.HttpContext));
+            logger?.LogWarning("Rate limit exceeded for partition: {PartitionKey} on endpoint: {Endpoint} from IP: {ClientIP}", 
+                sanitizedPartitionKey, context.HttpContext.Request.Path, sanitizedClientIp);
+
+            // Record the violation for enhanced monitoring
+            if (rateLimitingService != null)
+            {
+                await rateLimitingService.RecordRateLimitViolationAsync(context.HttpContext, partitionKey);
+            }
+
+            // Return appropriate response based on request type
+            if (IsApiRequest(context.HttpContext))
+            {
+                context.HttpContext.Response.ContentType = "application/json";
+                var jsonResponse = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    error = "rate_limit_exceeded",
+                    message = "Rate limit exceeded. Please try again later.",
+                    retry_after = 60
+                });
+                await context.HttpContext.Response.WriteAsync(jsonResponse, cancellationToken: token);
+            }
+            else
+            {
+                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", cancellationToken: token);
+            }
+        };
+    });
+
+    // SECURITY: Configure production security settings
+    if (!environment.IsDevelopment())
+    {
+        // Configure forwarded headers for reverse proxy scenarios
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor 
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+            
+            // Clear default known networks and proxies for security
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
+
+        // Configure data protection for production
+        services.AddDataProtection();
+
+        // Configure HSTS for production
+        services.AddHsts(options =>
+        {
+            options.Preload = true;
+            options.IncludeSubDomains = true;
+            options.MaxAge = TimeSpan.FromDays(365);
+        });
+    }
+
+    // Configure localization
+    services.AddLocalization(options => options.ResourcesPath = "Resources");
+    services.Configure<RequestLocalizationOptions>(options =>
+    {
+        var supportedCultures = new[] { "en-US", "es-ES", "fr-FR", "de-DE" };
+        options.SetDefaultCulture(supportedCultures[0])
+               .AddSupportedCultures(supportedCultures)
+               .AddSupportedUICultures(supportedCultures);
+    });
+}
+
+/// <summary>
+/// Configures the database provider based on the connection string format.
+/// This method is used by unit tests to validate database provider selection logic.
+/// </summary>
+/// <param name="options">The DbContextOptionsBuilder to configure</param>
+/// <param name="connectionString">The connection string to analyze</param>
+/// <returns>The configured DbContextOptionsBuilder for method chaining</returns>
+static DbContextOptionsBuilder ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
+    }
+
+    // SQLite connection strings typically contain "Data Source=" 
+    if (connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseSqlite(connectionString);
+    }
+    // SQL Server connection strings typically contain "Server=" or "Data Source=" with server name
+    else if (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+             connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) && 
+             !connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseSqlServer(connectionString);
+    }
+    // PostgreSQL connection strings typically contain "Host="
+    else if (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseNpgsql(connectionString);
+    }
+    else
+    {
+        throw new InvalidOperationException($"Unable to determine database provider from connection string format: {connectionString}");
+    }
+
+    return options;
 }
 
 /// <summary>
@@ -1631,6 +1534,104 @@ public partial class Program
                     .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
                 }
             });
+        });
+    }
+
+    /// <summary>
+    /// Configures database contexts and connection pooling with read replica support
+    /// </summary>
+    /// <param name="services">The service collection</param>
+    public static void ConfigureDatabase(IServiceCollection services)
+    {
+        // Register database configuration services
+        services.AddSingleton<IDatabaseConfiguration>(provider =>
+        {
+            var config = provider.GetRequiredService<IConfiguration>();
+            var logger = provider.GetRequiredService<ILogger<DatabaseConfiguration>>();
+            return new DatabaseConfiguration(config, logger);
+        });
+
+        services.AddSingleton<DatabaseProviderService>(provider =>
+        {
+            var config = provider.GetRequiredService<IDatabaseConfiguration>();
+            var logger = provider.GetRequiredService<ILogger<DatabaseProviderService>>();
+            return new DatabaseProviderService(config, logger);
+        });
+
+        // Configure write context (primary database)
+        services.AddDbContext<SetlistStudioDbContext>((serviceProvider, options) =>
+        {
+            var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
+            var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
+            
+            // Handle different providers appropriately
+            if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
+            {
+                // For SQLite/InMemory, use traditional configuration since Web project has these packages
+                var connectionString = databaseConfig.WriteConnectionString;
+                if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+                {
+                    options.UseSqlite(connectionString);
+                }
+                else
+                {
+                    options.UseInMemoryDatabase("InMemoryTestDatabase");
+                }
+            }
+            else
+            {
+                // For PostgreSQL/SQL Server, configure with migrations assembly
+                if (databaseConfig.Provider == DatabaseProvider.PostgreSQL)
+                {
+                    options.UseNpgsql(databaseConfig.WriteConnectionString, npgsqlOptions =>
+                    {
+                        npgsqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                        npgsqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                        npgsqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorCodesToAdd: null);
+                    });
+                }
+                else if (databaseConfig.Provider == DatabaseProvider.SqlServer)
+                {
+                    options.UseSqlServer(databaseConfig.WriteConnectionString, sqlOptions =>
+                    {
+                        sqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                        sqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                        sqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorNumbersToAdd: null);
+                    });
+                }
+            }
+        });
+
+        // Configure read-only context (read replicas)
+        services.AddDbContext<ReadOnlySetlistStudioDbContext>((serviceProvider, options) =>
+        {
+            var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
+            var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
+            
+            if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
+            {
+                // For SQLite/InMemory, use same connection as write (no read replicas)
+                var connectionString = databaseConfig.WriteConnectionString;
+                if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+                {
+                    options.UseSqlite(connectionString);
+                }
+                else
+                {
+                    options.UseInMemoryDatabase("InMemoryTestDatabase");
+                }
+            }
+            else
+            {
+                // For PostgreSQL/SQL Server, use read replica configuration
+                providerService.ConfigureReadContext(options);
+            }
         });
     }
 }
