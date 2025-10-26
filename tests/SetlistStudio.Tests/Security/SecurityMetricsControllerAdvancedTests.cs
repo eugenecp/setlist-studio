@@ -749,5 +749,116 @@ public class SecurityMetricsControllerAdvancedTests
         dashboard.SystemStatus.Should().Be("SECURE");
     }
 
+    [Fact]
+    public void GetSnapshot_ShouldReturnServiceUnavailable_WhenInvalidOperationExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetMetricsSnapshot())
+            .Throws(new InvalidOperationException("Service unavailable"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetSnapshot();
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(503);
+        statusResult.Value.Should().Be("Security metrics service temporarily unavailable");
+    }
+
+    [Fact]
+    public void GetSnapshot_ShouldReturnUnauthorized_WhenUnauthorizedAccessExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetMetricsSnapshot())
+            .Throws(new UnauthorizedAccessException("Access denied"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetSnapshot();
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public void GetSnapshot_ShouldReturnInternalServerError_WhenGenericExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetMetricsSnapshot())
+            .Throws(new Exception("Unexpected error"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetSnapshot();
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+        statusResult.Value.Should().Be("Error retrieving security metrics");
+    }
+
+    [Fact]
+    public void GetDetailedMetrics_ShouldReturnBadRequest_WhenArgumentOutOfRangeExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetDetailedMetrics(It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .Throws(new ArgumentOutOfRangeException("Invalid range"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetDetailedMetrics(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow);
+
+        // Assert
+        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequestResult.Value.Should().Be("Invalid date range specified");
+    }
+
+    [Fact]
+    public void GetDetailedMetrics_ShouldReturnServiceUnavailable_WhenInvalidOperationExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetDetailedMetrics(It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .Throws(new InvalidOperationException("Service error"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetDetailedMetrics(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(503);
+        statusResult.Value.Should().Be("Security metrics service temporarily unavailable");
+    }
+
+    [Fact]
+    public void GetDetailedMetrics_ShouldReturnInternalServerError_WhenGenericExceptionThrown()
+    {
+        // Arrange
+        _mockSecurityMetricsService
+            .Setup(s => s.GetDetailedMetrics(It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .Throws(new Exception("Database error"));
+
+        var controller = CreateControllerWithContext();
+
+        // Act
+        var result = controller.GetDetailedMetrics(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+        statusResult.Value.Should().Be("Error retrieving detailed security metrics");
+    }
+
     #endregion
 }

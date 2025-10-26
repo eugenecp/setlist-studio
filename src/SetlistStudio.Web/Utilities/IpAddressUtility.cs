@@ -34,12 +34,19 @@ public static class IpAddressUtility
     private static string? GetForwardedIpAddress(HttpContext context)
     {
         var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (string.IsNullOrEmpty(forwardedFor))
+        if (string.IsNullOrWhiteSpace(forwardedFor))
             return null;
 
-        // Take the first IP in the chain (the original client)
-        var firstIp = forwardedFor.Split(',')[0].Trim();
-        return string.IsNullOrEmpty(firstIp) ? null : firstIp;
+        // Find the first non-empty IP in the chain (the original client)
+        var ips = forwardedFor.Split(',');
+        foreach (var ip in ips)
+        {
+            var trimmedIp = ip.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmedIp))
+                return trimmedIp;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -48,7 +55,7 @@ public static class IpAddressUtility
     private static string? GetRealIpAddress(HttpContext context)
     {
         var realIp = context.Request.Headers["X-Real-IP"].FirstOrDefault();
-        return string.IsNullOrEmpty(realIp) ? null : realIp;
+        return string.IsNullOrWhiteSpace(realIp) ? null : realIp;
     }
 
     /// <summary>
