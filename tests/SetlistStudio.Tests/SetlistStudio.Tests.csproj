@@ -48,4 +48,9 @@
     <None Include="**\backup\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Security fix: Force MessagePack to secure version (CVE-2024-48924) -->
+    <PackageReference Include="MessagePack" Version="2.5.187" />
+  </ItemGroup>
+
 </Project>
