@@ -189,56 +189,131 @@ public class SanitizedStringAttribute : ValidationAttribute
 
         var sanitized = input;
 
+        // Apply security sanitization
+        sanitized = ApplySecuritySanitization(sanitized);
+
+        // Apply content formatting rules
+        sanitized = ApplyContentFormatting(sanitized);
+
+        // Apply length constraints
+        sanitized = ApplyLengthConstraints(sanitized);
+
+        return sanitized.Trim();
+    }
+
+    /// <summary>
+    /// Applies security-focused sanitization to remove dangerous content
+    /// </summary>
+    private string ApplySecuritySanitization(string input)
+    {
+        var sanitized = input;
+
+        // Remove script tags and JavaScript protocols
+        sanitized = RemoveScriptingThreats(sanitized);
+
+        // Remove SQL injection patterns
+        sanitized = RemoveSqlInjectionPatterns(sanitized);
+
+        // Remove other dangerous patterns
+        sanitized = RemoveDangerousPatterns(sanitized);
+
+        // Handle HTML content based on settings
+        sanitized = ProcessHtmlContent(sanitized);
+
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Removes scripting threats like script tags and JavaScript protocols
+    /// </summary>
+    private string RemoveScriptingThreats(string input)
+    {
+        var sanitized = input;
+        
         // Remove script tags completely
         sanitized = ScriptTagPattern.Replace(sanitized, string.Empty);
 
         // Remove javascript: and similar dangerous protocols
         sanitized = JavascriptPattern.Replace(sanitized, string.Empty);
 
-        // Check for SQL injection patterns and remove them
-        if (SqlInjectionPattern.IsMatch(sanitized))
-        {
-            // For musical application, we're strict about SQL-like patterns
-            sanitized = SqlInjectionPattern.Replace(sanitized, "***");
-        }
+        return sanitized;
+    }
 
-        // Remove dangerous patterns
-        foreach (var pattern in DangerousPatterns)
-        {
-            sanitized = sanitized.Replace(pattern, string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
+    /// <summary>
+    /// Removes SQL injection attack patterns
+    /// </summary>
+    private string RemoveSqlInjectionPatterns(string input)
+    {
+        // For musical application, we're strict about SQL-like patterns
+        return SqlInjectionPattern.IsMatch(input) 
+            ? SqlInjectionPattern.Replace(input, "***") 
+            : input;
+    }
 
-        // Handle HTML content based on AllowHtml setting
-        if (!AllowHtml && ContainsHtml(sanitized))
-        {
-            // HTML encode the content
-            sanitized = HttpUtility.HtmlEncode(sanitized);
-        }
+    /// <summary>
+    /// Removes other dangerous patterns from the input
+    /// </summary>
+    private string RemoveDangerousPatterns(string input)
+    {
+        return DangerousPatterns.Aggregate(input, (current, pattern) => 
+            current.Replace(pattern, string.Empty, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Processes HTML content based on AllowHtml setting
+    /// </summary>
+    private string ProcessHtmlContent(string input)
+    {
+        return !AllowHtml && ContainsHtml(input) 
+            ? HttpUtility.HtmlEncode(input) 
+            : input;
+    }
+
+    /// <summary>
+    /// Applies content formatting rules for line breaks and special characters
+    /// </summary>
+    private string ApplyContentFormatting(string input)
+    {
+        var sanitized = input;
 
         // Handle line breaks
-        if (!AllowLineBreaks)
-        {
-            sanitized = sanitized.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
-        }
+        sanitized = ProcessLineBreaks(sanitized);
 
         // Handle special characters for musical content
-        if (!AllowSpecialCharacters)
-        {
-            // Keep musical notation characters but remove others
-            sanitized = Regex.Replace(sanitized, @"[^\w\s\-#♭♯°øØ\(\)\[\]\.\,\;\:\!\?\'\""""]", string.Empty,
-                RegexOptions.None, TimeSpan.FromMilliseconds(100));
-        }
-
-        // Apply length limit
-        if (MaxLength > 0 && sanitized.Length > MaxLength)
-        {
-            sanitized = sanitized.Substring(0, MaxLength).Trim();
-        }
-
-        // Final trim
-        sanitized = sanitized.Trim();
+        sanitized = ProcessSpecialCharacters(sanitized);
 
         return sanitized;
+    }
+
+    /// <summary>
+    /// Processes line breaks based on AllowLineBreaks setting
+    /// </summary>
+    private string ProcessLineBreaks(string input)
+    {
+        return !AllowLineBreaks 
+            ? input.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ")
+            : input;
+    }
+
+    /// <summary>
+    /// Processes special characters, keeping musical notation while removing others
+    /// </summary>
+    private string ProcessSpecialCharacters(string input)
+    {
+        return !AllowSpecialCharacters
+            ? Regex.Replace(input, @"[^\w\s\-#♭♯°øØ\(\)\[\]\.\,\;\:\!\?\'\""""]", string.Empty,
+                RegexOptions.None, TimeSpan.FromMilliseconds(100))
+            : input;
+    }
+
+    /// <summary>
+    /// Applies length constraints based on MaxLength setting
+    /// </summary>
+    private string ApplyLengthConstraints(string input)
+    {
+        return MaxLength > 0 && input.Length > MaxLength 
+            ? input.Substring(0, MaxLength).Trim()
+            : input;
     }
 
     private static bool ContainsHtml(string input)

@@ -24,73 +24,137 @@ public class SecurityEventMiddleware
 
     public async Task InvokeAsync(HttpContext context, ISecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
     {
-        var startTime = DateTimeOffset.UtcNow;
-        var requestPath = context.Request.Path.Value ?? string.Empty;
+        var requestContext = new RequestExecutionContext
+        {
+            StartTime = DateTimeOffset.UtcNow,
+            RequestPath = context.Request.Path.Value ?? string.Empty
+        };
 
         try
         {
-            // Monitor for suspicious patterns in requests
-            await DetectSuspiciousPatterns(context, securityEventHandler, securityEventLogger);
-
-            // Continue processing the request
-            await _next(context);
-
-            // Log successful authentication events after request completion
-            await LogAuthenticationEvents(context, securityEventHandler, securityEventLogger);
+            await ProcessSecureRequest(context, securityEventHandler, securityEventLogger);
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogWarning(ex, "Unauthorized access attempt detected for path {RequestPath}", requestPath);
-            await LogSecurityException(context, securityEventHandler, ex);
-            throw;
-        }
-        catch (SecurityException ex)
-        {
-            _logger.LogWarning(ex, "Security exception in middleware for path {RequestPath}", requestPath);
-            await LogSecurityException(context, securityEventHandler, ex);
-            throw;
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogError(ex, "Invalid operation in security middleware for path {RequestPath}", requestPath);
-            if (IsSecurityRelatedException(ex))
-            {
-                await LogSecurityException(context, securityEventHandler, ex);
-            }
-            throw;
-        }
-        catch (ArgumentException ex)
-        {
-            _logger.LogError(ex, "Invalid argument in security middleware for path {RequestPath}", requestPath);
-            throw;
-        }
-        // CodeQL[cs/catch-of-all-exceptions] - Middleware boundary catch for security logging
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error in security event middleware for path {RequestPath}", requestPath);
-            
-            // Log potential security-related exceptions
-            if (IsSecurityRelatedException(ex))
-            {
-                await LogSecurityException(context, securityEventHandler, ex);
-            }
-
+            await HandleRequestException(ex, context, securityEventHandler, requestContext.RequestPath);
             throw; // Re-throw to maintain normal error handling
         }
         finally
         {
-            // Log slow requests that might indicate attacks
-            var duration = DateTimeOffset.UtcNow - startTime;
-            if (duration.TotalSeconds > 10) // Requests taking longer than 10 seconds
-            {
-                securityEventHandler.OnSuspiciousActivity(
-                    context,
-                    "SlowRequest",
-                    $"Request to {requestPath} took {duration.TotalSeconds:F2} seconds",
-                    context.User?.Identity?.Name,
-                    SecurityEventSeverity.Medium);
-            }
+            await LogSlowRequestIfNeeded(context, securityEventHandler, requestContext);
         }
+    }
+
+    /// <summary>
+    /// Processes the request with security monitoring
+    /// </summary>
+    private async Task ProcessSecureRequest(HttpContext context, ISecurityEventHandler securityEventHandler, SecurityEventLogger securityEventLogger)
+    {
+        // Monitor for suspicious patterns in requests
+        await DetectSuspiciousPatterns(context, securityEventHandler, securityEventLogger);
+
+        // Continue processing the request
+        await _next(context);
+
+        // Log successful authentication events after request completion
+        await LogAuthenticationEvents(context, securityEventHandler, securityEventLogger);
+    }
+
+    /// <summary>
+    /// Handles exceptions that occur during request processing
+    /// </summary>
+    private async Task HandleRequestException(Exception ex, HttpContext context, ISecurityEventHandler securityEventHandler, string requestPath)
+    {
+        switch (ex)
+        {
+            case UnauthorizedAccessException unauthorizedException:
+                await HandleUnauthorizedException(unauthorizedException, context, securityEventHandler, requestPath);
+                break;
+            case SecurityException securityException:
+                await HandleSecurityException(securityException, context, securityEventHandler, requestPath);
+                break;
+            case InvalidOperationException invalidOperationException:
+                await HandleInvalidOperationException(invalidOperationException, context, securityEventHandler, requestPath);
+                break;
+            case ArgumentException argumentException:
+                HandleArgumentException(argumentException, requestPath);
+                break;
+            default:
+                await HandleGeneralException(ex, context, securityEventHandler, requestPath);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Handles unauthorized access exceptions
+    /// </summary>
+    private async Task HandleUnauthorizedException(UnauthorizedAccessException ex, HttpContext context, ISecurityEventHandler securityEventHandler, string requestPath)
+    {
+        _logger.LogWarning(ex, "Unauthorized access attempt detected for path {RequestPath}", requestPath);
+        await LogSecurityException(context, securityEventHandler, ex);
+    }
+
+    /// <summary>
+    /// Handles security exceptions
+    /// </summary>
+    private async Task HandleSecurityException(SecurityException ex, HttpContext context, ISecurityEventHandler securityEventHandler, string requestPath)
+    {
+        _logger.LogWarning(ex, "Security exception in middleware for path {RequestPath}", requestPath);
+        await LogSecurityException(context, securityEventHandler, ex);
+    }
+
+    /// <summary>
+    /// Handles invalid operation exceptions
+    /// </summary>
+    private async Task HandleInvalidOperationException(InvalidOperationException ex, HttpContext context, ISecurityEventHandler securityEventHandler, string requestPath)
+    {
+        _logger.LogError(ex, "Invalid operation in security middleware for path {RequestPath}", requestPath);
+        if (IsSecurityRelatedException(ex))
+        {
+            await LogSecurityException(context, securityEventHandler, ex);
+        }
+    }
+
+    /// <summary>
+    /// Handles argument exceptions
+    /// </summary>
+    private void HandleArgumentException(ArgumentException ex, string requestPath)
+    {
+        _logger.LogError(ex, "Invalid argument in security middleware for path {RequestPath}", requestPath);
+    }
+
+    /// <summary>
+    /// Handles general exceptions
+    /// </summary>
+    private async Task HandleGeneralException(Exception ex, HttpContext context, ISecurityEventHandler securityEventHandler, string requestPath)
+    {
+        // CodeQL[cs/catch-of-all-exceptions] - Middleware boundary catch for security logging
+        _logger.LogError(ex, "Unexpected error in security event middleware for path {RequestPath}", requestPath);
+        
+        // Log potential security-related exceptions
+        if (IsSecurityRelatedException(ex))
+        {
+            await LogSecurityException(context, securityEventHandler, ex);
+        }
+    }
+
+    /// <summary>
+    /// Logs slow requests that might indicate attacks
+    /// </summary>
+    private static Task LogSlowRequestIfNeeded(HttpContext context, ISecurityEventHandler securityEventHandler, RequestExecutionContext requestContext)
+    {
+        var duration = DateTimeOffset.UtcNow - requestContext.StartTime;
+        if (duration.TotalSeconds > 10) // Requests taking longer than 10 seconds
+        {
+            securityEventHandler.OnSuspiciousActivity(
+                context,
+                "SlowRequest",
+                $"Request to {requestContext.RequestPath} took {duration.TotalSeconds:F2} seconds",
+                context.User?.Identity?.Name,
+                SecurityEventSeverity.Medium);
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -402,51 +466,7 @@ public class SecurityEventMiddleware
         try
         {
             var form = await context.Request.ReadFormAsync();
-            
-            foreach (var field in form)
-            {
-                var fieldValue = field.Value.ToString() ?? string.Empty;
-                
-                // Check for XSS patterns
-                if (ContainsXssPattern(fieldValue))
-                {
-                    // Use the overload that doesn't extract data from HttpContext to break taint chain
-                    var sanitizedUserAgent = SecureLoggingHelper.SanitizeMessage(context.Request.Headers.UserAgent.ToString());
-                    var sanitizedIpAddress = SecureLoggingHelper.SanitizeMessage(GetClientIpAddress(context) ?? "Unknown");
-                    var sanitizedRequestPath = SecureLoggingHelper.SanitizeMessage(context.Request.Path.ToString());
-                    var sanitizedRequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method);
-
-                    securityEventHandler.OnSuspiciousActivity(
-                        "XSS_Pattern_Detection",
-                        $"XSS pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
-                        context.User?.Identity?.Name,
-                        SecurityEventSeverity.High,
-                        sanitizedUserAgent,
-                        sanitizedIpAddress,
-                        sanitizedRequestPath,
-                        sanitizedRequestMethod);
-                }
-
-                // Check for SQL injection patterns
-                if (ContainsSqlInjectionPattern(fieldValue))
-                {
-                    // Use the overload that doesn't extract data from HttpContext to break taint chain
-                    var sanitizedUserAgent = SecureLoggingHelper.SanitizeMessage(context.Request.Headers.UserAgent.ToString());
-                    var sanitizedIpAddress = SecureLoggingHelper.SanitizeMessage(GetClientIpAddress(context) ?? "Unknown");
-                    var sanitizedRequestPath = SecureLoggingHelper.SanitizeMessage(context.Request.Path.ToString());
-                    var sanitizedRequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method);
-
-                    securityEventHandler.OnSuspiciousActivity(
-                        "SQL_Injection_Pattern_Detection",
-                        $"SQL injection pattern detected in field {SecureLoggingHelper.PreventLogInjection(field.Key)}",
-                        context.User?.Identity?.Name,
-                        SecurityEventSeverity.High,
-                        sanitizedUserAgent,
-                        sanitizedIpAddress,
-                        sanitizedRequestPath,
-                        sanitizedRequestMethod);
-                }
-            }
+            await ProcessFormFields(form, context, securityEventHandler);
         }
         catch (ArgumentNullException ex)
         {
@@ -461,6 +481,74 @@ public class SecurityEventMiddleware
         {
             _logger.LogWarning(ex, "Unexpected error while checking form data for suspicious patterns");
         }
+    }
+
+    /// <summary>
+    /// Processes all form fields for security threats
+    /// </summary>
+    private async Task ProcessFormFields(IFormCollection form, HttpContext context, ISecurityEventHandler securityEventHandler)
+    {
+        foreach (var field in form)
+        {
+            var fieldValue = field.Value.ToString() ?? string.Empty;
+            await CheckFieldForThreats(field.Key, fieldValue, context, securityEventHandler);
+        }
+    }
+
+    /// <summary>
+    /// Checks a single form field for security threats
+    /// </summary>
+    private Task CheckFieldForThreats(string fieldName, string fieldValue, HttpContext context, ISecurityEventHandler securityEventHandler)
+    {
+        // Check for XSS patterns
+        if (ContainsXssPattern(fieldValue))
+        {
+            ReportSecurityThreat("XSS_Pattern_Detection", 
+                $"XSS pattern detected in field {SecureLoggingHelper.PreventLogInjection(fieldName)}", 
+                context, securityEventHandler);
+        }
+
+        // Check for SQL injection patterns
+        if (ContainsSqlInjectionPattern(fieldValue))
+        {
+            ReportSecurityThreat("SQL_Injection_Pattern_Detection", 
+                $"SQL injection pattern detected in field {SecureLoggingHelper.PreventLogInjection(fieldName)}", 
+                context, securityEventHandler);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Reports a detected security threat with sanitized context information
+    /// </summary>
+    private void ReportSecurityThreat(string eventType, string description, HttpContext context, ISecurityEventHandler securityEventHandler)
+    {
+        var contextData = ExtractSanitizedContextData(context);
+        
+        securityEventHandler.OnSuspiciousActivity(
+            eventType,
+            description,
+            context.User?.Identity?.Name,
+            SecurityEventSeverity.High,
+            contextData.UserAgent,
+            contextData.IpAddress,
+            contextData.RequestPath,
+            contextData.RequestMethod);
+    }
+
+    /// <summary>
+    /// Extracts and sanitizes context data from HTTP request
+    /// </summary>
+    private SanitizedContextData ExtractSanitizedContextData(HttpContext context)
+    {
+        return new SanitizedContextData
+        {
+            UserAgent = SecureLoggingHelper.SanitizeMessage(context.Request.Headers.UserAgent.ToString()),
+            IpAddress = SecureLoggingHelper.SanitizeMessage(GetClientIpAddress(context) ?? "Unknown"),
+            RequestPath = SecureLoggingHelper.SanitizeMessage(context.Request.Path.ToString()),
+            RequestMethod = SecureLoggingHelper.SanitizeMessage(context.Request.Method)
+        };
     }
 
     /// <summary>
@@ -611,4 +699,24 @@ public class SecurityEventMiddleware
 
         return context.Connection.RemoteIpAddress?.ToString();
     }
+}
+
+/// <summary>
+/// Contains sanitized context data extracted from HTTP request for security logging
+/// </summary>
+internal class SanitizedContextData
+{
+    public string UserAgent { get; set; } = string.Empty;
+    public string IpAddress { get; set; } = string.Empty;
+    public string RequestPath { get; set; } = string.Empty;
+    public string RequestMethod { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Contains execution context information for request processing
+/// </summary>
+internal class RequestExecutionContext
+{
+    public DateTimeOffset StartTime { get; set; }
+    public string RequestPath { get; set; } = string.Empty;
 }

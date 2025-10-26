@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Services;
-using SetlistStudio.Web.Utilities;
 using System.Diagnostics;
 
 namespace SetlistStudio.Web.Controllers;
@@ -187,85 +186,178 @@ public class SecurityMetricsController : ControllerBase
             _logger.LogInformation("Security dashboard requested by user {UserId}", 
                 User.Identity?.Name ?? "Unknown");
 
-            var snapshot = _securityMetricsService.GetMetricsSnapshot();
-            var last24Hours = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(24));
-            var lastHour = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(1));
-
-            var dashboard = new SecurityDashboard
-            {
-                Timestamp = DateTime.UtcNow,
-                ThreatLevel = last24Hours.ThreatLevel,
-                SecurityScore = Math.Round(last24Hours.SecurityScore, 1),
-                ActiveThreats = snapshot.RecentEvents.Count(e => 
-                    e.Severity == "CRITICAL" || e.Severity == "HIGH"),
-                
-                // Key metrics
-                AuthFailuresLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "AUTHENTICATION_FAILURE" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-                    
-                RateLimitViolationsLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "RATE_LIMIT_VIOLATION" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-                    
-                SuspiciousActivitiesLast24h = snapshot.RecentEvents.Count(e => 
-                    e.EventType == "SUSPICIOUS_ACTIVITY" && 
-                    e.Timestamp >= DateTime.UtcNow.AddHours(-24)),
-
-                // Trends
-                AuthFailureTrend = CalculateTrend(snapshot.RecentEvents, "AUTHENTICATION_FAILURE"),
-                RateLimitTrend = CalculateTrend(snapshot.RecentEvents, "RATE_LIMIT_VIOLATION"),
-                ThreatTrend = CalculateOverallThrend(lastHour, last24Hours),
-
-                // Top threats
-                TopAttackingIPs = snapshot.TopFailingIps.Take(5).ToArray(),
-                TopViolatedEndpoints = snapshot.TopViolatedEndpoints.Take(5).ToArray(),
-                
-                // Alerts and recommendations
-                ActiveAlerts = GenerateActiveAlerts(snapshot, last24Hours),
-                Recommendations = last24Hours.Recommendations,
-                
-                // System status
-                SystemStatus = DetermineSystemStatus(last24Hours.ThreatLevel, last24Hours.SecurityScore),
-                LastIncidentTime = snapshot.RecentEvents
-                    .Where(e => e.Severity == "CRITICAL" || e.Severity == "HIGH")
-                    .OrderByDescending(e => e.Timestamp)
-                    .FirstOrDefault()?.Timestamp,
-                
-                // Operational metrics
-                MonitoringStatus = "ACTIVE",
-                AlertsEnabled = _configuration.GetValue<bool>("Security:AlertsEnabled", true),
-                MetricsRetentionDays = _configuration.GetValue<int>("Security:MetricsRetentionDays", 7)
-            };
+            var metricsData = CollectMetricsData();
+            var dashboard = BuildSecurityDashboard(metricsData);
 
             return Ok(dashboard);
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Unauthorized access to security dashboard by user {UserId}", User.Identity?.Name ?? "Unknown");
-            return Forbid();
+            return HandleUnauthorizedAccess(ex);
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Invalid argument in security dashboard request");
-            return BadRequest("Invalid request parameters");
+            return HandleArgumentException(ex);
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Security metrics service unavailable");
-            return StatusCode(503, "Security metrics service temporarily unavailable");
+            return HandleServiceUnavailable(ex);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout retrieving security dashboard data");
-            return StatusCode(504, "Request timeout - please try again");
+            return HandleTimeout(ex);
         }
         // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error retrieving security dashboard");
-            return StatusCode(500, "Error retrieving security dashboard");
+            return HandleUnexpectedError(ex);
         }
+    }
+
+    /// <summary>
+    /// Collects all necessary metrics data from the security service
+    /// </summary>
+    private DashboardMetricsData CollectMetricsData()
+    {
+        return new DashboardMetricsData
+        {
+            Snapshot = _securityMetricsService.GetMetricsSnapshot(),
+            Last24Hours = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(24)),
+            LastHour = _securityMetricsService.GetMetricsForPeriod(TimeSpan.FromHours(1))
+        };
+    }
+
+    /// <summary>
+    /// Builds the complete security dashboard from collected metrics data
+    /// </summary>
+    private SecurityDashboard BuildSecurityDashboard(DashboardMetricsData data)
+    {
+        return new SecurityDashboard
+        {
+            Timestamp = DateTime.UtcNow,
+            ThreatLevel = data.Last24Hours.ThreatLevel,
+            SecurityScore = Math.Round(data.Last24Hours.SecurityScore, 1),
+            ActiveThreats = CountActiveThreats(data.Snapshot),
+                
+            // Key metrics
+            AuthFailuresLast24h = CountEventsByType(data.Snapshot, "AUTHENTICATION_FAILURE"),
+            RateLimitViolationsLast24h = CountEventsByType(data.Snapshot, "RATE_LIMIT_VIOLATION"),
+            SuspiciousActivitiesLast24h = CountEventsByType(data.Snapshot, "SUSPICIOUS_ACTIVITY"),
+
+            // Trends
+            AuthFailureTrend = CalculateTrend(data.Snapshot.RecentEvents, "AUTHENTICATION_FAILURE"),
+            RateLimitTrend = CalculateTrend(data.Snapshot.RecentEvents, "RATE_LIMIT_VIOLATION"),
+            ThreatTrend = CalculateOverallThrend(data.LastHour, data.Last24Hours),
+
+            // Top threats
+            TopAttackingIPs = GetTopAttackingIPs(data.Snapshot),
+            TopViolatedEndpoints = GetTopViolatedEndpoints(data.Snapshot),
+                
+            // Alerts and recommendations
+            ActiveAlerts = GenerateActiveAlerts(data.Snapshot, data.Last24Hours),
+            Recommendations = data.Last24Hours.Recommendations,
+                
+            // System status
+            SystemStatus = DetermineSystemStatus(data.Last24Hours.ThreatLevel, data.Last24Hours.SecurityScore),
+            LastIncidentTime = GetLastIncidentTime(data.Snapshot),
+                
+            // Operational metrics
+            MonitoringStatus = "ACTIVE",
+            AlertsEnabled = _configuration.GetValue<bool>("Security:AlertsEnabled", true),
+            MetricsRetentionDays = _configuration.GetValue<int>("Security:MetricsRetentionDays", 7)
+        };
+    }
+
+    /// <summary>
+    /// Counts active threats (critical and high severity events)
+    /// </summary>
+    private static int CountActiveThreats(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.RecentEvents.Count(e => 
+            e.Severity == "CRITICAL" || e.Severity == "HIGH");
+    }
+
+    /// <summary>
+    /// Counts events of a specific type in the last 24 hours
+    /// </summary>
+    private static int CountEventsByType(SecurityMetricsSnapshot snapshot, string eventType)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        return snapshot.RecentEvents.Count(e => 
+            e.EventType == eventType && e.Timestamp >= cutoff);
+    }
+
+    /// <summary>
+    /// Gets the top attacking IP addresses
+    /// </summary>
+    private static string[] GetTopAttackingIPs(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.TopFailingIps.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the top violated endpoints
+    /// </summary>
+    private static string[] GetTopViolatedEndpoints(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.TopViolatedEndpoints.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the timestamp of the last critical or high severity incident
+    /// </summary>
+    private static DateTime? GetLastIncidentTime(SecurityMetricsSnapshot snapshot)
+    {
+        return snapshot.RecentEvents
+            .Where(e => e.Severity == "CRITICAL" || e.Severity == "HIGH")
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefault()?.Timestamp;
+    }
+
+    /// <summary>
+    /// Handles unauthorized access exceptions
+    /// </summary>
+    private ActionResult HandleUnauthorizedAccess(UnauthorizedAccessException ex)
+    {
+        _logger.LogWarning(ex, "Unauthorized access to security dashboard by user {UserId}", 
+            User.Identity?.Name ?? "Unknown");
+        return Forbid();
+    }
+
+    /// <summary>
+    /// Handles argument exceptions
+    /// </summary>
+    private ActionResult HandleArgumentException(ArgumentException ex)
+    {
+        _logger.LogWarning(ex, "Invalid argument in security dashboard request");
+        return BadRequest("Invalid request parameters");
+    }
+
+    /// <summary>
+    /// Handles service unavailable exceptions
+    /// </summary>
+    private ActionResult HandleServiceUnavailable(InvalidOperationException ex)
+    {
+        _logger.LogError(ex, "Security metrics service unavailable");
+        return StatusCode(503, "Security metrics service temporarily unavailable");
+    }
+
+    /// <summary>
+    /// Handles timeout exceptions
+    /// </summary>
+    private ActionResult HandleTimeout(TimeoutException ex)
+    {
+        _logger.LogError(ex, "Timeout retrieving security dashboard data");
+        return StatusCode(504, "Request timeout - please try again");
+    }
+
+    /// <summary>
+    /// Handles unexpected errors
+    /// </summary>
+    private ActionResult HandleUnexpectedError(Exception ex)
+    {
+        _logger.LogError(ex, "Unexpected error retrieving security dashboard");
+        return StatusCode(500, "Error retrieving security dashboard");
     }
 
     /// <summary>
@@ -460,9 +552,37 @@ public class SecurityMetricsController : ControllerBase
 
     private string GetClientIpAddress()
     {
-        return IpAddressUtility.GetClientIpAddress(Request.HttpContext);
+        // Try to get real IP from forwarded headers (for reverse proxy scenarios)
+        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+        {
+            var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            return ips[0].Trim(); // First IP is the original client
+        }
+
+        var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(realIp))
+        {
+            return realIp;
+        }
+
+        return HttpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
     }
 }
+
+#region Internal Data Models
+
+/// <summary>
+/// Internal data structure for collecting metrics data from the security service
+/// </summary>
+internal class DashboardMetricsData
+{
+    public SecurityMetricsSnapshot Snapshot { get; set; } = null!;
+    public SecurityMetricsPeriod Last24Hours { get; set; } = null!;
+    public SecurityMetricsPeriod LastHour { get; set; } = null!;
+}
+
+#endregion
 
 #region Request/Response Models
 
