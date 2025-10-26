@@ -23,6 +23,7 @@ using SetlistStudio.Web.Security;
 using System.Threading.RateLimiting;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using StackExchange.Redis;
 
 // Configure Serilog with secure logging and data filtering
 Log.Logger = new LoggerConfiguration()
@@ -2111,7 +2112,7 @@ public partial class Program
             })
             .AddStackExchangeRedis(redisConnection, options =>
             {
-                options.Configuration.ChannelPrefix = "SetlistStudio";
+                options.Configuration.ChannelPrefix = RedisChannel.Literal("SetlistStudio");
             });
 
             // Configure Blazor Server with sticky sessions

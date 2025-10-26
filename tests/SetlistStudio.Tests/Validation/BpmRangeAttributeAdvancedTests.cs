@@ -8,7 +8,7 @@ namespace SetlistStudio.Tests.Validation;
 /// Advanced tests for BpmRangeAttribute to improve branch coverage
 /// Targets specific branches in TryConvertToInt and GetGenreRange methods
 /// </summary>
-public class BpmRangeAttributeBranchCoverageTests
+public class BpmRangeAttributeAdvancedTests
 {
     #region TryConvertToInt Branch Coverage Tests
 
