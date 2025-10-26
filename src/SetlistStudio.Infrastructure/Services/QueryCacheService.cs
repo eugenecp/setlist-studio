@@ -4,7 +4,7 @@ using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Infrastructure.Extensions;
 using System.Collections.Concurrent;
-
+using System.Linq;
 namespace SetlistStudio.Infrastructure.Services;
 
 /// <summary>
@@ -241,9 +241,8 @@ public class QueryCacheService : IQueryCacheService
         var prefixes = new[] { GenrePrefix, ArtistPrefix, SongCountPrefix, SetlistCountPrefix, RecentSongsPrefix };
         var invalidatedCount = 0;
 
-        foreach (var prefix in prefixes)
+        foreach (var cacheKey in prefixes.Select(prefix => GetCacheKey(prefix, userId)))
         {
-            var cacheKey = GetCacheKey(prefix, userId);
             _cache.Remove(cacheKey);
             _metrics.TryRemove(cacheKey, out _);
             invalidatedCount++;
