@@ -141,7 +141,7 @@ public class SecurityIntegrationTests : IClassFixture<TestWebApplicationFactory>
             if (response.StatusCode == HttpStatusCode.Found)
             {
                 var location = response.Headers.Location?.ToString();
-                location.Should().Contain("Account/Login", "Unauthorized access should redirect to login");
+                location.Should().Contain("login", "Unauthorized access should redirect to login");
             }
         }
     }

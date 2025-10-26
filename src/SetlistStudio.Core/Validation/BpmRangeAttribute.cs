@@ -64,16 +64,79 @@ public class BpmRangeAttribute : ValidationAttribute
     {
         result = 0;
         
+        // Handle direct integer
+        if (value is int intValue)
+        {
+            result = intValue;
+            return true;
+        }
+
+        // Handle string conversion
+        if (value is string stringValue)
+        {
+            return int.TryParse(stringValue.Trim(), out result);
+        }
+
+        // Handle numeric types
+        return TryConvertNumericToInt(value, out result);
+    }
+
+    private static bool TryConvertNumericToInt(object value, out int result)
+    {
+        result = 0;
+
         return value switch
         {
-            int intValue => (result = intValue) >= 0 || result < 0, // Always true, just assigns value
-            long longValue when longValue >= int.MinValue && longValue <= int.MaxValue => (result = (int)longValue) >= 0 || result < 0,
-            float floatValue when float.IsFinite(floatValue) && floatValue >= int.MinValue && floatValue <= int.MaxValue => (result = (int)Math.Round(floatValue)) >= 0 || result < 0,
-            double doubleValue when double.IsFinite(doubleValue) && doubleValue >= int.MinValue && doubleValue <= int.MaxValue => (result = (int)Math.Round(doubleValue)) >= 0 || result < 0,
-            decimal decimalValue when decimalValue >= int.MinValue && decimalValue <= int.MaxValue => (result = (int)Math.Round(decimalValue)) >= 0 || result < 0,
-            string stringValue => int.TryParse(stringValue.Trim(), out result),
+            long longValue => TryConvertLong(longValue, out result),
+            float floatValue => TryConvertFloat(floatValue, out result),
+            double doubleValue => TryConvertDouble(doubleValue, out result),
+            decimal decimalValue => TryConvertDecimal(decimalValue, out result),
             _ => false
         };
+    }
+
+    private static bool TryConvertLong(long value, out int result)
+    {
+        result = 0;
+        if (value >= int.MinValue && value <= int.MaxValue)
+        {
+            result = (int)value;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool TryConvertFloat(float value, out int result)
+    {
+        result = 0;
+        if (float.IsFinite(value) && value >= int.MinValue && value <= int.MaxValue)
+        {
+            result = (int)Math.Round(value);
+            return true;
+        }
+        return false;
+    }
+
+    private static bool TryConvertDouble(double value, out int result)
+    {
+        result = 0;
+        if (double.IsFinite(value) && value >= int.MinValue && value <= int.MaxValue)
+        {
+            result = (int)Math.Round(value);
+            return true;
+        }
+        return false;
+    }
+
+    private static bool TryConvertDecimal(decimal value, out int result)
+    {
+        result = 0;
+        if (value >= int.MinValue && value <= int.MaxValue)
+        {
+            result = (int)Math.Round(value);
+            return true;
+        }
+        return false;
     }
 
     private static string GetBpmGuidance(int min, int max)
@@ -110,22 +173,85 @@ public class BpmRangeAttribute : ValidationAttribute
     /// </summary>
     public static (int Min, int Max) GetGenreRange(string? genre)
     {
-        return genre?.ToLower() switch
+        if (string.IsNullOrWhiteSpace(genre))
+        {
+            return DefaultRange;
+        }
+
+        var normalizedGenre = genre.ToLower();
+        
+        // Check common genre categories to reduce complexity
+        if (IsSlowGenre(normalizedGenre))
+        {
+            return GetSlowGenreRange(normalizedGenre);
+        }
+        
+        if (IsMediumGenre(normalizedGenre))
+        {
+            return GetMediumGenreRange(normalizedGenre);
+        }
+        
+        if (IsElectronicGenre(normalizedGenre))
+        {
+            return GetElectronicGenreRange(normalizedGenre);
+        }
+        
+        if (IsFastGenre(normalizedGenre))
+        {
+            return GetFastGenreRange(normalizedGenre);
+        }
+
+        return DefaultRange;
+    }
+
+    private static readonly (int Min, int Max) DefaultRange = (40, 250);
+
+    private static bool IsSlowGenre(string genre) =>
+        genre is "ballad" or "slow" or "reggae";
+
+    private static bool IsMediumGenre(string genre) =>
+        genre is "blues" or "jazz" or "rock" or "pop" or "funk" or "country";
+
+    private static bool IsElectronicGenre(string genre) =>
+        genre is "electronic" or "techno" or "house" or "trance";
+
+    private static bool IsFastGenre(string genre) =>
+        genre is "drum and bass" or "dubstep";
+
+    private static (int Min, int Max) GetSlowGenreRange(string genre) =>
+        genre switch
         {
             "ballad" or "slow" => (60, 80),
+            "reggae" => (60, 90),
+            _ => DefaultRange
+        };
+
+    private static (int Min, int Max) GetMediumGenreRange(string genre) =>
+        genre switch
+        {
             "blues" => (80, 120),
             "jazz" => (90, 200),
             "rock" => (110, 140),
             "pop" => (100, 130),
             "funk" => (90, 120),
-            "reggae" => (60, 90),
             "country" => (80, 140),
+            _ => DefaultRange
+        };
+
+    private static (int Min, int Max) GetElectronicGenreRange(string genre) =>
+        genre switch
+        {
             "electronic" or "techno" => (120, 140),
             "house" => (115, 130),
             "trance" => (130, 140),
+            _ => DefaultRange
+        };
+
+    private static (int Min, int Max) GetFastGenreRange(string genre) =>
+        genre switch
+        {
             "drum and bass" => (160, 180),
             "dubstep" => (140, 150),
-            _ => (40, 250) // Default range
+            _ => DefaultRange
         };
-    }
 }

@@ -96,6 +96,268 @@ public class SecurityEventHandlerTests
     }
 
     /// <summary>
+    /// Tests exception handling in OnLoginSuccess method.
+    /// </summary>
+    [Fact]
+    public void OnLoginSuccess_ShouldHandleArgumentException()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogAuthenticationSuccess(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Throws(new ArgumentException("Test argument exception"));
+
+        // Act
+        _securityEventHandler.OnLoginSuccess(_httpContext, user);
+
+        // Assert - Should not throw, should log warning
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Invalid argument provided to authentication success logging")),
+                It.IsAny<ArgumentException>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnLoginSuccess method for InvalidOperationException.
+    /// </summary>
+    [Fact]
+    public void OnLoginSuccess_ShouldHandleInvalidOperationException()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogAuthenticationSuccess(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Throws(new InvalidOperationException("Service unavailable"));
+
+        // Act
+        _securityEventHandler.OnLoginSuccess(_httpContext, user);
+
+        // Assert - Should not throw, should log warning
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Security event logging service temporarily unavailable")),
+                It.IsAny<InvalidOperationException>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnLoginSuccess method for unexpected exceptions.
+    /// </summary>
+    [Fact]
+    public void OnLoginSuccess_ShouldHandleUnexpectedException()
+    {
+        // Arrange
+        var user = new SetlistStudio.Core.Entities.ApplicationUser
+        {
+            Id = "user123",
+            UserName = "test@example.com"
+        };
+
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogAuthenticationSuccess(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Throws(new Exception("Unexpected error"));
+
+        // Act
+        _securityEventHandler.OnLoginSuccess(_httpContext, user);
+
+        // Assert - Should not throw, should log error
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Unexpected error logging authentication success event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnLogout method.
+    /// </summary>
+    [Fact]
+    public void OnLogout_ShouldHandleException()
+    {
+        // Arrange
+        var userId = "test-user-123";
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogSecurityEvent(It.IsAny<SecurityEventType>(), It.IsAny<SecurityEventSeverity>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>()))
+            .Throws(new Exception("Logout logging failed"));
+
+        // Act
+        _securityEventHandler.OnLogout(_httpContext, userId);
+
+        // Assert - Should not throw, should log error
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log logout event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests exception handling in OnSuspiciousActivity method.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_ShouldHandleException()
+    {
+        // Arrange
+        var activityType = "TestActivity";
+        var description = "Test suspicious activity";
+        var userId = "test-user-123";
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+        _httpContext.Request.Path = "/test/path";
+
+        _mockSecurityEventLogger
+            .Setup(x => x.LogSuspiciousActivity(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SecurityEventSeverity>(), It.IsAny<object>()))
+            .Throws(new Exception("Suspicious activity logging failed"));
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(_httpContext, activityType, description, userId);
+
+        // Assert - Should not throw, should log error
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to log suspicious activity event")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests OnLogout method with valid parameters.
+    /// </summary>
+    [Fact]
+    public void OnLogout_ShouldLogSecurityEvent()
+    {
+        // Arrange
+        var userId = "test-user-123";
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        // Act
+        _securityEventHandler.OnLogout(_httpContext, userId);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSecurityEvent(
+                SecurityEventType.Authentication,
+                SecurityEventSeverity.Low,
+                "User logged out successfully",
+                userId,
+                "Authentication",
+                null,
+                It.IsAny<object>()),
+            Times.Once);
+
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Logout logged for user")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests OnSuspiciousActivity method with valid parameters.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_ShouldLogSuspiciousActivity()
+    {
+        // Arrange
+        var activityType = "MaliciousRequest";
+        var description = "Suspicious URL pattern detected";
+        var userId = "test-user-123";
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+        _httpContext.Request.Path = "/test/path";
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(_httpContext, activityType, description, userId);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSuspiciousActivity(
+                activityType,
+                description,
+                userId,
+                SecurityEventSeverity.High,
+                It.IsAny<object>()),
+            Times.Once);
+
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Suspicious activity logged")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Tests OnSuspiciousActivity method with custom severity.
+    /// </summary>
+    [Fact]
+    public void OnSuspiciousActivity_ShouldRespectCustomSeverity()
+    {
+        // Arrange
+        var activityType = "MinorSuspiciousActivity";
+        var description = "Low priority suspicious activity";
+        _httpContext.Request.Headers["User-Agent"] = "Mozilla/5.0 Test Browser";
+        _httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.100");
+
+        // Act
+        _securityEventHandler.OnSuspiciousActivity(_httpContext, activityType, description, null, SecurityEventSeverity.Medium);
+
+        // Assert
+        _mockSecurityEventLogger.Verify(
+            x => x.LogSuspiciousActivity(
+                activityType,
+                description,
+                null,
+                SecurityEventSeverity.Medium,
+                It.IsAny<object>()),
+            Times.Once);
+    }
+
+    /// <summary>
     /// Tests that login failure events are properly logged.
     /// </summary>
     [Fact]

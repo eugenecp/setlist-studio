@@ -113,10 +113,10 @@ public class AuditLogService : IAuditLogService
             if (!string.IsNullOrWhiteSpace(tableName))
                 query = query.Where(a => a != null && a.EntityType == tableName);
 
-            if (startDate.HasValue && startDate.Value != default(DateTime))
+            if (startDate.HasValue && startDate.Value != DateTime.MinValue)
                 query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
 
-            if (endDate.HasValue && endDate.Value != default(DateTime))
+            if (endDate.HasValue && endDate.Value != DateTime.MinValue)
                 query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
 
             return await query

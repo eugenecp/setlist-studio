@@ -121,6 +121,18 @@ public static class DatabasePathValidator
         {
             throw; // Re-throw validation exceptions
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new ArgumentException("Database path access is unauthorized", nameof(path), ex);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new ArgumentException("Database path format is not supported", nameof(path), ex);
+        }
+        catch (PathTooLongException ex)
+        {
+            throw new ArgumentException("Database path is too long", nameof(path), ex);
+        }
         catch (Exception ex)
         {
             throw new ArgumentException("Invalid database path format", nameof(path), ex);
@@ -181,8 +193,21 @@ public static class DatabasePathValidator
             
             return true;
         }
-        catch
+        catch (UnauthorizedAccessException)
         {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // For any other unexpected exception during permission testing
             return false;
         }
     }

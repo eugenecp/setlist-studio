@@ -1,4 +1,5 @@
 using Bunit;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -14,10 +15,22 @@ namespace SetlistStudio.Tests.Pages;
 public class LoginTests : TestContext
 {
     private readonly Mock<AuthenticationStateProvider> _mockAuthStateProvider;
+    private readonly Mock<IAuthenticationSchemeProvider> _mockSchemeProvider;
 
     public LoginTests()
     {
         _mockAuthStateProvider = new Mock<AuthenticationStateProvider>();
+        _mockSchemeProvider = new Mock<IAuthenticationSchemeProvider>();
+        
+        // Setup mock authentication schemes (Google, Microsoft, Facebook)
+        var schemes = new List<AuthenticationScheme>
+        {
+            new AuthenticationScheme("Google", "Google", typeof(IAuthenticationHandler)),
+            new AuthenticationScheme("Microsoft", "Microsoft", typeof(IAuthenticationHandler)),
+            new AuthenticationScheme("Facebook", "Facebook", typeof(IAuthenticationHandler))
+        };
+        _mockSchemeProvider.Setup(x => x.GetAllSchemesAsync())
+            .ReturnsAsync(schemes);
         
         // Register MudBlazor services
         Services.AddMudServices();
@@ -27,6 +40,7 @@ public class LoginTests : TestContext
         
         // Register mocked services
         Services.AddScoped<AuthenticationStateProvider>(_ => _mockAuthStateProvider.Object);
+        Services.AddScoped<IAuthenticationSchemeProvider>(_ => _mockSchemeProvider.Object);
     }
 
     [Fact]

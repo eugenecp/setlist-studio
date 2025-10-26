@@ -17,6 +17,7 @@ services:
     
     # Relaxed resource limits for development
     mem_limit: 1G
+    memswap_limit: 2G
     cpus: '2.0'
     
     # Volume mounts for development with security considerations
@@ -46,9 +47,7 @@ services:
       - SETGID
       - SETUID
       - DAC_OVERRIDE  # Allow file permission overrides for development
-    security_opt:
-      - no-new-privileges:true
-      - apparmor:docker-default
+    # security_opt inherited from base compose file
     # Read-only filesystem disabled in development for easier debugging
     # Uncomment for production-like testing: read_only: true
     user: "1001:1001"

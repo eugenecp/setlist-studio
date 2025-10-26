@@ -51,12 +51,12 @@ public class SetlistService : ISetlistService
             // Apply filters
             if (isTemplate.HasValue)
             {
-                query = query.Where(sl => sl.IsTemplate == isTemplate.Value);
+                query = query.Where(sl => sl.IsTemplate == isTemplate!.Value);
             }
 
             if (isActive.HasValue)
             {
-                query = query.Where(sl => sl.IsActive == isActive.Value);
+                query = query.Where(sl => sl.IsActive == isActive!.Value);
             }
 
             var totalCount = await query.CountAsync();
@@ -374,7 +374,7 @@ public class SetlistService : ISetlistService
         if (!position.HasValue) return;
 
         var songsToShift = await _context.SetlistSongs
-            .Where(ss => ss.SetlistId == setlistId && ss.Position >= position.Value)
+            .Where(ss => ss.SetlistId == setlistId && ss.Position >= position!.Value)
             .ToListAsync();
 
         foreach (var songToShift in songsToShift)

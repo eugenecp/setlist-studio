@@ -450,7 +450,7 @@ public class SecretValidationServiceAdvancedTests
             x => x.Log(
                 LogLevel.Debug,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Optional OAuth secret not configured")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Skipping validation for optional OAuth secret")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeast(1),

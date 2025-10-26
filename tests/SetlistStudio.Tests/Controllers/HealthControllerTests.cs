@@ -46,6 +46,7 @@ public class HealthControllerTests : IDisposable
         result.Should().BeOfType<OkObjectResult>();
         
         var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
         okResult!.Value.Should().NotBeNull();
         
         // Use reflection to check the anonymous object properties
@@ -139,6 +140,7 @@ public class HealthControllerTests : IDisposable
         result.Should().BeOfType<OkObjectResult>();
         
         var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
         okResult!.Value.Should().NotBeNull();
         
         var healthStatus = okResult.Value!;

@@ -42,11 +42,9 @@ services:
       - SETGID    # Required for group changes
       - SETUID    # Required for user changes
     read_only: true
-    # Security: Enhanced security options
+    # Security: Enhanced security options (Windows compatible)
     security_opt:
       - no-new-privileges:true    # Prevent privilege escalation
-      - apparmor:docker-default   # Use AppArmor security profile
-      - seccomp:default          # Use default seccomp profile
     # Security: Run as non-root user
     user: "1001:1001"
     # Security: Disable network access to other containers by default

@@ -11,7 +11,7 @@ namespace SetlistStudio.Web.Security;
 /// Handles security event logging for authentication and authorization events.
 /// Integrates with ASP.NET Core Identity to capture security-relevant events.
 /// </summary>
-public class SecurityEventHandler
+public class SecurityEventHandler : ISecurityEventHandler
 {
     private readonly SecurityEventLogger _securityEventLogger;
     private readonly ILogger<SecurityEventHandler> _logger;
