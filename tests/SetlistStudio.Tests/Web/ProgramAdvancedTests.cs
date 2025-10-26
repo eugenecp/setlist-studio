@@ -17,6 +17,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Builder;
 using System.Text;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using System.Security.Principal;
 
 namespace SetlistStudio.Tests.Web;
 
@@ -3198,5 +3201,7 @@ public class ProgramAdvancedTests : IDisposable
     }
 
     #endregion
+
+
 
 }
