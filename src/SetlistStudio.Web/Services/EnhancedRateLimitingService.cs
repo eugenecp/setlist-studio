@@ -608,15 +608,21 @@ public class EnhancedRateLimitingService : IEnhancedRateLimitingService
 
     private bool IsSensitiveOperation(string? endpoint, string method)
     {
-        if (string.IsNullOrEmpty(endpoint))
-            return false;
+        return !string.IsNullOrEmpty(endpoint) && 
+               IsSensitiveMethod(method) && 
+               IsSensitiveEndpoint(endpoint);
+    }
 
-        // POST/PUT/DELETE operations on sensitive endpoints
+    private static bool IsSensitiveMethod(string method)
+    {
         var sensitiveMethods = new[] { "POST", "PUT", "DELETE", "PATCH" };
-        var sensitiveEndpoints = new[] { "/api/users", "/api/settings", "/api/export" };
+        return sensitiveMethods.Contains(method);
+    }
 
-        return sensitiveMethods.Contains(method) && 
-               sensitiveEndpoints.Any(sensitive => endpoint.StartsWith(sensitive, StringComparison.OrdinalIgnoreCase));
+    private static bool IsSensitiveEndpoint(string endpoint)
+    {
+        var sensitiveEndpoints = new[] { "/api/users", "/api/settings", "/api/export" };
+        return sensitiveEndpoints.Any(sensitive => endpoint.StartsWith(sensitive, StringComparison.OrdinalIgnoreCase));
     }
 
     #endregion

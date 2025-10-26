@@ -245,27 +245,48 @@ public class DatabaseConfiguration : IDatabaseConfiguration
     private static (string host, string port, string database, string username, string password) ExtractPostgreSqlConnectionParameters(
         IConfiguration configuration, bool isContainerized)
     {
-        var host = configuration["Database:PostgreSQL:Host"] ?? 
-                   Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? 
-                   (isContainerized ? "postgres" : "localhost");
-        
-        var port = configuration["Database:PostgreSQL:Port"] ?? 
-                   Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? 
-                   "5432";
-        
-        var database = configuration["Database:PostgreSQL:Database"] ?? 
-                       Environment.GetEnvironmentVariable("POSTGRES_DB") ?? 
-                       "setliststudio";
-        
-        var username = configuration["Database:PostgreSQL:Username"] ?? 
-                       Environment.GetEnvironmentVariable("POSTGRES_USER") ?? 
-                       "setliststudio";
-        
-        var password = configuration["Database:PostgreSQL:Password"] ?? 
-                       Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? 
-                       "setliststudio";
+        return (
+            ExtractPostgreSqlHost(configuration, isContainerized),
+            ExtractPostgreSqlPort(configuration),
+            ExtractPostgreSqlDatabase(configuration),
+            ExtractPostgreSqlUsername(configuration),
+            ExtractPostgreSqlPassword(configuration)
+        );
+    }
 
-        return (host, port, database, username, password);
+    private static string ExtractPostgreSqlHost(IConfiguration configuration, bool isContainerized)
+    {
+        return configuration["Database:PostgreSQL:Host"] ?? 
+               Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? 
+               (isContainerized ? "postgres" : "localhost");
+    }
+
+    private static string ExtractPostgreSqlPort(IConfiguration configuration)
+    {
+        return configuration["Database:PostgreSQL:Port"] ?? 
+               Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? 
+               "5432";
+    }
+
+    private static string ExtractPostgreSqlDatabase(IConfiguration configuration)
+    {
+        return configuration["Database:PostgreSQL:Database"] ?? 
+               Environment.GetEnvironmentVariable("POSTGRES_DB") ?? 
+               "setliststudio";
+    }
+
+    private static string ExtractPostgreSqlUsername(IConfiguration configuration)
+    {
+        return configuration["Database:PostgreSQL:Username"] ?? 
+               Environment.GetEnvironmentVariable("POSTGRES_USER") ?? 
+               "setliststudio";
+    }
+
+    private static string ExtractPostgreSqlPassword(IConfiguration configuration)
+    {
+        return configuration["Database:PostgreSQL:Password"] ?? 
+               Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? 
+               "setliststudio";
     }
 
     /// <summary>
@@ -289,6 +310,16 @@ public class DatabaseConfiguration : IDatabaseConfiguration
 
     private string GenerateSqlServerConnectionString(IConfiguration configuration, string environment, bool isContainerized)
     {
+        var connectionParams = ExtractSqlServerConnectionParameters(configuration, isContainerized);
+        var baseConnectionString = BuildSqlServerBaseConnectionString(connectionParams);
+        var encryptionSettings = GetSqlServerEncryptionSettings(environment);
+        
+        return baseConnectionString + encryptionSettings;
+    }
+
+    private static (string server, string database, string? username, string? password) ExtractSqlServerConnectionParameters(
+        IConfiguration configuration, bool isContainerized)
+    {
         var server = configuration["Database:SqlServer:Server"] ?? 
                      Environment.GetEnvironmentVariable("SQL_SERVER") ?? 
                      (isContainerized ? "sqlserver" : "localhost");
@@ -303,27 +334,25 @@ public class DatabaseConfiguration : IDatabaseConfiguration
         var password = configuration["Database:SqlServer:Password"] ?? 
                        Environment.GetEnvironmentVariable("SQL_PASSWORD");
 
-        string connectionString;
-        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-        {
-            connectionString = $"Server={server};Database={database};User Id={username};Password={password};";
-        }
-        else
-        {
-            connectionString = $"Server={server};Database={database};Integrated Security=true;";
-        }
+        return (server, database, username, password);
+    }
 
-        // Add encryption for production
-        if (!environment.Equals("Development", StringComparison.OrdinalIgnoreCase))
-        {
-            connectionString += "Encrypt=true;TrustServerCertificate=false;";
-        }
-        else
-        {
-            connectionString += "Encrypt=false;";
-        }
+    private static string BuildSqlServerBaseConnectionString(
+        (string server, string database, string? username, string? password) parameters)
+    {
+        var hasCredentials = !string.IsNullOrWhiteSpace(parameters.username) && 
+                           !string.IsNullOrWhiteSpace(parameters.password);
 
-        return connectionString;
+        return hasCredentials
+            ? $"Server={parameters.server};Database={parameters.database};User Id={parameters.username};Password={parameters.password};"
+            : $"Server={parameters.server};Database={parameters.database};Integrated Security=true;";
+    }
+
+    private static string GetSqlServerEncryptionSettings(string environment)
+    {
+        return environment.Equals("Development", StringComparison.OrdinalIgnoreCase)
+            ? "Encrypt=false;"
+            : "Encrypt=true;TrustServerCertificate=false;";
     }
 
     private string GenerateSqliteConnectionString(IConfiguration configuration, string environment, bool isContainerized)

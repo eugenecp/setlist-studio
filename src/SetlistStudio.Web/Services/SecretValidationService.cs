@@ -713,21 +713,38 @@ public class SecretValidationService
 
         for (int i = 0; i < value.Length - 2; i++)
         {
-            if (char.IsLetterOrDigit(value[i]) && 
-                char.IsLetterOrDigit(value[i + 1]) && 
-                char.IsLetterOrDigit(value[i + 2]))
+            if (AreConsecutiveAlphanumericCharacters(value, i) && 
+                HasSequentialPattern(value, i))
             {
-                // Check for ascending sequence
-                if (value[i + 1] == value[i] + 1 && value[i + 2] == value[i] + 2)
-                    return true;
-                
-                // Check for descending sequence
-                if (value[i + 1] == value[i] - 1 && value[i + 2] == value[i] - 2)
-                    return true;
+                return true;
             }
         }
 
         return false;
+    }
+
+    private static bool AreConsecutiveAlphanumericCharacters(string value, int startIndex)
+    {
+        return char.IsLetterOrDigit(value[startIndex]) && 
+               char.IsLetterOrDigit(value[startIndex + 1]) && 
+               char.IsLetterOrDigit(value[startIndex + 2]);
+    }
+
+    private static bool HasSequentialPattern(string value, int startIndex)
+    {
+        return IsAscendingSequence(value, startIndex) || IsDescendingSequence(value, startIndex);
+    }
+
+    private static bool IsAscendingSequence(string value, int startIndex)
+    {
+        return value[startIndex + 1] == value[startIndex] + 1 && 
+               value[startIndex + 2] == value[startIndex] + 2;
+    }
+
+    private static bool IsDescendingSequence(string value, int startIndex)
+    {
+        return value[startIndex + 1] == value[startIndex] - 1 && 
+               value[startIndex + 2] == value[startIndex] - 2;
     }
 
     /// <summary>

@@ -123,28 +123,8 @@ public class AuditLogService : IAuditLogService
     {
         try
         {
-            var query = _context.AuditLogs.AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(userId))
-                query = query.Where(a => a != null && a.UserId == userId);
-
-            if (!string.IsNullOrWhiteSpace(action))
-                query = query.Where(a => a != null && a.Action == action);
-
-            if (!string.IsNullOrWhiteSpace(tableName))
-                query = query.Where(a => a != null && a.EntityType == tableName);
-
-            if (startDate.HasValue && startDate.Value != DateTime.MinValue)
-                query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
-
-            if (endDate.HasValue && endDate.Value != DateTime.MinValue)
-                query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
-
-            return await query
-                .OrderByDescending(a => a!.Timestamp)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync() ?? new List<AuditLog>();
+            var query = BuildAuditLogQuery(userId, action, tableName, startDate, endDate);
+            return await ExecutePagedQuery(query, pageNumber, pageSize);
         }
         catch (InvalidOperationException ex)
         {
@@ -156,6 +136,64 @@ public class AuditLogService : IAuditLogService
             _logger.LogError(ex, "Invalid argument retrieving audit logs");
             return Enumerable.Empty<AuditLog>();
         }
+    }
+
+    private IQueryable<AuditLog> BuildAuditLogQuery(
+        string? userId, 
+        string? action, 
+        string? tableName, 
+        DateTime? startDate, 
+        DateTime? endDate)
+    {
+        var query = _context.AuditLogs.AsQueryable();
+
+        query = ApplyUserFilter(query, userId);
+        query = ApplyActionFilter(query, action);
+        query = ApplyTableNameFilter(query, tableName);
+        query = ApplyDateRangeFilters(query, startDate, endDate);
+
+        return query;
+    }
+
+    private static IQueryable<AuditLog> ApplyUserFilter(IQueryable<AuditLog> query, string? userId)
+    {
+        return string.IsNullOrWhiteSpace(userId) 
+            ? query 
+            : query.Where(a => a != null && a.UserId == userId);
+    }
+
+    private static IQueryable<AuditLog> ApplyActionFilter(IQueryable<AuditLog> query, string? action)
+    {
+        return string.IsNullOrWhiteSpace(action) 
+            ? query 
+            : query.Where(a => a != null && a.Action == action);
+    }
+
+    private static IQueryable<AuditLog> ApplyTableNameFilter(IQueryable<AuditLog> query, string? tableName)
+    {
+        return string.IsNullOrWhiteSpace(tableName) 
+            ? query 
+            : query.Where(a => a != null && a.EntityType == tableName);
+    }
+
+    private static IQueryable<AuditLog> ApplyDateRangeFilters(IQueryable<AuditLog> query, DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate.HasValue && startDate.Value != DateTime.MinValue)
+            query = query.Where(a => a != null && a.Timestamp >= startDate!.Value);
+
+        if (endDate.HasValue && endDate.Value != DateTime.MinValue)
+            query = query.Where(a => a != null && a.Timestamp <= endDate!.Value);
+
+        return query;
+    }
+
+    private static async Task<List<AuditLog>> ExecutePagedQuery(IQueryable<AuditLog> query, int pageNumber, int pageSize)
+    {
+        return await query
+            .OrderByDescending(a => a!.Timestamp)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync() ?? new List<AuditLog>();
     }
 
     /// <inheritdoc />

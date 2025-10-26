@@ -71,39 +71,40 @@ public static class SecureLoggingHelper
     {
         // Always process through sanitization to prevent user-controlled bypass
         // This addresses CWE-807: User-controlled bypass of sensitive method
+        var sanitized = NormalizeInputForSanitization(message);
+        
+        sanitized = RedactSensitiveEdgeCases(sanitized);
+        sanitized = RedactSensitivePatterns(sanitized);
+        sanitized = SanitizeXssContent(sanitized);
+        sanitized = PreventLogInjection(sanitized);
+
+        // Use TaintBarrier to ensure no taint tracking through sanitization
+        return TaintBarrier.BreakTaint(sanitized);
+    }
+
+    private static string NormalizeInputForSanitization(string? input)
+    {
         // Handle null by converting to empty string for consistent processing
-        var sanitized = message ?? string.Empty;
+        return input ?? string.Empty;
+    }
 
+    private static string RedactSensitiveEdgeCases(string input)
+    {
         // Handle the specific edge case for space-only values first
-        sanitized = Regex.Replace(sanitized, @"\b(password|token|secret|(?<!musical\s)(?<!song\s)(?<!and\s)key|api[_-]?key|client[_-]?secret)\s*:\s+$", 
+        return Regex.Replace(input, @"\b(password|token|secret|(?<!musical\s)(?<!song\s)(?<!and\s)key|api[_-]?key|client[_-]?secret)\s*:\s+$", 
             match => $"{match.Groups[1].Value}:[REDACTED]", RegexOptions.IgnoreCase);
+    }
 
+    private static string RedactSensitivePatterns(string input)
+    {
+        var sanitized = input;
+        
         // Apply sensitive pattern redaction
         foreach (var pattern in SensitivePatterns)
         {
             try
             {
-                sanitized = pattern.Replace(sanitized, match =>
-                {
-                    var groups = match.Groups;
-                    
-                    // Handle quoted values (pattern: field="value" or field='value')
-                    if (groups.Count >= 3 && groups[1].Success && (groups[1].Value == "\"" || groups[1].Value == "'"))
-                    {
-                        // For quoted patterns, preserve the opening quote but not the closing quote
-                        var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
-                        var quote = groups[1].Value;
-                        return $"{prefix}{quote}[REDACTED]";
-                    }
-                    // Handle unquoted values (pattern: field=value or field: value)
-                    else if (groups.Count >= 2 && groups[1].Success)
-                    {
-                        var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
-                        return $"{prefix}[REDACTED]";
-                    }
-                    
-                    return "[REDACTED]";
-                });
+                sanitized = pattern.Replace(sanitized, ProcessSensitivePatternMatch);
             }
             catch (RegexMatchTimeoutException)
             {
@@ -122,14 +123,29 @@ public static class SecureLoggingHelper
             }
         }
 
-        // Apply XSS and malicious content sanitization
-        sanitized = SanitizeXssContent(sanitized);
+        return sanitized;
+    }
 
-        // Apply log injection prevention
-        sanitized = PreventLogInjection(sanitized);
-
-        // Use TaintBarrier to ensure no taint tracking through sanitization
-        return TaintBarrier.BreakTaint(sanitized);
+    private static string ProcessSensitivePatternMatch(Match match)
+    {
+        var groups = match.Groups;
+        
+        // Handle quoted values (pattern: field="value" or field='value')
+        if (groups.Count >= 3 && groups[1].Success && (groups[1].Value == "\"" || groups[1].Value == "'"))
+        {
+            // For quoted patterns, preserve the opening quote but not the closing quote
+            var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
+            var quote = groups[1].Value;
+            return $"{prefix}{quote}[REDACTED]";
+        }
+        // Handle unquoted values (pattern: field=value or field: value)
+        else if (groups.Count >= 2 && groups[1].Success)
+        {
+            var prefix = match.Value.Substring(0, groups[1].Index - match.Index);
+            return $"{prefix}[REDACTED]";
+        }
+        
+        return "[REDACTED]";
     }
 
     /// <summary>
@@ -143,35 +159,49 @@ public static class SecureLoggingHelper
         // Always process through sanitization to prevent user-controlled bypass
         var sanitized = input ?? string.Empty;
 
+        sanitized = ApplyLogInjectionPatterns(sanitized);
+        sanitized = LimitMessageLength(sanitized);
+
+        return sanitized;
+    }
+
+    private static string ApplyLogInjectionPatterns(string input)
+    {
+        var sanitized = input;
+        
         // Apply log injection prevention patterns
         foreach (var pattern in LogInjectionPatterns)
         {
-            sanitized = pattern.Replace(sanitized, match =>
-            {
-                // Replace CRLF and control characters with safe alternatives
-                if (match.Value.Contains('\r') || match.Value.Contains('\n'))
-                    return " [NEWLINE] ";
-                
-                // Replace control characters with safe representation
-                if (match.Value.Length == 1 && char.IsControl(match.Value[0]))
-                    return $"[CTRL-{(int)match.Value[0]:X2}]";
-                
-                // Replace ANSI escape sequences
-                if (match.Value.StartsWith("\x1B["))
-                    return "[ANSI]";
-                
-                // Replace potential log level injection
-                return " [LOG-INJECT] ";
-            });
-        }
-
-        // Additional safety: limit message length to prevent log flooding
-        if (sanitized.Length > 1000)
-        {
-            sanitized = sanitized.Substring(0, 997) + "...";
+            sanitized = pattern.Replace(sanitized, ProcessLogInjectionMatch);
         }
 
         return sanitized;
+    }
+
+    private static string ProcessLogInjectionMatch(Match match)
+    {
+        // Replace CRLF and control characters with safe alternatives
+        if (match.Value.Contains('\r') || match.Value.Contains('\n'))
+            return " [NEWLINE] ";
+        
+        // Replace control characters with safe representation
+        if (match.Value.Length == 1 && char.IsControl(match.Value[0]))
+            return $"[CTRL-{(int)match.Value[0]:X2}]";
+        
+        // Replace ANSI escape sequences
+        if (match.Value.StartsWith("\x1B["))
+            return "[ANSI]";
+        
+        // Replace potential log level injection
+        return " [LOG-INJECT] ";
+    }
+
+    private static string LimitMessageLength(string input)
+    {
+        // Additional safety: limit message length to prevent log flooding
+        return input.Length > 1000 
+            ? input.Substring(0, 997) + "..." 
+            : input;
     }
 
     /// <summary>
