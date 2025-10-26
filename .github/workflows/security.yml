@@ -248,7 +248,7 @@ jobs:
       with:
         target: 'http://localhost:5000'
         rules_file_name: '.zap/rules.tsv'
-        cmd_options: '-a -j -m 2 -T 5 -z "-silent"'
+        cmd_options: '-a -j -m 2 -T 5'
         allow_issue_writing: false
         fail_action: false
       continue-on-error: true
