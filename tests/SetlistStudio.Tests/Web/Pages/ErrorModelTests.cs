@@ -66,7 +66,7 @@ public class ErrorModelTests
     {
         // Arrange
         var errorModel = new ErrorModel();
-        var activity = new Activity("TestActivity");
+        using var activity = new Activity("TestActivity");
         activity.Start();
 
         try

@@ -345,9 +345,9 @@ public class Pages__HostTests : IClassFixture<TestWebApplicationFactory>
         
         // Verify it's hidden/inactive (check for display:none or hidden class)
         var errorUiSection = content.Substring(content.IndexOf("blazor-error-ui"));
-        var isErrorUiHidden = errorUiSection.Contains("display:none") || 
-                             errorUiSection.Contains("style=\"display:none\"") ||
-                             !content.Contains("An unhandled exception has occurred");
+        _ = errorUiSection.Contains("display:none") || 
+            errorUiSection.Contains("style=\"display:none\"") ||
+            !content.Contains("An unhandled exception has occurred");
         
         // Should contain Blazor-specific elements
         var hasBlazorElements = content.Contains("_blazor") || 

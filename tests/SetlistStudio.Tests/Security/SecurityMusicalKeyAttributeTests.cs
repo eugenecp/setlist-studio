@@ -158,8 +158,8 @@ public class SecurityMusicalKeyAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success, $"{key} should be rejected as invalid");
-        result?.ErrorMessage.Should().Contain($"'{key}' is not a valid musical key");
-        result?.ErrorMessage.Should().Contain("Valid keys are:");
+        result!.ErrorMessage.Should().Contain($"'{key}' is not a valid musical key");
+        result!.ErrorMessage.Should().Contain("Valid keys are:");
     }
 
     [Theory]
@@ -209,7 +209,7 @@ public class SecurityMusicalKeyAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success, "Malicious input should be rejected");
-        result?.ErrorMessage.Should().Contain("is not a valid musical key");
+        result!.ErrorMessage.Should().Contain("is not a valid musical key");
     }
 
     [Theory]
@@ -330,10 +330,10 @@ public class SecurityMusicalKeyAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success);
-        result?.ErrorMessage.Should().Contain("'InvalidKey' is not a valid musical key");
-        result?.ErrorMessage.Should().Contain("Valid keys are:");
-        result?.ErrorMessage.Should().Contain("C, C#, Db, D");  // Should contain some valid keys
-        result?.ErrorMessage.Should().Contain("Am, A#m, Bbm, Bm"); // Should contain some minor keys
+        result!.ErrorMessage.Should().Contain("'InvalidKey' is not a valid musical key");
+        result!.ErrorMessage.Should().Contain("Valid keys are:");
+        result!.ErrorMessage.Should().Contain("C, C#, Db, D");  // Should contain some valid keys
+        result!.ErrorMessage.Should().Contain("Am, A#m, Bbm, Bm"); // Should contain some minor keys
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public class SecurityMusicalKeyAttributeTests
 
         // Assert
         result.Should().NotBe(ValidationResult.Success);
-        var errorMessage = result?.ErrorMessage ?? "";
+        var errorMessage = result!.ErrorMessage ?? "";
         
         // Check that all major keys are listed
         var majorKeys = new[] { "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B" };

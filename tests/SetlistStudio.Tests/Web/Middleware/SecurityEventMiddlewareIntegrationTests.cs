@@ -501,7 +501,7 @@ public class SecurityEventMiddlewareIntegrationTests : IClassFixture<TestWebAppl
             
             // 4. Form-based attack
             async () => {
-                var formData = new FormUrlEncodedContent(new[]
+                using var formData = new FormUrlEncodedContent(new[]
                 {
                     new KeyValuePair<string, string>("Title", "<script>alert('xss')</script>"),
                     new KeyValuePair<string, string>("Artist", "'; drop table songs; --")

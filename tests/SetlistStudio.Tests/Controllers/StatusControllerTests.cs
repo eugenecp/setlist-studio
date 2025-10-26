@@ -33,7 +33,7 @@ public class StatusControllerTests
         var okResult = result as OkObjectResult;
         okResult!.Value.Should().NotBeNull();
         
-        var status = okResult.Value!;
+        var status = okResult!.Value!;
         var statusProperty = status.GetType().GetProperty("Status");
         var timestampProperty = status.GetType().GetProperty("Timestamp");
         var serviceProperty = status.GetType().GetProperty("Service");
@@ -147,7 +147,7 @@ public class StatusControllerTests
         var okResult = result as OkObjectResult;
         okResult!.Value.Should().NotBeNull();
         
-        var pingResponse = okResult.Value!;
+        var pingResponse = okResult!.Value!;
         var statusProperty = pingResponse.GetType().GetProperty("Status");
         var timestampProperty = pingResponse.GetType().GetProperty("Timestamp");
 

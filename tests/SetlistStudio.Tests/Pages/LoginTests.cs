@@ -229,7 +229,7 @@ public class LoginTests : TestContext
         // Act & Assert - Should not throw during component initialization
         var exception = await Record.ExceptionAsync(async () =>
         {
-            var component = RenderComponent<Login>();
+            _ = RenderComponent<Login>();
             await Task.Delay(50); // Allow async operations to complete
         });
 
