@@ -739,34 +739,6 @@ public class SecurityMetricsController : ControllerBase
             _ => "SECURE"
         };
     }
-
-    private string GetClientIpAddress()
-    {
-        // Try forwarded headers first (for reverse proxy scenarios)
-        var clientIp = GetForwardedIpAddress() ?? GetRealIpAddress() ?? GetDirectIpAddress();
-        return clientIp ?? "unknown";
-    }
-
-    private string? GetForwardedIpAddress()
-    {
-        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (string.IsNullOrEmpty(forwardedFor))
-            return null;
-
-        var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        return ips.Length > 0 ? ips[0].Trim() : null;
-    }
-
-    private string? GetRealIpAddress()
-    {
-        var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
-        return string.IsNullOrEmpty(realIp) ? null : realIp;
-    }
-
-    private string? GetDirectIpAddress()
-    {
-        return HttpContext.Connection?.RemoteIpAddress?.ToString();
-    }
 }
 
 #region Internal Data Models
