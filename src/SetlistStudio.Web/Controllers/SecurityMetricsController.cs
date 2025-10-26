@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Services;
+using SetlistStudio.Web.Utilities;
 using System.Diagnostics;
 
 namespace SetlistStudio.Web.Controllers;
@@ -459,19 +460,7 @@ public class SecurityMetricsController : ControllerBase
 
     private string GetClientIpAddress()
     {
-        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            return forwardedFor.Split(',')[0].Trim();
-        }
-
-        var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(realIp))
-        {
-            return realIp;
-        }
-
-        return Request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        return IpAddressUtility.GetClientIpAddress(Request.HttpContext);
     }
 }
 

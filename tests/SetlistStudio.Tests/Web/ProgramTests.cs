@@ -1776,9 +1776,9 @@ public class ProgramTests : IDisposable
     {
         var programType = typeof(Program);
         
-        // Find the generated method name for ConfigureDatabaseProvider
+        // Find the ConfigureDatabaseProvider method with the new signature
         var method = programType.GetMethods(BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)
-            .FirstOrDefault(m => m.Name.Contains("ConfigureDatabaseProvider"));
+            .FirstOrDefault(m => m.Name == "ConfigureDatabaseProvider" && m.GetParameters().Length == 3);
         
         if (method == null)
         {
@@ -1788,8 +1788,28 @@ public class ProgramTests : IDisposable
                 .ToArray();
             throw new InvalidOperationException($"ConfigureDatabaseProvider method not found. Available static methods: {string.Join(", ", allMethods)}");
         }
+
+        // Create a mock database configuration
+        var mockDatabaseConfig = new Mock<IDatabaseConfiguration>();
+        mockDatabaseConfig.Setup(x => x.WriteConnectionString).Returns(connectionString);
         
-        method.Invoke(null, new object[] { options, connectionString });
+        // Determine provider type based on connection string
+        if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+        {
+            mockDatabaseConfig.Setup(x => x.Provider).Returns(DatabaseProvider.SQLite);
+        }
+        else if (connectionString.Contains("Server="))
+        {
+            mockDatabaseConfig.Setup(x => x.Provider).Returns(DatabaseProvider.SqlServer);
+        }
+        else if (connectionString.Contains("Host="))
+        {
+            mockDatabaseConfig.Setup(x => x.Provider).Returns(DatabaseProvider.PostgreSQL);
+        }
+
+        mockDatabaseConfig.Setup(x => x.CommandTimeout).Returns(30);
+        
+        method.Invoke(null, new object[] { options, mockDatabaseConfig.Object, true });
     }
 
     private static bool IsValidAuthenticationCredentialsViaReflection(string? id, string? secret)

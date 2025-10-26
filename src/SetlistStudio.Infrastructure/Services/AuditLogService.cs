@@ -238,27 +238,9 @@ public class AuditLogService : IAuditLogService
 
         try
         {
-            // Extract IP address (handle proxy scenarios)
-            auditLog.IpAddress = GetClientIpAddress(httpContext);
-
-            // Extract user agent
-            auditLog.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
-
-            // Extract session ID if available
-            if (httpContext.Session is not null)
-            {
-                auditLog.SessionId = httpContext.Session.Id;
-            }
-
-            // Enhance user ID from claims if not already set
-            if (string.IsNullOrEmpty(auditLog.UserId) && httpContext.User?.Identity?.IsAuthenticated == true)
-            {
-                var user = httpContext.User;
-                if (user is not null)
-                {
-                    auditLog.UserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
-                }
-            }
+            EnhanceWithNetworkInfo(auditLog, httpContext);
+            EnhanceWithSessionInfo(auditLog, httpContext);
+            EnhanceWithUserInfo(auditLog, httpContext);
         }
         catch (ArgumentException ex)
         {
@@ -267,6 +249,41 @@ public class AuditLogService : IAuditLogService
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "Invalid operation enhancing audit log with HTTP context information");
+        }
+    }
+
+    /// <summary>
+    /// Enhances audit log with network-related information
+    /// </summary>
+    private static void EnhanceWithNetworkInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        auditLog.IpAddress = GetClientIpAddress(httpContext);
+        auditLog.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
+    }
+
+    /// <summary>
+    /// Enhances audit log with session information
+    /// </summary>
+    private static void EnhanceWithSessionInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        if (httpContext.Session is not null)
+        {
+            auditLog.SessionId = httpContext.Session.Id;
+        }
+    }
+
+    /// <summary>
+    /// Enhances audit log with user information from claims
+    /// </summary>
+    private static void EnhanceWithUserInfo(AuditLog auditLog, HttpContext httpContext)
+    {
+        if (string.IsNullOrEmpty(auditLog.UserId) && httpContext.User?.Identity?.IsAuthenticated == true)
+        {
+            var user = httpContext.User;
+            if (user is not null)
+            {
+                auditLog.UserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
+            }
         }
     }
 

@@ -18,6 +18,7 @@ using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Infrastructure.Configuration;
 using SetlistStudio.Web.Services;
 using SetlistStudio.Web.Middleware;
+using SetlistStudio.Web.Utilities;
 using SetlistStudio.Web.Security;
 using System.Threading.RateLimiting;
 using System.Text.Json;
@@ -1064,37 +1065,7 @@ static void ConfigureLocalization(IServiceCollection services)
 /// <param name="options">The DbContextOptionsBuilder to configure</param>
 /// <param name="connectionString">The connection string to analyze</param>
 /// <returns>The configured DbContextOptionsBuilder for method chaining</returns>
-static DbContextOptionsBuilder ConfigureDatabaseProvider(DbContextOptionsBuilder options, string connectionString)
-{
-    if (string.IsNullOrWhiteSpace(connectionString))
-    {
-        throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
-    }
 
-    // SQLite connection strings typically contain "Data Source=" 
-    if (connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseSqlite(connectionString);
-    }
-    // SQL Server connection strings typically contain "Server=" or "Data Source=" with server name
-    else if (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-             connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) && 
-             !connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseSqlServer(connectionString);
-    }
-    // PostgreSQL connection strings typically contain "Host="
-    else if (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseNpgsql(connectionString);
-    }
-    else
-    {
-        throw new InvalidOperationException($"Unable to determine database provider from connection string format: {connectionString}");
-    }
-
-    return options;
-}
 
 /// <summary>
 /// Gets a song ID by title, throwing an exception if not found
@@ -1176,49 +1147,10 @@ static bool IsValidAuthenticatedUser(System.Security.Principal.IIdentity? userId
 
 static string GetClientIpAddress(HttpContext httpContext)
 {
-    var forwardedIp = GetForwardedIpAddress(httpContext);
-    if (forwardedIp != null) return forwardedIp;
-    
-    var realIp = GetRealIpAddress(httpContext);
-    if (realIp != null) return realIp;
-    
-    return GetRemoteIpAddress(httpContext);
+    return IpAddressUtility.GetClientIpAddress(httpContext);
 }
 
-/// <summary>
-/// Extracts IP address from X-Forwarded-For header (reverse proxy scenarios)
-/// </summary>
-/// <param name="httpContext">The HTTP context</param>
-/// <returns>First IP from forwarded header, or null if not available</returns>
-static string? GetForwardedIpAddress(HttpContext httpContext)
-{
-    var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-    if (string.IsNullOrEmpty(forwardedFor)) return null;
-    
-    var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries);
-    return ips.Length > 0 ? ips[0].Trim() : null;
-}
 
-/// <summary>
-/// Extracts IP address from X-Real-IP header
-/// </summary>
-/// <param name="httpContext">The HTTP context</param>
-/// <returns>Real IP from header, or null if not available</returns>
-static string? GetRealIpAddress(HttpContext httpContext)
-{
-    var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
-    return !string.IsNullOrEmpty(realIp) ? realIp : null;
-}
-
-/// <summary>
-/// Gets the remote IP address from connection
-/// </summary>
-/// <param name="httpContext">The HTTP context</param>
-/// <returns>Remote IP address or "unknown" if not available</returns>
-static string GetRemoteIpAddress(HttpContext httpContext)
-{
-    return httpContext.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
-}
 
 static bool IsApiRequest(HttpContext httpContext)
 {
@@ -1681,6 +1613,13 @@ public partial class Program
     /// <param name="services">The service collection</param>
     public static void ConfigureDatabase(IServiceCollection services)
     {
+        RegisterDatabaseServices(services);
+        ConfigureWriteDbContext(services);
+        ConfigureReadDbContext(services);
+    }
+
+    private static void RegisterDatabaseServices(IServiceCollection services)
+    {
         // Register database configuration services
         services.AddSingleton<IDatabaseConfiguration>(provider =>
         {
@@ -1695,57 +1634,20 @@ public partial class Program
             var logger = provider.GetRequiredService<ILogger<DatabaseProviderService>>();
             return new DatabaseProviderService(config, logger);
         });
+    }
 
+    private static void ConfigureWriteDbContext(IServiceCollection services)
+    {
         // Configure write context (primary database)
         services.AddDbContext<SetlistStudioDbContext>((serviceProvider, options) =>
         {
             var databaseConfig = serviceProvider.GetRequiredService<IDatabaseConfiguration>();
-            var providerService = serviceProvider.GetRequiredService<DatabaseProviderService>();
-            
-            // Handle different providers appropriately
-            if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
-            {
-                // For SQLite/InMemory, use traditional configuration since Web project has these packages
-                var connectionString = databaseConfig.WriteConnectionString;
-                if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
-                {
-                    options.UseSqlite(connectionString);
-                }
-                else
-                {
-                    options.UseInMemoryDatabase("InMemoryTestDatabase");
-                }
-            }
-            else
-            {
-                // For PostgreSQL/SQL Server, configure with migrations assembly
-                if (databaseConfig.Provider == DatabaseProvider.PostgreSQL)
-                {
-                    options.UseNpgsql(databaseConfig.WriteConnectionString, npgsqlOptions =>
-                    {
-                        npgsqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
-                        npgsqlOptions.MigrationsAssembly("SetlistStudio.Web");
-                        npgsqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorCodesToAdd: null);
-                    });
-                }
-                else if (databaseConfig.Provider == DatabaseProvider.SqlServer)
-                {
-                    options.UseSqlServer(databaseConfig.WriteConnectionString, sqlOptions =>
-                    {
-                        sqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
-                        sqlOptions.MigrationsAssembly("SetlistStudio.Web");
-                        sqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorNumbersToAdd: null);
-                    });
-                }
-            }
+            ConfigureDatabaseProvider(options, databaseConfig, true);
         });
+    }
 
+    private static void ConfigureReadDbContext(IServiceCollection services)
+    {
         // Configure read-only context (read replicas)
         services.AddDbContext<ReadOnlySetlistStudioDbContext>((serviceProvider, options) =>
         {
@@ -1755,15 +1657,7 @@ public partial class Program
             if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
             {
                 // For SQLite/InMemory, use same connection as write (no read replicas)
-                var connectionString = databaseConfig.WriteConnectionString;
-                if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
-                {
-                    options.UseSqlite(connectionString);
-                }
-                else
-                {
-                    options.UseInMemoryDatabase("InMemoryTestDatabase");
-                }
+                ConfigureDatabaseProvider(options, databaseConfig, false);
             }
             else
             {
@@ -1771,5 +1665,61 @@ public partial class Program
                 providerService.ConfigureReadContext(options);
             }
         });
+    }
+
+    private static void ConfigureDatabaseProvider(DbContextOptionsBuilder options, IDatabaseConfiguration databaseConfig, bool isWriteContext)
+    {
+        // Handle different providers appropriately
+        if (databaseConfig.Provider == DatabaseProvider.SQLite || databaseConfig.Provider == DatabaseProvider.InMemory)
+        {
+            ConfigureSqliteProvider(options, databaseConfig);
+        }
+        else if (isWriteContext)
+        {
+            ConfigureServerDatabaseProvider(options, databaseConfig);
+        }
+    }
+
+    private static void ConfigureSqliteProvider(DbContextOptionsBuilder options, IDatabaseConfiguration databaseConfig)
+    {
+        // For SQLite/InMemory, use traditional configuration since Web project has these packages
+        var connectionString = databaseConfig.WriteConnectionString;
+        if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+        {
+            options.UseSqlite(connectionString);
+        }
+        else
+        {
+            options.UseInMemoryDatabase("InMemoryTestDatabase");
+        }
+    }
+
+    private static void ConfigureServerDatabaseProvider(DbContextOptionsBuilder options, IDatabaseConfiguration databaseConfig)
+    {
+        // For PostgreSQL/SQL Server, configure with migrations assembly
+        if (databaseConfig.Provider == DatabaseProvider.PostgreSQL)
+        {
+            options.UseNpgsql(databaseConfig.WriteConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                npgsqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+            });
+        }
+        else if (databaseConfig.Provider == DatabaseProvider.SqlServer)
+        {
+            options.UseSqlServer(databaseConfig.WriteConnectionString, sqlOptions =>
+            {
+                sqlOptions.CommandTimeout(databaseConfig.CommandTimeout);
+                sqlOptions.MigrationsAssembly("SetlistStudio.Web");
+                sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null);
+            });
+        }
     }
 }
