@@ -737,4 +737,304 @@ public class DatabaseConfigurationTests
     }
 
     #endregion
+
+    #region Branch Coverage Improvement Tests
+
+    [Fact]
+    public void DatabaseConfiguration_WithMinimalSQLiteConfig_ShouldGenerateDefaultConnectionString()
+    {
+        // Arrange - Minimal SQLite configuration
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SQLite"
+            // No connection strings provided - should generate default
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        
+        // Assert - The implementation generates a default SQLite connection string
+        databaseConfig.WriteConnectionString.Should().NotBeEmpty("DatabaseConfiguration should generate a default connection string");
+        databaseConfig.WriteConnectionString.Should().Contain("Data Source=");
+        databaseConfig.IsValid().Should().BeTrue("Configuration with generated default connection string should be valid");
+    }
+
+    [Fact]
+    public void IsConnectionStringValid_WithManuallySetEmptyConnectionString_ShouldReturnFalseAndLogError()
+    {
+        // Arrange - Create a configuration that will generate a connection string first
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SQLite",
+            ["ConnectionStrings:WriteConnection"] = "Data Source=test.db"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Use reflection to set WriteConnectionString to empty to test the validation path
+        var writeConnectionStringProperty = typeof(DatabaseConfiguration).GetProperty("WriteConnectionString");
+        writeConnectionStringProperty?.SetValue(databaseConfig, string.Empty);
+
+        // Act
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("Configuration with empty write connection string should be invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Write connection string is missing or empty")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void ValidateMaxPoolSizeRange_WithMaxPoolSizeAboveLimit_ShouldReturnFalseAndLogError()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test",
+            ["Database:Pool:MaxSize"] = "1001" // Invalid - above 1000 limit
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+        var isValid = databaseConfig.IsValid();
+
+        // Assert
+        isValid.Should().BeFalse("MaxPoolSize above 1000 should make configuration invalid");
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("MaxPoolSize must be between 1 and 1000")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public void HasReadReplicas_WithMultipleDistinctReadReplicas_ShouldReturnTrue()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["ConnectionStrings:WriteConnection"] = "Host=primary;Database=test",
+            ["Database:ReadReplicas:0"] = "Host=replica1;Database=test",
+            ["Database:ReadReplicas:1"] = "Host=replica2;Database=test"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert
+        databaseConfig.HasReadReplicas.Should().BeTrue("Configuration with distinct read replicas should have read replicas");
+        databaseConfig.ReadConnectionStrings.Count.Should().Be(2);
+    }
+
+    [Fact] 
+    public void HasReadReplicas_WithOnlyWriteConnectionAsSingleReadReplica_ShouldReturnFalse()
+    {
+        // Arrange - Configuration where read replica list only contains the write connection
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["ConnectionStrings:WriteConnection"] = "Host=localhost;Database=test"
+            // No explicit read replicas - will use write connection as only read replica
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert
+        databaseConfig.HasReadReplicas.Should().BeFalse("Configuration with only write connection as read replica should not have distinct read replicas");
+        databaseConfig.ReadConnectionStrings.Count.Should().Be(1);
+        databaseConfig.ReadConnectionStrings.First().Should().Be(databaseConfig.WriteConnectionString);
+    }
+
+    [Fact]
+    public void GeneratePostgreSqlConnectionString_WithValidConfiguration_ShouldGenerateCorrectConnectionString()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:PostgreSQL:Host"] = "testhost",
+            ["Database:PostgreSQL:Port"] = "5433",
+            ["Database:PostgreSQL:Database"] = "testdb",
+            ["Database:PostgreSQL:Username"] = "testuser",
+            ["Database:PostgreSQL:Password"] = "testpass"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert
+        databaseConfig.WriteConnectionString.Should().Contain("Host=testhost");
+        databaseConfig.WriteConnectionString.Should().Contain("Port=5433");
+        databaseConfig.WriteConnectionString.Should().Contain("Database=testdb");
+        databaseConfig.WriteConnectionString.Should().Contain("Username=testuser");
+        databaseConfig.WriteConnectionString.Should().Contain("Password=testpass");
+    }
+
+    [Fact]
+    public void ExtractPostgreSqlHost_WithProductionEnvironment_ShouldUseCorrectHost()
+    {
+        // Arrange
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+        
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "PostgreSQL",
+            ["Database:PostgreSQL:Host"] = "myserver",
+            ["Database:PostgreSQL:Database"] = "testdb",
+            ["Database:PostgreSQL:Username"] = "testuser",
+            ["Database:PostgreSQL:Password"] = "testpass"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        try
+        {
+            // Act
+            var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+            // Assert - The actual implementation uses the host as provided
+            databaseConfig.WriteConnectionString.Should().Contain("Host=myserver");
+            databaseConfig.WriteConnectionString.Should().Contain("SSL Mode=Require");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+        }
+    }
+
+    [Fact]
+    public void GenerateSqliteConnectionString_WithInvalidPath_ShouldHandleGracefully()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SQLite",
+            ["Database:SQLite:DataSource"] = "invalid:/path/to/db.sqlite"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert
+        databaseConfig.WriteConnectionString.Should().NotBeEmpty();
+        databaseConfig.Provider.Should().Be(DatabaseProvider.SQLite);
+    }
+
+    [Fact]
+    public void IsRunningInTests_WithTestEnvironment_ShouldDetectCorrectly()
+    {
+        // Arrange - This test method itself proves we can detect test environment
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SQLite"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert - We're running in tests, so SQLite should be adjusted for testing
+        databaseConfig.EnablePooling.Should().BeFalse("SQLite should disable pooling in test environment");
+    }
+
+    [Fact]
+    public void ExtractSqlServerDatabase_WithMissingConfiguration_ShouldUseDefault()
+    {
+        // Arrange
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SqlServer",
+            ["Database:SqlServer:Server"] = "localhost"
+            // Missing Database configuration
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        // Act
+        var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+        // Assert
+        databaseConfig.WriteConnectionString.Should().Contain("Database=SetlistStudio"); // Default database name
+    }
+
+    [Fact]
+    public void ExtractSqlServerServer_WithProductionEnvironment_ShouldUseCorrectServer()
+    {
+        // Arrange
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+        
+        var configData = new Dictionary<string, string>
+        {
+            ["Database:Provider"] = "SqlServer", 
+            ["Database:SqlServer:Server"] = "myserver",
+            ["Database:SqlServer:Database"] = "testdb"
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(configData!)
+            .Build();
+
+        try
+        {
+            // Act
+            var databaseConfig = new DatabaseConfiguration(config, _mockLogger.Object);
+
+            // Assert - The actual implementation uses the server as provided
+            databaseConfig.WriteConnectionString.Should().Contain("Server=myserver");
+            databaseConfig.WriteConnectionString.Should().Contain("Encrypt=true");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+        }
+    }
+
+    #endregion
 }
