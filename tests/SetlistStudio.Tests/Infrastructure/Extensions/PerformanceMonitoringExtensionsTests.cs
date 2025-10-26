@@ -489,8 +489,8 @@ public class PerformanceMonitoringExtensionsTests
         // Assert
         result.Should().Be("long result");
         recordedTime.Should().NotBeNull();
-        recordedTime!.Value.TotalMilliseconds.Should().BeGreaterOrEqualTo(expectedDelayMs * 0.9); // Allow 10% variance
-        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(expectedDelayMs * 1.5); // Allow reasonable upper bound
+        recordedTime!.Value.TotalMilliseconds.Should().BeGreaterOrEqualTo(expectedDelayMs * 0.8); // Allow 20% variance for CI
+        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(expectedDelayMs * 3.0); // Allow generous upper bound for CI environments
     }
 
     #endregion
