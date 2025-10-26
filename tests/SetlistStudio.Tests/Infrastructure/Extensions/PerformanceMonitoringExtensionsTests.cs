@@ -258,11 +258,10 @@ public class PerformanceMonitoringExtensionsTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _mockPerformanceService.Object.TrackPaginatedQueryAsync(queryType, function));
 
-        // Note: The current implementation has a bug - it calls function twice, 
-        // which will throw twice. This test documents the current behavior.
+        // Performance should still be recorded even when exceptions occur (finally block behavior)
         _mockPerformanceService.Verify(
-            x => x.RecordQueryPerformanceAsync(queryType, It.IsAny<TimeSpan>(), It.IsAny<int>()),
-            Times.Never); // Function throws, so no recording happens
+            x => x.RecordQueryPerformanceAsync(queryType, It.IsAny<TimeSpan>(), 0),
+            Times.Once); // Performance is recorded with recordCount=0 since no data was retrieved
     }
 
     #endregion

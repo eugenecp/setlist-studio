@@ -59,16 +59,16 @@ public static class PerformanceMonitoringExtensions
         where TData : IEnumerable<object>
     {
         var stopwatch = Stopwatch.StartNew();
+        var recordCount = 0;
         try
         {
             var result = await function();
+            recordCount = result.Data?.Count() ?? 0;
             return result;
         }
         finally
         {
             stopwatch.Stop();
-            var (data, totalCount) = await function();
-            var recordCount = data?.Count() ?? 0;
             await performanceService.RecordQueryPerformanceAsync(queryType, stopwatch.Elapsed, recordCount);
         }
     }
