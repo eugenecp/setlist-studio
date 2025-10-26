@@ -263,21 +263,44 @@ public class SecretValidationService
     /// </summary>
     private static bool IsValidKeyVaultName(string keyVaultName)
     {
+        return IsValidKeyVaultNameLength(keyVaultName) &&
+               IsValidKeyVaultNameStart(keyVaultName) &&
+               IsValidKeyVaultNameEnd(keyVaultName) &&
+               IsValidKeyVaultNameCharacters(keyVaultName);
+    }
+
+    /// <summary>
+    /// Validates that the Key Vault name has the correct length (3-24 characters)
+    /// </summary>
+    private static bool IsValidKeyVaultNameLength(string keyVaultName)
+    {
         if (string.IsNullOrWhiteSpace(keyVaultName))
             return false;
 
-        if (keyVaultName.Length < 3 || keyVaultName.Length > 24)
-            return false;
+        return keyVaultName.Length >= 3 && keyVaultName.Length <= 24;
+    }
 
-        // Must start with letter
-        if (!char.IsLetter(keyVaultName[0]))
-            return false;
+    /// <summary>
+    /// Validates that the Key Vault name starts with a letter
+    /// </summary>
+    private static bool IsValidKeyVaultNameStart(string keyVaultName)
+    {
+        return keyVaultName.Length > 0 && char.IsLetter(keyVaultName[0]);
+    }
 
-        // Must end with letter or digit
-        if (!char.IsLetterOrDigit(keyVaultName[^1]))
-            return false;
+    /// <summary>
+    /// Validates that the Key Vault name ends with a letter or digit
+    /// </summary>
+    private static bool IsValidKeyVaultNameEnd(string keyVaultName)
+    {
+        return keyVaultName.Length > 0 && char.IsLetterOrDigit(keyVaultName[^1]);
+    }
 
-        // Can only contain letters, digits, and hyphens
+    /// <summary>
+    /// Validates that the Key Vault name contains only valid characters (letters, digits, and hyphens)
+    /// </summary>
+    private static bool IsValidKeyVaultNameCharacters(string keyVaultName)
+    {
         return keyVaultName.All(c => char.IsLetterOrDigit(c) || c == '-');
     }
 

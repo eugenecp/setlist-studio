@@ -64,36 +64,7 @@ try
     }
 
     // SECURITY: Configure Azure Key Vault for production secrets management
-    if (!builder.Environment.IsDevelopment())
-    {
-        var keyVaultName = builder.Configuration["KeyVault:VaultName"];
-        if (!string.IsNullOrEmpty(keyVaultName))
-        {
-            // Validate Key Vault name to prevent URL injection
-            if (!System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$"))
-            {
-                Log.Warning("Invalid Azure Key Vault name format: {KeyVaultName}", keyVaultName);
-                throw new InvalidOperationException("Invalid Azure Key Vault name format");
-            }
-            
-            try
-            {
-                var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
-                var secretClient = new SecretClient(keyVaultUri, new DefaultAzureCredential());
-                builder.Configuration.AddAzureKeyVault(secretClient, new KeyVaultSecretManager());
-                Log.Information("Azure Key Vault configured: {KeyVaultUri}", keyVaultUri);
-            }
-            // CodeQL[cs/catch-of-all-exceptions] - Application startup configuration handling
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
-            }
-        }
-        else if (!builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Warning("Azure Key Vault name not configured for non-development environment");
-        }
-    }
+    ConfigureAzureKeyVault(builder.Configuration, builder.Environment);
 
     // Add Serilog
     builder.Host.UseSerilog();
@@ -143,89 +114,7 @@ try
     });
 
     // SECURITY: Configure CORS with restrictive policy for production security
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("RestrictivePolicy", policy =>
-        {
-            var environment = builder.Environment.EnvironmentName;
-            
-            if (environment == "Production")
-            {
-                // Production: Only allow specific trusted domains
-                policy.WithOrigins(
-                    "https://setliststudio.com",
-                    "https://www.setliststudio.com",
-                    "https://api.setliststudio.com"
-                )
-                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-            }
-            else if (environment == "Development")
-            {
-                // Development: Allow any origin for testing purposes
-                policy.AllowAnyOrigin()
-                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-            }
-            else
-            {
-                // Test/Staging: More restrictive than development but not production
-                policy.WithOrigins(
-                    "https://staging.setliststudio.com",
-                    "https://test.setliststudio.com",
-                    "https://preview.setliststudio.com"
-                )
-                .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-            }
-        });
-
-        // Add a more restrictive policy for API endpoints
-        options.AddPolicy("ApiPolicy", policy =>
-        {
-            var environment = builder.Environment.EnvironmentName;
-            
-            if (environment == "Production")
-            {
-                policy.WithOrigins(
-                    "https://setliststudio.com",
-                    "https://www.setliststudio.com",
-                    "https://api.setliststudio.com"
-                )
-                .WithMethods("GET", "POST", "PUT", "DELETE")
-                .WithHeaders("Content-Type", "Authorization")
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-            }
-            else if (environment == "Development")
-            {
-                // Development: Allow any origin for testing purposes
-                policy.AllowAnyOrigin()
-                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-            }
-            else
-            {
-                // Test/Staging: Allow specific localhost origins
-                policy.WithOrigins(
-                    "https://localhost:5001",
-                    "http://localhost:5000",
-                    "https://localhost:7000",
-                    "http://localhost:8000"
-                )
-                .WithMethods("GET", "POST", "PUT", "DELETE")
-                .WithHeaders("Content-Type", "Authorization")
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
-            }
-        });
-    });
+    ConfigureCors(builder.Services, builder.Environment);
 
     // Configure database with connection pooling and read replica support
     builder.Services.AddSingleton<IDatabaseConfiguration>(provider =>
@@ -1599,5 +1488,149 @@ public partial class Program
         // Enable rate limiting in all environments except strict test environments
         return !environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase) &&
                !environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Configures Azure Key Vault for production secrets management
+    /// </summary>
+    /// <param name="configuration">The configuration builder</param>
+    /// <param name="environment">The hosting environment</param>
+    public static void ConfigureAzureKeyVault(IConfiguration configuration, IWebHostEnvironment environment)
+    {
+        if (environment.IsDevelopment())
+        {
+            return;
+        }
+
+        var keyVaultName = configuration["KeyVault:VaultName"];
+        if (string.IsNullOrEmpty(keyVaultName))
+        {
+            if (!environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning("Azure Key Vault name not configured for non-development environment");
+            }
+            return;
+        }
+
+        if (!IsValidKeyVaultName(keyVaultName))
+        {
+            Log.Warning("Invalid Azure Key Vault name format: {KeyVaultName}", keyVaultName);
+            throw new InvalidOperationException("Invalid Azure Key Vault name format");
+        }
+
+        try
+        {
+            var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+            var secretClient = new SecretClient(keyVaultUri, new DefaultAzureCredential());
+            ((IConfigurationBuilder)configuration).AddAzureKeyVault(secretClient, new KeyVaultSecretManager());
+            Log.Information("Azure Key Vault configured: {KeyVaultUri}", keyVaultUri);
+        }
+        // CodeQL[cs/catch-of-all-exceptions] - Application startup configuration handling
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Azure Key Vault: {KeyVaultName}", keyVaultName);
+        }
+    }
+
+    /// <summary>
+    /// Validates Azure Key Vault name format according to Azure naming conventions
+    /// </summary>
+    /// <param name="keyVaultName">The Key Vault name to validate</param>
+    /// <returns>True if the name is valid</returns>
+    private static bool IsValidKeyVaultName(string keyVaultName)
+    {
+        return System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$");
+    }
+
+    /// <summary>
+    /// Configures CORS policies with environment-specific security settings
+    /// </summary>
+    /// <param name="services">The service collection</param>
+    /// <param name="environment">The hosting environment</param>
+    public static void ConfigureCors(IServiceCollection services, IWebHostEnvironment environment)
+    {
+        services.AddCors(options =>
+        {
+            options.AddPolicy("RestrictivePolicy", policy =>
+            {
+                var environmentName = environment.EnvironmentName;
+                
+                if (environmentName == "Production")
+                {
+                    // Production: Only allow specific trusted domains
+                    policy.WithOrigins(
+                        "https://setliststudio.com",
+                        "https://www.setliststudio.com",
+                        "https://api.setliststudio.com"
+                    )
+                    .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                    .AllowCredentials()
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+                }
+                else if (environmentName == "Development")
+                {
+                    // Development: Allow any origin for testing purposes
+                    policy.AllowAnyOrigin()
+                    .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+                }
+                else
+                {
+                    // Test/Staging: More restrictive than development but not production
+                    policy.WithOrigins(
+                        "https://staging.setliststudio.com",
+                        "https://test.setliststudio.com",
+                        "https://preview.setliststudio.com"
+                    )
+                    .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
+                    .AllowCredentials()
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+                }
+            });
+
+            // Add a more restrictive policy for API endpoints
+            options.AddPolicy("ApiPolicy", policy =>
+            {
+                var environmentName = environment.EnvironmentName;
+                
+                if (environmentName == "Production")
+                {
+                    policy.WithOrigins(
+                        "https://setliststudio.com",
+                        "https://www.setliststudio.com",
+                        "https://api.setliststudio.com"
+                    )
+                    .WithMethods("GET", "POST", "PUT", "DELETE")
+                    .WithHeaders("Content-Type", "Authorization")
+                    .AllowCredentials()
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+                }
+                else if (environmentName == "Development")
+                {
+                    // Development: Allow any origin for testing purposes
+                    policy.AllowAnyOrigin()
+                    .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                    .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN", "Origin", "Accept")
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+                }
+                else
+                {
+                    // Test/Staging: Allow specific localhost origins
+                    policy.WithOrigins(
+                        "https://localhost:5001",
+                        "http://localhost:5000",
+                        "https://localhost:7000",
+                        "http://localhost:8000"
+                    )
+                    .WithMethods("GET", "POST", "PUT", "DELETE")
+                    .WithHeaders("Content-Type", "Authorization")
+                    .AllowCredentials()
+                    .SetPreflightMaxAge(TimeSpan.FromMinutes(5));
+                }
+            });
+        });
     }
 }
