@@ -249,7 +249,7 @@
     {
         try
         {
-            IsOnline = await JS.InvokeAsync<bool>("navigator.onLine");
+            IsOnline = await JS.InvokeAsync<bool>("blazorHelpers.getConnectionStatus");
         }
         catch
         {

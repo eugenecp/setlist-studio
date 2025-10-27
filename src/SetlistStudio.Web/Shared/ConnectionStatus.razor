@@ -82,7 +82,7 @@
     {
         try
         {
-            IsOnline = await JS.InvokeAsync<bool>("navigator.onLine");
+            IsOnline = await JS.InvokeAsync<bool>("blazorHelpers.getConnectionStatus");
             StateHasChanged();
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued"))
