@@ -8,6 +8,12 @@ using Xunit;
 
 namespace SetlistStudio.Tests.Infrastructure.Configuration;
 
+[CollectionDefinition("EnvironmentVariableTests", DisableParallelization = true)]
+public class EnvironmentVariableTestCollection
+{
+}
+
+[Collection("EnvironmentVariableTests")]
 public class DatabaseConfigurationTests
 {
     private readonly Mock<ILogger<DatabaseConfiguration>> _mockLogger;
