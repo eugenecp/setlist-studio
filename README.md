@@ -344,24 +344,61 @@ You can manually trigger the CI/CD pipeline:
 - **Docker Build**: Creates containerized version
 - **Deploy Preview**: Sets up preview environment for PRs
 
-## �🤝 Contributing
+## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
+We welcome contributions! Setlist Studio maintains high standards for security, maintainability, and user experience to ensure musicians can rely on our tool during performances.
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Follow coding standards**: Use consistent naming and add tests
-4. **Commit changes**: `git commit -m 'Add amazing feature'`
-5. **Push to branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
+### 🚀 Quick Start for Contributors
 
-### Development Guidelines
-- Follow the existing code style and patterns
-- Write unit tests for new functionality
-- Ensure accessibility compliance
-- Update documentation as needed
-- All PRs are automatically tested via GitHub Actions
-- Use realistic music data in examples
+1. **Read our comprehensive guides**:
+   - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Complete development setup and guidelines
+   - **[Code Review Standards](.github/CODE_REVIEW_STANDARDS.md)** - Quality requirements and review process
+   - **[Copilot Instructions](.github/copilot-instructions.md)** - Detailed technical standards
+
+2. **Security-First Development**:
+   - **CodeQL Analysis**: Zero tolerance for high/critical security issues
+   - **Input Validation**: All user inputs must be validated and sanitized
+   - **Authorization**: Every data access must verify user ownership
+
+3. **Quality Requirements**:
+   - **100% Test Success**: Zero failing tests allowed
+   - **80%+ Coverage**: Line AND branch coverage for new code
+   - **Zero Build Warnings**: Clean builds required
+   - **Performance Standards**: <500ms API responses, <100ms DB queries
+
+### 🎼 Development Process
+
+```bash
+# 1. Setup and validation
+git clone https://github.com/eugenecp/setlist-studio.git
+cd setlist-studio
+dotnet test  # Must achieve 100% success rate
+.\scripts\run-codeql-security.ps1  # Must pass with zero security issues
+
+# 2. Create feature branch
+git checkout -b feature/[issue-number]-[description]
+
+# 3. Security-first development with musician focus
+# - Implement input validation first
+# - Add authorization checks
+# - Use realistic musical data (BPM: 40-250, standard keys)
+# - Follow test naming: {SourceClass}Tests.cs
+
+# 4. Quality validation before PR
+dotnet test --collect:"XPlat Code Coverage"  # Verify 80%+ coverage
+dotnet build --verbosity normal  # Check for zero warnings
+.\scripts\run-codeql-security.ps1  # Final security validation
+```
+
+### 📋 Pull Request Requirements
+
+Every PR must complete our [comprehensive quality checklist](.github/PULL_REQUEST_TEMPLATE.md):
+- **Security & Testing**: CodeQL passes, all tests pass, adequate coverage
+- **Maintainability**: Clear business purpose, team handover readiness
+- **Musical Context**: Features serve real musician workflows
+- **Performance**: Response times and scalability considered
+
+**All contributions go through our [Code Review Standards](.github/CODE_REVIEW_STANDARDS.md) ensuring security, maintainability, and musician-focused excellence.**
 
 ## 📄 License
 

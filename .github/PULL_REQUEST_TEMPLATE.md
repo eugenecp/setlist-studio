@@ -21,30 +21,60 @@
 ### ✅ Quality Checklist
 
 #### Security & Testing (MANDATORY)
-- [ ] All tests pass (`dotnet test`)
-- [ ] Code coverage ≥80% for new code
+- [ ] All tests pass (`dotnet test`) - **100% success rate required**
+- [ ] Code coverage ≥80% for new code (line AND branch coverage)
 - [ ] **CodeQL security analysis passes with zero high/critical issues**
 - [ ] No hardcoded secrets or credentials
 - [ ] Input validation added for user inputs
 - [ ] Authorization checks verify user ownership
+- [ ] Security headers and rate limiting implemented where applicable
 
-#### Code Quality
+#### Code Quality & Standards
 - [ ] Follows existing code patterns and naming conventions
 - [ ] Uses musician-friendly terminology (`SetlistSong`, `PerformanceNotes`, etc.)
 - [ ] Includes XML documentation for public APIs
 - [ ] Realistic musical data in tests/examples
+- [ ] **Zero build warnings** in main and test projects
+- [ ] CodeQL best practices followed (null safety, LINQ usage, resource disposal)
 
-#### Documentation & Maintainability
+#### Maintainability & Business Continuity
+- [ ] Code facilitates easy team handover with clear business purpose
+- [ ] Features clearly serve documented musician workflows
+- [ ] Technical decisions include business justification
+- [ ] New developers can understand changes within context
+- [ ] Dependencies prioritize long-term stability over cutting-edge features
+- [ ] Breaking changes documented with migration path
+
+#### Documentation & Knowledge Transfer
 - [ ] README updated if needed
-- [ ] Breaking changes documented
-- [ ] Migration guide added if applicable
-- [ ] Code is self-documenting with clear business purpose
+- [ ] Decision records added for architectural changes
+- [ ] Code is self-documenting with musician-focused terminology
+- [ ] Complex business logic includes explanatory comments
 
 ### 🧪 Testing Details
 <!-- Describe the tests you ran to verify your changes -->
 
 ### 📱 Mobile/Performance Testing
 <!-- For UI changes: tested on mobile devices or performance scenarios? -->
+
+### 🔧 Maintainability Assessment
+
+#### Team Handover Readiness
+- [ ] New team member could understand this change within 30 minutes
+- [ ] Business context is clear from code and comments
+- [ ] No single points of failure or undocumented complexity introduced
+
+#### Performance & Scalability Impact
+- [ ] API endpoints respond within 500ms under normal load
+- [ ] Database queries complete within 100ms
+- [ ] Memory usage patterns considered and optimized
+- [ ] Scalability impact assessed for growth scenarios
+
+#### Long-term Sustainability
+- [ ] Dependencies have active communities and LTS support
+- [ ] Technology choices align with business continuity goals
+- [ ] Migration strategies considered for future growth
+- [ ] Monitoring and observability maintained or improved
 
 ### 🔗 Related Issues
 <!-- Link any related GitHub issues -->
