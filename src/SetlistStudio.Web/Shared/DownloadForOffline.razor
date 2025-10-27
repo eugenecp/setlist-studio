@@ -188,8 +188,9 @@
         {
             // Check if setlist is already cached
             var cacheStatus = await JS.InvokeAsync<Dictionary<string, int>>("setlistStudioApp.offline.getCacheStatus");
-            IsDownloaded = cacheStatus.ContainsKey("setlist-studio-api-v1.0.0") && 
-                          cacheStatus["setlist-studio-api-v1.0.0"] > 0;
+            int versionCachedCount;
+            IsDownloaded = cacheStatus.TryGetValue("setlist-studio-api-v1.0.0", out versionCachedCount) && 
+                           versionCachedCount > 0;
         }
         catch (Exception ex)
         {
