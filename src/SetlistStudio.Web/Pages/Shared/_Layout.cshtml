@@ -15,7 +15,15 @@
     
     <!-- Custom CSS -->
     <link href="css/app.css" rel="stylesheet" />
+    <link href="css/mobile-enhancements.css" rel="stylesheet" />
     <link href="SetlistStudio.Web.styles.css" rel="stylesheet" />
+    
+    <!-- Mobile Optimization -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json" />
@@ -55,5 +63,14 @@
     
     <!-- Custom App JS -->
     <script src="js/app.js"></script>
+    
+    <!-- Blazor Safe Helpers - Load first to avoid CSP issues -->
+    <script src="js/blazor-helpers.js"></script>
+    
+    <!-- Mobile Enhancements -->
+    <script src="js/mobile-enhancements.js"></script>
+    
+    <!-- Connection Status for Mobile -->
+    <div class="connection-status-mobile" id="connectionStatus"></div>
 </body>
 </html>

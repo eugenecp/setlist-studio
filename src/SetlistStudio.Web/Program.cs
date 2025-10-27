@@ -1850,6 +1850,7 @@ public partial class Program
     static void ApplyCspHeaders(HttpContext context, IConfiguration configuration)
     {
         // Content Security Policy - enhanced with nonce-based security
+        var environment = context.RequestServices.GetRequiredService<IWebHostEnvironment>();
         var cspReportingEnabled = configuration.GetValue<bool>("Security:CspReporting:Enabled", true);
         var cspPolicyBuilder = new StringBuilder();
         cspPolicyBuilder.Append("default-src 'self'; ");
@@ -1858,9 +1859,9 @@ public partial class Program
         var scriptNonce = context.Items["ScriptNonce"]?.ToString();
         var styleNonce = context.Items["StyleNonce"]?.ToString();
         
-        AppendScriptCspPolicy(cspPolicyBuilder, scriptNonce);
-        AppendStyleCspPolicy(cspPolicyBuilder, styleNonce);
-        AppendResourceCspPolicies(cspPolicyBuilder);
+        AppendScriptCspPolicy(cspPolicyBuilder, scriptNonce, environment);
+        AppendStyleCspPolicy(cspPolicyBuilder, styleNonce, environment);
+        AppendResourceCspPolicies(cspPolicyBuilder, environment);
         AppendCspReporting(cspPolicyBuilder, cspReportingEnabled);
         
         var cspPolicy = cspPolicyBuilder.ToString();
@@ -1872,17 +1873,33 @@ public partial class Program
     /// </summary>
     /// <param name="cspPolicyBuilder">The CSP policy builder</param>
     /// <param name="scriptNonce">The script nonce if available</param>
-    static void AppendScriptCspPolicy(StringBuilder cspPolicyBuilder, string? scriptNonce)
+    /// <param name="environment">The web host environment</param>
+    static void AppendScriptCspPolicy(StringBuilder cspPolicyBuilder, string? scriptNonce, IWebHostEnvironment environment)
     {
         // Enhanced script-src with nonce fallback
         if (!string.IsNullOrEmpty(scriptNonce))
         {
-            cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
+            // Allow 'unsafe-eval' in development for Blazor debugging
+            if (environment.IsDevelopment())
+            {
+                cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}' 'unsafe-eval'; ");
+            }
+            else
+            {
+                cspPolicyBuilder.Append($"script-src 'self' 'nonce-{scriptNonce}'; ");
+            }
         }
         else
         {
             // Fallback for development/testing or when nonces aren't available
-            cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
+            if (environment.IsDevelopment())
+            {
+                cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline' 'unsafe-eval'; ");
+            }
+            else
+            {
+                cspPolicyBuilder.Append("script-src 'self' 'unsafe-inline'; ");
+            }
         }
     }
 
@@ -1891,17 +1908,33 @@ public partial class Program
     /// </summary>
     /// <param name="cspPolicyBuilder">The CSP policy builder</param>
     /// <param name="styleNonce">The style nonce if available</param>
-    static void AppendStyleCspPolicy(StringBuilder cspPolicyBuilder, string? styleNonce)
+    /// <param name="environment">The web host environment</param>
+    static void AppendStyleCspPolicy(StringBuilder cspPolicyBuilder, string? styleNonce, IWebHostEnvironment environment)
     {
         // Enhanced style-src with nonce fallback
         if (!string.IsNullOrEmpty(styleNonce))
         {
-            cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
+            // Allow Google Fonts in development
+            if (environment.IsDevelopment())
+            {
+                cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}' https://fonts.googleapis.com; ");
+            }
+            else
+            {
+                cspPolicyBuilder.Append($"style-src 'self' 'nonce-{styleNonce}'; ");
+            }
         }
         else
         {
             // Fallback for development/testing or when nonces aren't available
-            cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
+            if (environment.IsDevelopment())
+            {
+                cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ");
+            }
+            else
+            {
+                cspPolicyBuilder.Append("style-src 'self' 'unsafe-inline'; ");
+            }
         }
     }
 
@@ -1909,11 +1942,23 @@ public partial class Program
     /// Appends resource-related CSP policies for images, fonts, connections, etc.
     /// </summary>
     /// <param name="cspPolicyBuilder">The CSP policy builder</param>
-    static void AppendResourceCspPolicies(StringBuilder cspPolicyBuilder)
+    /// <param name="environment">The web host environment</param>
+    static void AppendResourceCspPolicies(StringBuilder cspPolicyBuilder, IWebHostEnvironment environment)
     {
         cspPolicyBuilder.Append("img-src 'self' data: https:; ");
-        cspPolicyBuilder.Append("font-src 'self'; ");
-        cspPolicyBuilder.Append("connect-src 'self'; ");
+        
+        // Allow Google Fonts in development
+        if (environment.IsDevelopment())
+        {
+            cspPolicyBuilder.Append("font-src 'self' https://fonts.gstatic.com; ");
+            cspPolicyBuilder.Append("connect-src 'self' wss: ws:; ");
+        }
+        else
+        {
+            cspPolicyBuilder.Append("font-src 'self'; ");
+            cspPolicyBuilder.Append("connect-src 'self'; ");
+        }
+        
         cspPolicyBuilder.Append("frame-ancestors 'none'; ");
         cspPolicyBuilder.Append("base-uri 'self'; ");
         cspPolicyBuilder.Append("form-action 'self'");

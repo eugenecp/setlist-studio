@@ -6,7 +6,11 @@
         <Configuration>
           <Format>cobertura</Format>
           <ExcludeByFile>**/Migrations/**/*.cs</ExcludeByFile>
-          <Exclude>[SetlistStudio.Web]SetlistStudio.Web.Migrations.*</Exclude>
+          <Exclude>
+            [SetlistStudio.Web]SetlistStudio.Web.Migrations.*
+            [*]*.Migrations.*
+            [*]*Migrations*
+          </Exclude>
         </Configuration>
       </DataCollector>
     </DataCollectors>

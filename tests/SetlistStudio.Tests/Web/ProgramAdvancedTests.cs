@@ -3182,14 +3182,18 @@ public class ProgramAdvancedTests : IDisposable
     {
         var method = typeof(Program).GetMethod("AppendScriptCspPolicy", 
             BindingFlags.NonPublic | BindingFlags.Static);
-        method?.Invoke(null, new object?[] { cspPolicyBuilder, scriptNonce });
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(x => x.EnvironmentName).Returns("Testing");
+        method?.Invoke(null, new object?[] { cspPolicyBuilder, scriptNonce, mockEnvironment.Object });
     }
     
     private static void TestAppendStyleCspPolicy(StringBuilder cspPolicyBuilder, string? styleNonce)
     {
         var method = typeof(Program).GetMethod("AppendStyleCspPolicy", 
             BindingFlags.NonPublic | BindingFlags.Static);
-        method?.Invoke(null, new object?[] { cspPolicyBuilder, styleNonce });
+        var mockEnvironment = new Mock<IWebHostEnvironment>();
+        mockEnvironment.Setup(x => x.EnvironmentName).Returns("Testing");
+        method?.Invoke(null, new object?[] { cspPolicyBuilder, styleNonce, mockEnvironment.Object });
     }
     
     private Mock<IWebHostEnvironment> CreateMockEnvironment(string environmentName)

@@ -1,7 +1,7 @@
 // Setlist Studio App JavaScript
 // Handles accessibility, theme management, and UI interactions
 
-window.setlistStudioApp = {
+globalThis.setlistStudioApp = {
     
     // Initialize app
     init: function() {
@@ -15,14 +15,14 @@ window.setlistStudioApp = {
     setupAccessibility: function() {
         // Announce route changes to screen readers
         const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
+            for (const mutation of mutations) {
                 if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                     const mainContent = document.querySelector('#main-content');
                     if (mainContent?.contains(mutation.addedNodes[0])) {
                         this.announcePageChange();
                     }
                 }
-            });
+            }
         });
         
         observer.observe(document.body, { 
@@ -87,7 +87,7 @@ window.setlistStudioApp = {
     
     // Respect user's reduced motion preference
     setupReducedMotion: function() {
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const reducedMotion = globalThis.matchMedia('(prefers-reduced-motion: reduce)');
         
         if (reducedMotion.matches) {
             document.body.classList.add('reduced-motion');
@@ -121,7 +121,7 @@ window.setlistStudioApp = {
         if (focusableElements.length === 0) return;
         
         const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
+        const lastElement = focusableElements.at(-1);
         
         element.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
@@ -202,15 +202,16 @@ window.setlistStudioApp = {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    window.setlistStudioApp.init();
+    globalThis.setlistStudioApp.init();
 });
 
 // Blazor reconnection helpers
 
 // Service Worker registration for offline performance support
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js')
-        .then(registration => {
+(async function() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js');
             console.log('[App] Service Worker registered - offline performance mode enabled');
             
             // Listen for updates to the service worker
@@ -227,12 +228,14 @@ if ('serviceWorker' in navigator) {
                     });
                 }
             });
-        })
-        .catch(error => {
+        } catch (error) {
             console.error('[App] Service Worker registration failed:', error);
-        });
-    
-    // Listen for service worker messages
+        }
+    }
+})();
+
+// Listen for service worker messages
+if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', event => {
         const { type, payload } = event.data;
         
@@ -243,7 +246,7 @@ if ('serviceWorker' in navigator) {
                 
             case 'OFFLINE_READY':
                 console.log('[App] Offline capabilities ready');
-                window.setlistStudioApp.showOfflineReady?.();
+                globalThis.setlistStudioApp.showOfflineReady?.();
                 break;
                 
             default:
@@ -253,7 +256,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // Offline functionality for performance scenarios
-window.setlistStudioApp.offline = {
+globalThis.setlistStudioApp.offline = {
     // Cache specific setlist for offline access
     cacheSetlist: function(setlistId) {
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -308,7 +311,12 @@ window.setlistStudioApp.offline = {
     
     // Check if app is currently offline
     isOffline: function() {
-        return !navigator.onLine;
+        try {
+            return !navigator.onLine;
+        } catch (error) {
+            console.warn('[App] Connection status check failed:', error.message);
+            return false; // Assume online if check fails
+        }
     },
     
     // Show offline notification to users
@@ -320,37 +328,37 @@ window.setlistStudioApp.offline = {
 };
 
 // Connection status callbacks for Blazor components
-window.setlistStudioApp.connectionStatusCallback = null;
+globalThis.setlistStudioApp.connectionStatusCallback = null;
 
-window.setlistStudioApp.registerConnectionStatusCallback = function(dotNetRef) {
-    window.setlistStudioApp.connectionStatusCallback = dotNetRef;
+globalThis.setlistStudioApp.registerConnectionStatusCallback = function(dotNetRef) {
+    globalThis.setlistStudioApp.connectionStatusCallback = dotNetRef;
     console.log('[App] Connection status callback registered');
 };
 
-window.setlistStudioApp.unregisterConnectionStatusCallback = function() {
-    window.setlistStudioApp.connectionStatusCallback = null;
+globalThis.setlistStudioApp.unregisterConnectionStatusCallback = function() {
+    globalThis.setlistStudioApp.connectionStatusCallback = null;
     console.log('[App] Connection status callback unregistered');
 };
 
 // Connection status monitoring for live performance scenarios
-window.addEventListener('online', () => {
+globalThis.addEventListener('online', () => {
     console.log('[App] Connection restored - sync mode enabled');
     document.body.classList.remove('offline-mode');
     document.body.classList.add('online-mode');
     
     // Notify Blazor component
-    if (window.setlistStudioApp.connectionStatusCallback) {
-        window.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', true);
+    if (globalThis.setlistStudioApp.connectionStatusCallback) {
+        globalThis.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', true);
     }
 });
 
-window.addEventListener('offline', () => {
+globalThis.addEventListener('offline', () => {
     console.log('[App] Offline detected - performance mode activated');
     document.body.classList.remove('online-mode'); 
     document.body.classList.add('offline-mode');
     
     // Notify Blazor component
-    if (window.setlistStudioApp.connectionStatusCallback) {
-        window.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', false);
+    if (globalThis.setlistStudioApp.connectionStatusCallback) {
+        globalThis.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', false);
     }
 });

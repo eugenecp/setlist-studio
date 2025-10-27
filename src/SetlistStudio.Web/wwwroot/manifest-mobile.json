@@ -4,13 +4,10 @@
   "description": "Music performance management application for organizing songs and creating setlists with offline performance support",
   "start_url": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
-  "orientation": "portrait-primary",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#1976d2",
   "theme_color": "#1976d2",
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
   "scope": "/",
   "lang": "en",
   "categories": ["music", "productivity", "entertainment"],
@@ -40,8 +37,20 @@
   ],
   "shortcuts": [
     {
+      "name": "Performance Mode",
+      "short_name": "🎤 Perform",
+      "description": "Quick access for live performance (offline-ready)",
+      "url": "/setlists?mode=performance",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
       "name": "My Setlists",
-      "short_name": "Setlists",
+      "short_name": "📝 Setlists",
       "description": "Quick access to your performance setlists",
       "url": "/setlists",
       "icons": [
@@ -53,7 +62,7 @@
     },
     {
       "name": "Song Library",
-      "short_name": "Songs", 
+      "short_name": "♪ Songs", 
       "description": "Browse and manage your song collection",
       "url": "/songs",
       "icons": [
@@ -64,10 +73,10 @@
       ]
     },
     {
-      "name": "Performance Mode",
-      "short_name": "Perform",
-      "description": "Offline-ready performance view",
-      "url": "/?mode=performance",
+      "name": "Add Song",
+      "short_name": "➕ Add",
+      "description": "Quickly add a new song to your library",
+      "url": "/songs/add",
       "icons": [
         {
           "src": "icon-192.png",
@@ -76,8 +85,6 @@
       ]
     }
   ],
-  "related_applications": [],
-  "display_override": ["standalone", "minimal-ui"],
   "edge_side_panel": {
     "preferred_width": 400
   },
@@ -87,7 +94,32 @@
   "protocol_handlers": [
     {
       "protocol": "web+setlist",
-      "url": "/setlist?id=%s"
+      "url": "/import?url=%s"
     }
-  ]
+  ],
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "text/plain": [".txt", ".setlist"],
+        "application/json": [".json"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/import/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "setlistFile",
+          "accept": ["text/plain", "application/json"]
+        }
+      ]
+    }
+  }
 }
