@@ -1,7 +1,8 @@
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using MudBlazor
 @using SetlistStudio.Core.Entities
-@using Microsoft.AspNetCore.Components.Rendering
 @inject IJSRuntime JS
 
 <!-- Download for Offline Component -->
@@ -126,7 +127,7 @@
             builder.OpenComponent<MudIconButton>(8);
             builder.AddAttribute(9, "Icon", Icons.Material.Filled.Delete);
             builder.AddAttribute(10, "Size", Size.Small);
-            builder.AddAttribute(11, "OnClick", EventCallback.Factory.Create(this, RemoveFromCache));
+            builder.AddAttribute(11, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => RemoveFromCache(args)));
             builder.AddAttribute(12, "title", "Remove from offline cache");
             builder.CloseComponent();
         }
@@ -142,7 +143,7 @@
         builder.AddAttribute(2, "Size", Size.Small);
         builder.AddAttribute(3, "Variant", Variant.Outlined);
         builder.AddAttribute(4, "Color", Color.Primary);
-        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create(this, CacheForOffline));
+        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => CacheForOffline(args)));
         builder.AddAttribute(6, "Class", "download-button");
         builder.AddContent(7, "Cache for Offline");
         builder.CloseComponent();
@@ -174,7 +175,7 @@
         builder.AddAttribute(2, "Size", Size.Small);
         builder.AddAttribute(3, "Variant", Variant.Text);
         builder.AddAttribute(4, "Color", Color.Secondary);
-        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create(this, CacheSongs));
+        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => CacheSongs(args)));
         builder.AddAttribute(6, "Class", "cache-songs-button");
         builder.AddContent(7, "Cache All Songs");
         builder.CloseComponent();
@@ -229,6 +230,11 @@
         }
     }
 
+    private async Task CacheForOffline(MouseEventArgs args)
+    {
+        await CacheForOffline();
+    }
+
     private async Task CacheSongs()
     {
         if (Songs == null || !Songs.Any() || IsCachingSongs) return;
@@ -257,6 +263,11 @@
         }
     }
 
+    private async Task CacheSongs(MouseEventArgs args)
+    {
+        await CacheSongs();
+    }
+
     private async Task RemoveFromCache()
     {
         try
@@ -272,6 +283,11 @@
         {
             Console.WriteLine($"[DownloadForOffline] Error clearing cache: {ex.Message}");
         }
+    }
+
+    private async Task RemoveFromCache(MouseEventArgs args)
+    {
+        await RemoveFromCache();
     }
 }
 

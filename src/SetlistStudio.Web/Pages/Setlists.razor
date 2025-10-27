@@ -1,5 +1,6 @@
 @page "/setlists"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using MudBlazor
 @using SetlistStudio.Core.Entities
@@ -62,7 +63,7 @@
             <MudIconButton 
                 Icon="@Icons.Material.Filled.Refresh" 
                 Color="Color.Primary"
-                OnClick="RefreshSetlists"
+                OnClick="@((MouseEventArgs args) => RefreshSetlists(args))"
                 Disabled="!IsOnline || IsLoading"
                 title="Refresh from server">
             </MudIconButton>
@@ -70,7 +71,7 @@
             <MudIconButton 
                 Icon="@Icons.Material.Filled.CloudDownload" 
                 Color="Color.Secondary"
-                OnClick="CacheAllSetlists"
+                OnClick="@((MouseEventArgs args) => CacheAllSetlists(args))"
                 Disabled="!IsOnline || IsLoading"
                 title="Cache all for offline">
             </MudIconButton>
@@ -142,7 +143,7 @@
                                 <MudIconButton 
                                     Icon="@Icons.Material.Filled.MoreVert" 
                                     Color="Color.Default" 
-                                    OnClick="@(() => ShowSetlistMenu(setlist.Id))" />
+                                    OnClick="@((MouseEventArgs args) => ShowSetlistMenu(args, setlist.Id))" />
                             </CardHeaderActions>
                         </MudCardHeader>
                         
@@ -361,6 +362,11 @@
         await LoadSetlists();
     }
 
+    private async Task RefreshSetlists(MouseEventArgs args)
+    {
+        await RefreshSetlists();
+    }
+
     private async Task CacheAllSetlists()
     {
         if (!IsOnline || !UserSetlists.Any()) return;
@@ -379,6 +385,11 @@
         {
             Logger.LogError(ex, "Error caching setlists for offline access");
         }
+    }
+
+    private async Task CacheAllSetlists(MouseEventArgs args)
+    {
+        await CacheAllSetlists();
     }
 
     private void OnSearchKeyUp(KeyboardEventArgs e)
@@ -506,6 +517,11 @@
     {
         // Future: Show context menu for setlist actions
         Logger.LogInformation("Show menu for setlist {SetlistId}", setlistId);
+    }
+
+    private void ShowSetlistMenu(MouseEventArgs args, int setlistId)
+    {
+        ShowSetlistMenu(setlistId);
     }
 
     public void Dispose()

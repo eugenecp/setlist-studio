@@ -63,7 +63,7 @@ public class DownloadForOfflineAdvancedTests : IDisposable
     private async Task InvokeCacheSongsAsync(DownloadForOffline component)
     {
         var method = typeof(DownloadForOffline).GetMethod("CacheSongs", 
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance, null, Type.EmptyTypes, null);
         
         if (method == null)
             throw new InvalidOperationException("CacheSongs method not found");

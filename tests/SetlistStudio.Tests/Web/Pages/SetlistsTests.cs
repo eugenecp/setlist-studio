@@ -8,6 +8,7 @@ using Moq;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Web.Pages;
+using System.Linq;
 using System.Net.Http.Json;
 using System.Reflection;
 using Xunit;
@@ -890,8 +891,10 @@ public class SetlistsTests : TestContext
     /// </summary>
     private static async Task InvokePrivateMethodAsync(object instance, string methodName, params object[] parameters)
     {
+        var parameterTypes = parameters?.Select(p => p?.GetType() ?? typeof(object)).ToArray() ?? Type.EmptyTypes;
         var method = instance.GetType().GetMethod(methodName, 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, 
+            null, parameterTypes, null);
         
         if (method == null)
             throw new InvalidOperationException($"Method {methodName} not found on type {instance.GetType().Name}");
