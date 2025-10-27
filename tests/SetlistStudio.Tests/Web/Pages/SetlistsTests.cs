@@ -734,11 +734,11 @@ public class SetlistsTests : TestContext
     [Fact] 
     public void NormalizeSearchTerm_WithNullInput_ShouldThrowException()
     {
-        // Act & Assert - Should throw when trying to call with null
+        // Act & Assert - Should throw when trying to call with null (single parameter)
         Action act = () => InvokePrivateStaticMethod<string>(
             typeof(Setlists), 
             "NormalizeSearchTerm", 
-            null!);
+            new object[] { null! });
         
         act.Should().Throw<TargetInvocationException>();
     }
