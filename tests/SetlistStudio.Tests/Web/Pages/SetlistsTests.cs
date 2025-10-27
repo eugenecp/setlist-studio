@@ -738,7 +738,7 @@ public class SetlistsTests : TestContext
         Action act = () => InvokePrivateStaticMethod<string>(
             typeof(Setlists), 
             "NormalizeSearchTerm", 
-            (string?)null!);
+            null!);
         
         act.Should().Throw<TargetInvocationException>();
     }
@@ -857,7 +857,7 @@ public class SetlistsTests : TestContext
         Action act = () => InvokePrivateStaticMethod<IEnumerable<Setlist>>(
             typeof(Setlists), 
             "FilterSetlistsBySearchTerm", 
-            (List<Setlist>?)null!, 
+            null!, 
             "search term");
         
         act.Should().Throw<TargetInvocationException>();
