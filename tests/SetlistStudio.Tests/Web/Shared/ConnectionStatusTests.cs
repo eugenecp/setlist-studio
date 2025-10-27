@@ -60,13 +60,13 @@ public class ConnectionStatusTests : TestContext
         // Act - Render component and wait for after render
         var component = RenderComponent<ConnectionStatus>();
         
-        // Trigger the connection status change through the public method
-        await component.InvokeAsync(async () => await component.Instance.OnConnectionStatusChanged(false));
+        // Simulate connection status change to offline
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(false));
 
         // Assert - Performance mode alert should be visible when offline
         component.Markup.Should().Contain("Performance Mode Active");
         component.Markup.Should().Contain("Using cached setlists and songs");
-        component.Markup.Should().Contain("performance-mode-alert");
+        component.Markup.Should().Contain("connection-status-container");
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class ConnectionStatusTests : TestContext
         var component = RenderComponent<ConnectionStatus>();
 
         // Act - Simulate connection status change to offline using InvokeAsync
-        await component.InvokeAsync(async () => await component.Instance.OnConnectionStatusChanged(false));
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(false));
 
         // Assert - Component should show offline status
         component.Markup.Should().Contain("Performance Mode Active");
@@ -163,7 +163,7 @@ public class ConnectionStatusTests : TestContext
             .Add(p => p.ShowCacheStatus, true));
 
         // Act - Simulate going online using InvokeAsync
-        await component.InvokeAsync(async () => await component.Instance.OnConnectionStatusChanged(true));
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(true));
 
         // Assert - Cache status should be updated when going online
         JSInterop.VerifyInvoke("setlistStudioApp.offline.getCacheStatus");
@@ -177,7 +177,7 @@ public class ConnectionStatusTests : TestContext
 
         // Act - Render component and trigger offline state
         var component = RenderComponent<ConnectionStatus>();
-        await component.InvokeAsync(async () => await component.Instance.OnConnectionStatusChanged(false));
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(false));
 
         // Assert - Performance mode alert should have correct CSS classes
         component.Markup.Should().Contain("performance-mode-alert");
@@ -216,7 +216,7 @@ public class ConnectionStatusTests : TestContext
 
         // Act - Render component and trigger offline state
         var component = RenderComponent<ConnectionStatus>();
-        await component.InvokeAsync(async () => await component.Instance.OnConnectionStatusChanged(false));
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(false));
 
         // Assert - Component should have proper accessibility features through MudAlert
         component.Markup.Should().Contain("role=\"img\""); // SVG icons have img role for screen readers
