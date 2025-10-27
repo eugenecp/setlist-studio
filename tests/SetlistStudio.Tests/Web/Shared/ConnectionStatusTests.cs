@@ -152,21 +152,22 @@ public class ConnectionStatusTests : TestContext
     }
 
     [Fact]
-    public async Task ConnectionStatus_OnConnectionStatusChanged_WhenGoingOnline_ShouldUpdateCacheIfEnabled()
+    public async Task ConnectionStatus_OnConnectionStatusChanged_WhenGoingOnline_ShouldHideOfflineAlert()
     {
-        // Arrange - Start offline with cache status enabled
+        // Arrange - Start offline and render component
         JSInterop.Setup<bool>("navigator.onLine").SetResult(false);
-        JSInterop.Setup<Dictionary<string, int>>("setlistStudioApp.offline.getCacheStatus")
-            .SetResult(new Dictionary<string, int> { ["setlist-studio-api-v1.0.0"] = 15 });
+        var component = RenderComponent<ConnectionStatus>();
+        
+        // Set to offline state first
+        await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(false));
+        component.Markup.Should().Contain("Performance Mode Active");
 
-        var component = RenderComponent<ConnectionStatus>(parameters => parameters
-            .Add(p => p.ShowCacheStatus, true));
-
-        // Act - Simulate going online using InvokeAsync
+        // Act - Simulate going online
         await component.InvokeAsync(() => component.Instance.OnConnectionStatusChanged(true));
 
-        // Assert - Cache status should be updated when going online
-        JSInterop.VerifyInvoke("setlistStudioApp.offline.getCacheStatus");
+        // Assert - Performance mode alert should be hidden when online
+        component.Markup.Should().NotContain("Performance Mode Active");
+        component.Markup.Should().NotContain("Using cached setlists and songs");
     }
 
     [Fact]
