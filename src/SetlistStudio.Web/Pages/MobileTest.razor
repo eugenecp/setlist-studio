@@ -259,20 +259,22 @@
 
     private async Task InitializeMobileTestEvents()
     {
-        // Initialize swipe gesture listeners
-        await JSRuntime.InvokeVoidAsync("eval", @"
-            document.addEventListener('swipe', function(e) {
-                DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandleSwipeGesture', e.detail.direction);
-            });
+        try 
+        {
+            // Initialize mobile test events using safe Blazor helpers
+            await JSRuntime.InvokeVoidAsync("blazorHelpers.addSwipeListener");
+            await JSRuntime.InvokeVoidAsync("blazorHelpers.addPullRefreshListener");  
+            await JSRuntime.InvokeVoidAsync("blazorHelpers.addTouchCountListener");
             
-            document.addEventListener('pullRefresh', function(e) {
-                DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandlePullRefresh');
-            });
-            
-            document.addEventListener('touchstart', function(e) {
-                DotNet.invokeMethodAsync('SetlistStudio.Web', 'IncrementTouchCount');
-            });
-        ");
+            // Initialize mobile enhancements if available
+            var initialized = await JSRuntime.InvokeAsync<bool>("blazorHelpers.initializeMobileTest");
+            System.Console.WriteLine($"Mobile test initialization: {(initialized ? "Success" : "Partial - basic features only")}");
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't break the page
+            System.Console.WriteLine($"Mobile test initialization error: {ex.Message}");
+        }
     }
 
     [JSInvokable]

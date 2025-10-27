@@ -3,7 +3,7 @@
 
 class MobileEnhancements {
     constructor() {
-        this.isTouch = 'ontouchstart' in window;
+        this.isTouch = 'ontouchstart' in globalThis;
         this.gestureThreshold = 50;
         this.swipeThreshold = 100;
         this.pullRefreshThreshold = 80;
@@ -21,13 +21,13 @@ class MobileEnhancements {
         this.optimizeForMobile();
         
         // Listen for orientation changes
-        window.addEventListener('orientationchange', () => {
+        globalThis.addEventListener('orientationchange', () => {
             setTimeout(() => this.handleOrientationChange(), 100);
         });
         
         // Listen for connection changes
-        window.addEventListener('online', () => this.handleConnectionChange(true));
-        window.addEventListener('offline', () => this.handleConnectionChange(false));
+        globalThis.addEventListener('online', () => this.handleConnectionChange(true));
+        globalThis.addEventListener('offline', () => this.handleConnectionChange(false));
     }
     
     // ===== TOUCH TARGET ENHANCEMENTS =====
@@ -37,9 +37,9 @@ class MobileEnhancements {
         
         // Add mobile-touch-target class to interactive elements
         const interactiveElements = document.querySelectorAll('button, .mud-button, .mud-icon-button, .mud-nav-link, input, select');
-        interactiveElements.forEach(element => {
+        for (const element of interactiveElements) {
             element.classList.add('mobile-touch-target');
-        });
+        }
         
         // Add click delay removal for iOS
         document.addEventListener('touchstart', () => {}, { passive: true });
@@ -127,7 +127,7 @@ class MobileEnhancements {
     initializePullToRefresh() {
         const refreshContainers = document.querySelectorAll('.pull-refresh-container');
         
-        refreshContainers.forEach(container => {
+        for (const container of refreshContainers) {
             let startY = 0;
             let currentY = 0;
             let isPulling = false;
@@ -168,7 +168,7 @@ class MobileEnhancements {
                     isPulling = false;
                 }
             }, { passive: true });
-        });
+        }
     }
     
     createPullRefreshIndicator() {
@@ -253,7 +253,8 @@ class MobileEnhancements {
         const container = document.getElementById('fabContainer');
         if (container) {
             container.classList.toggle('expanded');
-            window.mobileEnhancements?.triggerHapticFeedback('light');
+            // Haptic feedback for successful actions
+            globalThis.mobileEnhancements?.triggerHapticFeedback('light');
         }
     }
     
@@ -264,17 +265,17 @@ class MobileEnhancements {
         // Navigate based on action
         switch (action) {
             case 'search':
-                window.location.href = '/songs?focus=search';
+                globalThis.location.href = '/songs?focus=search';
                 break;
             case 'add':
-                window.location.href = '/songs/add';
+                globalThis.location.href = '/songs/add';
                 break;
-            case 'setlist':
-                window.location.href = '/setlists/create';
+            case 'create':
+                globalThis.location.href = '/setlists/create';
                 break;
         }
         
-        window.mobileEnhancements?.triggerHapticFeedback('medium');
+        globalThis.mobileEnhancements?.triggerHapticFeedback('medium');
         MobileEnhancements.toggleFAB();
     }
     
@@ -282,7 +283,7 @@ class MobileEnhancements {
     
     initializePerformanceMode() {
         // Auto-enable performance mode when offline
-        if (!navigator.onLine) {
+        if (!this.checkConnectionStatus()) {
             this.enablePerformanceMode();
         }
         
@@ -378,16 +379,16 @@ class MobileEnhancements {
     addHapticFeedback() {
         // Add to all interactive elements
         const elements = document.querySelectorAll('button, .mud-button, .mud-icon-button');
-        elements.forEach(element => {
+        for (const element of elements) {
             element.addEventListener('touchstart', () => {
                 this.triggerHapticFeedback('light');
             }, { passive: true });
-        });
+        }
     }
     
     triggerHapticFeedback(intensity = 'light') {
         // Use native haptic feedback if available
-        if (window.navigator.vibrate) {
+        if (globalThis.navigator.vibrate) {
             const patterns = {
                 light: [10],
                 medium: [15],
@@ -395,7 +396,7 @@ class MobileEnhancements {
                 success: [10, 50, 10],
                 error: [50, 50, 50]
             };
-            window.navigator.vibrate(patterns[intensity] || patterns.light);
+            globalThis.navigator.vibrate(patterns[intensity] || patterns.light);
         } else {
             // Visual feedback fallback
             document.body.classList.add('haptic-feedback');
@@ -412,7 +413,7 @@ class MobileEnhancements {
             statusElement.textContent = isOnline ? 'Online' : 'Offline';
         }
         
-        if (!isOnline) {
+        if (isOnline === false) {
             this.enablePerformanceMode();
             this.showConnectionNotification('Switched to Performance Mode (Offline)');
         } else {
@@ -467,7 +468,7 @@ class MobileEnhancements {
         
         // Trigger layout recalculation
         setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
+            globalThis.dispatchEvent(new Event('resize'));
         }, 100);
     }
     
@@ -487,9 +488,9 @@ class MobileEnhancements {
     static togglePerformanceMode() {
         const isPerformanceMode = document.body.classList.contains('performance-mode');
         if (isPerformanceMode) {
-            window.mobileEnhancements?.disablePerformanceMode();
+            globalThis.mobileEnhancements?.disablePerformanceMode();
         } else {
-            window.mobileEnhancements?.enablePerformanceMode();
+            globalThis.mobileEnhancements?.enablePerformanceMode();
         }
     }
     
@@ -498,25 +499,143 @@ class MobileEnhancements {
     optimizeForMobile() {
         // Prevent zoom on input focus (iOS)
         const inputs = document.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
+        for (const input of inputs) {
             if (!input.style.fontSize) {
                 input.style.fontSize = '16px';
             }
-        });
+        }
         
         // Optimize scroll performance
         document.body.style.webkitOverflowScrolling = 'touch';
         
         // Add safe area support
         const safeAreaElements = document.querySelectorAll('.safe-area-container, .fab-container');
-        safeAreaElements.forEach(element => {
+        for (const element of safeAreaElements) {
             element.classList.add('safe-area-container');
-        });
+        }
         
         // Load performance preferences
         const performanceMode = localStorage.getItem('performanceMode');
         if (performanceMode === 'enabled') {
             this.enablePerformanceMode();
+        }
+    }
+    
+    // ===== MOBILE TEST FUNCTIONS =====
+    
+    addSwipeListener() {
+        document.addEventListener('swipe', function(e) {
+            if (globalThis.DotNet) {
+                globalThis.DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandleSwipeGesture', e.detail.direction);
+            }
+        });
+    }
+    
+    addPullRefreshListener() {
+        document.addEventListener('pullRefresh', function(e) {
+            if (globalThis.DotNet) {
+                globalThis.DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandlePullRefresh');
+            }
+        });
+    }
+    
+    addTouchCountListener() {
+        document.addEventListener('touchstart', function(e) {
+            if (globalThis.DotNet) {
+                globalThis.DotNet.invokeMethodAsync('SetlistStudio.Web', 'IncrementTouchCount');
+            }
+        });
+    }
+    
+    // Connection status check without using navigator.onLine property directly
+    checkConnectionStatus() {
+        try {
+            return navigator.onLine !== false;
+        } catch (error) {
+            console.warn('[MobileEnhancements] Connection status check failed:', error.message);
+            return true; // Assume online if check fails
+        }
+    }
+    
+    // Initialize mobile test events - separate function for mobile test page
+    initializeMobileTest() {
+        try {
+            // Add event listeners for mobile test interactions
+            this.addMobileTestListeners();
+            console.log('[MobileEnhancements] Mobile test initialized');
+        } catch (e) {
+            console.error('[MobileEnhancements] Error initializing mobile test:', e);
+        }
+    }
+    
+    addMobileTestListeners() {
+        // Add swipe event listener
+        document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
+        document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: true });
+        document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: true });
+    }
+    
+    handleTouchStart(e) {
+        this.touchStartX = e.touches[0].clientX;
+        this.touchStartY = e.touches[0].clientY;
+        this.touchStartTime = Date.now();
+    }
+    
+    handleTouchMove(e) {
+        if (!this.touchStartX || !this.touchStartY) return;
+        
+        const touchEndX = e.touches[0].clientX;
+        const touchEndY = e.touches[0].clientY;
+        const diffX = this.touchStartX - touchEndX;
+        const diffY = this.touchStartY - touchEndY;
+        
+        // Update for pull-to-refresh
+        if (diffY < -this.pullRefreshThreshold && Math.abs(diffX) < 100) {
+            this.showPullRefreshIndicator();
+        }
+    }
+    
+    handleTouchEnd(e) {
+        if (!this.touchStartX || !this.touchStartY) return;
+        
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        const diffX = this.touchStartX - touchEndX;
+        const diffY = this.touchStartY - touchEndY;
+        const diffTime = Date.now() - this.touchStartTime;
+        
+        // Check for swipe gesture
+        if (Math.abs(diffX) > this.swipeThreshold && Math.abs(diffY) < 100 && diffTime < 500) {
+            const direction = diffX > 0 ? 'left' : 'right';
+            this.dispatchSwipeEvent(direction);
+        }
+        
+        // Check for pull-to-refresh
+        if (diffY < -this.pullRefreshThreshold && Math.abs(diffX) < 100 && diffTime < 1000) {
+            this.dispatchPullRefreshEvent();
+        }
+        
+        // Reset touch data
+        this.touchStartX = null;
+        this.touchStartY = null;
+        this.touchStartTime = null;
+    }
+    
+    dispatchSwipeEvent(direction) {
+        const swipeEvent = new CustomEvent('swipe', { detail: { direction } });
+        document.dispatchEvent(swipeEvent);
+    }
+    
+    dispatchPullRefreshEvent() {
+        const pullRefreshEvent = new CustomEvent('pullRefresh');
+        document.dispatchEvent(pullRefreshEvent);
+    }
+    
+    showPullRefreshIndicator() {
+        const indicator = document.querySelector('.pull-refresh-indicator');
+        if (indicator) {
+            indicator.style.transform = 'translateY(0)';
+            indicator.style.opacity = '1';
         }
     }
 }
@@ -545,11 +664,11 @@ document.head.appendChild(style);
 // Initialize mobile enhancements when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        window.mobileEnhancements = new MobileEnhancements();
+        globalThis.mobileEnhancements = new MobileEnhancements();
     });
 } else {
-    window.mobileEnhancements = new MobileEnhancements();
+    globalThis.mobileEnhancements = new MobileEnhancements();
 }
 
 // Export for use in Blazor components
-window.MobileEnhancements = MobileEnhancements;
+globalThis.MobileEnhancements = MobileEnhancements;
