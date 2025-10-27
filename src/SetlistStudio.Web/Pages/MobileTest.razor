@@ -1,0 +1,370 @@
+@page "/mobile-test"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using MudBlazor
+@using SetlistStudio.Core.Entities
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Mobile Experience Test - Setlist Studio</PageTitle>
+
+<div class="mobile-test-container safe-area-container">
+    <!-- Mobile Enhancement Demo Header -->
+    <MudAppBar Elevation="4" Class="mobile-touch-target">
+        <MudIconButton 
+            Icon="@Icons.Material.Filled.Menu" 
+            Color="Color.Inherit" 
+            Edge="Edge.Start"
+            Class="mobile-touch-target"
+            OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h6">Mobile Experience Test</MudText>
+        <MudSpacer />
+        <MudIconButton 
+            Icon="@Icons.Material.Filled.DarkMode" 
+            Color="Color.Inherit"
+            Class="mobile-touch-target performance-focus"
+            OnClick="@TogglePerformanceMode"
+            Title="Toggle Performance Mode" />
+    </MudAppBar>
+
+    <!-- Mobile Test Content -->
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-8">
+        
+        <!-- Connection Status Test -->
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3 performance-mode">📱 Connection Status</MudText>
+            <div class="d-flex gap-2 mb-3">
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Primary"
+                    Class="mobile-touch-target"
+                    OnClick="@SimulateOffline">
+                    Test Offline Mode
+                </MudButton>
+                <MudButton 
+                    Variant="Variant.Outlined" 
+                    Color="Color.Secondary"
+                    Class="mobile-touch-target"
+                    OnClick="@SimulateOnline">
+                    Test Online Mode
+                </MudButton>
+            </div>
+            <MudAlert Severity="@(isOfflineMode ? Severity.Warning : Severity.Success)" Class="performance-mode">
+                Status: @(isOfflineMode ? "🎵 Performance Mode (Offline)" : "🌐 Online Mode")
+            </MudAlert>
+        </MudPaper>
+
+        <!-- Touch Target Test -->
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3 performance-mode">👆 Touch Targets</MudText>
+            <div class="d-flex flex-column gap-3">
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Primary" 
+                    Size="Size.Large"
+                    Class="mobile-touch-target"
+                    FullWidth="true"
+                    OnClick="@(() => ShowFeedback("Large button tapped!"))">
+                    Large Touch Target (Recommended)
+                </MudButton>
+                
+                <div class="d-flex gap-2">
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Secondary"
+                        Size="Size.Medium"
+                        Class="mobile-touch-target"
+                        FullWidth="true"
+                        OnClick="@(() => ShowFeedback("Medium button tapped!"))">
+                        Medium Target
+                    </MudButton>
+                    <MudIconButton 
+                        Icon="@Icons.Material.Filled.Favorite"
+                        Color="Color.Error"
+                        Size="Size.Large"
+                        Class="mobile-touch-target"
+                        OnClick="@(() => ShowFeedback("Icon button tapped!"))" />
+                </div>
+            </div>
+        </MudPaper>
+
+        <!-- Swipe Gesture Test -->
+        <MudPaper Class="pa-4 mb-4 swipe-container" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3 performance-mode">👈 Swipe Gestures</MudText>
+            <div class="swipe-item mobile-card" style="background: linear-gradient(45deg, #1976d2, #42a5f5); color: white; padding: 20px; border-radius: 12px; position: relative;">
+                <div class="swipe-actions-left">⭐</div>
+                <div class="swipe-actions-right">🗑️</div>
+                
+                <MudText Typo="Typo.h6">Swipe me left or right!</MudText>
+                <MudText Typo="Typo.body2">← Left: Favorite | Right: Delete →</MudText>
+            </div>
+            <MudText Typo="Typo.caption" Class="mt-2">Last action: @swipeAction</MudText>
+        </MudPaper>
+
+        <!-- Pull to Refresh Test -->
+        <MudPaper Class="pull-refresh-container" Elevation="2" Style="height: 300px; overflow-y: auto;">
+            <div class="pull-refresh-indicator"></div>
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 performance-mode">🔄 Pull to Refresh</MudText>
+                <MudText Typo="Typo.body1" Class="mb-3">Pull down from the top to refresh!</MudText>
+                
+                @for (int i = 1; i <= refreshCount; i++)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2">
+                        🎵 Sample Setlist Item @i - @DateTime.Now.ToString("HH:mm:ss")
+                    </MudText>
+                }
+                
+                @if (refreshCount == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Pull down to load sample content...
+                    </MudText>
+                }
+            </div>
+        </MudPaper>
+
+        <!-- Performance Metrics -->
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3 performance-mode">📊 Performance Metrics</MudText>
+            <div class="performance-metrics">
+                <div class="metric-item">
+                    <MudIcon Icon="@Icons.Material.Filled.TouchApp" Color="Color.Primary" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Class="performance-mode">@touchCount</MudText>
+                    <MudText Typo="Typo.caption">Touches</MudText>
+                </div>
+                <div class="metric-item">
+                    <MudIcon Icon="@Icons.Material.Filled.SwipeLeft" Color="Color.Secondary" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Class="performance-mode">@swipeCount</MudText>
+                    <MudText Typo="Typo.caption">Swipes</MudText>
+                </div>
+                <div class="metric-item">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Success" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Class="performance-mode">@refreshCount</MudText>
+                    <MudText Typo="Typo.caption">Refreshes</MudText>
+                </div>
+            </div>
+        </MudPaper>
+
+        <!-- Large Text Mode Test -->
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3 performance-mode">🔍 Accessibility Tests</MudText>
+            <div class="d-flex gap-2 mb-3">
+                <MudButton 
+                    Variant="@(isLargeTextMode ? Variant.Filled : Variant.Outlined)"
+                    Color="Color.Primary"
+                    Class="mobile-touch-target"
+                    OnClick="@ToggleLargeTextMode">
+                    Large Text Mode
+                </MudButton>
+                <MudButton 
+                    Variant="@(isHighContrastMode ? Variant.Filled : Variant.Outlined)"
+                    Color="Color.Secondary"
+                    Class="mobile-touch-target"
+                    OnClick="@ToggleHighContrastMode">
+                    High Contrast
+                </MudButton>
+            </div>
+            <div class="@(isLargeTextMode ? "large-text-mode" : "")">
+                <MudText Typo="Typo.h6" Class="mb-2 performance-mode">Sample Song Title</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">Artist Name - BPM: 120 - Key: C</MudText>
+                <MudText Typo="Typo.body2">Performance notes and chord progressions would appear here...</MudText>
+            </div>
+        </MudPaper>
+
+    </MudContainer>
+
+    <!-- Floating Action Button Test -->
+    <div class="fab-container @(isFabExpanded ? "expanded" : "")">
+        <button class="fab-secondary" onclick="alert('Search action')" title="Search">🔍</button>
+        <button class="fab-secondary" onclick="alert('Add action')" title="Add Song">➕</button>
+        <button class="fab-secondary" onclick="alert('Setlist action')" title="New Setlist">📝</button>
+        <button class="fab-main" @onclick="ToggleFAB" title="Quick Actions">🎵</button>
+    </div>
+
+</div>
+
+<!-- Feedback Snackbar -->
+@if (!string.IsNullOrEmpty(feedbackMessage))
+{
+    <MudAlert Severity="Severity.Info" 
+              Class="feedback-alert"
+              Style="position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 9999;">
+        @feedbackMessage
+    </MudAlert>
+}
+
+<style>
+    .mobile-test-container {
+        padding-bottom: 100px; /* Space for FAB */
+    }
+    
+    .feedback-alert {
+        animation: slideUp 0.3s ease;
+    }
+    
+    .performance-metrics {
+        display: flex;
+        justify-content: space-around;
+        margin: 16px 0;
+        padding: 16px;
+        background: rgba(25, 118, 210, 0.1);
+        border-radius: 12px;
+    }
+    
+    .metric-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+    }
+    
+    /* Performance mode styles */
+    .performance-mode-active {
+        background: #000000 !important;
+        color: #ffffff !important;
+    }
+    
+    .performance-mode-active .mud-paper {
+        background: #1a1a1a !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+    }
+    
+    .performance-mode-active .performance-metrics {
+        background: rgba(255, 107, 53, 0.2) !important;
+    }
+</style>
+
+@code {
+    private bool isOfflineMode = false;
+    private bool isPerformanceMode = false;
+    private bool isLargeTextMode = false;
+    private bool isHighContrastMode = false;
+    private bool isFabExpanded = false;
+    private int touchCount = 0;
+    private int swipeCount = 0;
+    private int refreshCount = 0;
+    private string swipeAction = "None";
+    private string feedbackMessage = "";
+    private Timer? feedbackTimer;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeMobileTestEvents();
+        }
+    }
+
+    private async Task InitializeMobileTestEvents()
+    {
+        // Initialize swipe gesture listeners
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            document.addEventListener('swipe', function(e) {
+                DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandleSwipeGesture', e.detail.direction);
+            });
+            
+            document.addEventListener('pullRefresh', function(e) {
+                DotNet.invokeMethodAsync('SetlistStudio.Web', 'HandlePullRefresh');
+            });
+            
+            document.addEventListener('touchstart', function(e) {
+                DotNet.invokeMethodAsync('SetlistStudio.Web', 'IncrementTouchCount');
+            });
+        ");
+    }
+
+    [JSInvokable]
+    public static async Task HandleSwipeGesture(string direction)
+    {
+        // This would be implemented with proper component reference
+        // For demo purposes, we'll use a simpler approach
+    }
+
+    [JSInvokable]
+    public static async Task HandlePullRefresh()
+    {
+        // This would be implemented with proper component reference
+    }
+
+    [JSInvokable]
+    public static async Task IncrementTouchCount()
+    {
+        // This would be implemented with proper component reference
+    }
+
+    private async Task ToggleDrawer()
+    {
+        touchCount++;
+        await ShowFeedback("Navigation drawer toggled");
+    }
+
+    private async Task SimulateOffline()
+    {
+        isOfflineMode = true;
+        touchCount++;
+        await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.add('offline-mode', 'performance-mode')");
+        await ShowFeedback("Switched to Performance Mode (Offline)");
+    }
+
+    private async Task SimulateOnline()
+    {
+        isOfflineMode = false;
+        touchCount++;
+        await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.remove('offline-mode', 'performance-mode')");
+        await ShowFeedback("Switched to Online Mode");
+    }
+
+    private async Task TogglePerformanceMode()
+    {
+        isPerformanceMode = !isPerformanceMode;
+        touchCount++;
+        
+        var bodyClass = isPerformanceMode ? "performance-mode-active" : "";
+        await JSRuntime.InvokeVoidAsync("eval", $"document.body.className = '{bodyClass}'");
+        
+        await ShowFeedback($"Performance Mode {(isPerformanceMode ? "Enabled" : "Disabled")}");
+    }
+
+    private void ToggleLargeTextMode()
+    {
+        isLargeTextMode = !isLargeTextMode;
+        touchCount++;
+        ShowFeedback($"Large Text Mode {(isLargeTextMode ? "Enabled" : "Disabled")}");
+    }
+
+    private void ToggleHighContrastMode()
+    {
+        isHighContrastMode = !isHighContrastMode;
+        touchCount++;
+        ShowFeedback($"High Contrast Mode {(isHighContrastMode ? "Enabled" : "Disabled")}");
+    }
+
+    private void ToggleFAB()
+    {
+        isFabExpanded = !isFabExpanded;
+        touchCount++;
+        ShowFeedback("FAB toggled");
+    }
+
+    private Task ShowFeedback(string message)
+    {
+        feedbackMessage = message;
+        
+        // Auto-hide after 2 seconds
+        feedbackTimer?.Dispose();
+        feedbackTimer = new Timer(_ => 
+        {
+            feedbackMessage = "";
+            InvokeAsync(StateHasChanged);
+        }, null, 2000, Timeout.Infinite);
+        
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        feedbackTimer?.Dispose();
+    }
+}

@@ -1,0 +1,502 @@
+/* Mobile Enhancements for Setlist Studio */
+/* Optimized for musicians using tablets/phones during performances */
+
+/* ===== TOUCH TARGET IMPROVEMENTS ===== */
+/* Larger touch targets for backstage use with gloves or in low light */
+
+.mobile-touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: 12px 16px !important;
+}
+
+/* Enhanced button sizing for mobile */
+@media (max-width: 768px) {
+    .mud-button {
+        min-height: 48px !important;
+        padding: 12px 24px !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        border-radius: 8px !important;
+    }
+    
+    .mud-button-small {
+        min-height: 40px !important;
+        padding: 8px 16px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .mud-button-large {
+        min-height: 56px !important;
+        padding: 16px 32px !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Icon buttons need larger touch areas */
+    .mud-icon-button {
+        min-height: 48px !important;
+        min-width: 48px !important;
+        border-radius: 50% !important;
+    }
+    
+    /* Input fields optimized for mobile */
+    .mud-input-control {
+        min-height: 48px !important;
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+    
+    /* Navigation menu items */
+    .mud-nav-link {
+        min-height: 52px !important;
+        padding: 16px 20px !important;
+        font-size: 1rem !important;
+    }
+}
+
+/* ===== PERFORMANCE MODE UI ENHANCEMENTS ===== */
+/* Larger fonts and higher contrast for stage lighting conditions */
+
+.performance-mode {
+    font-size: 1.2rem !important;
+    line-height: 1.5 !important;
+    font-weight: 500 !important;
+}
+
+.performance-mode .mud-typography-h4 {
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.performance-mode .mud-typography-h5 {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+}
+
+.performance-mode .mud-typography-h6 {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+}
+
+/* High contrast theme for dark venues */
+.performance-mode-dark {
+    background: #000000 !important;
+    color: #ffffff !important;
+}
+
+.performance-mode-dark .mud-paper {
+    background: #1a1a1a !important;
+    color: #ffffff !important;
+    border: 1px solid #333333 !important;
+}
+
+.performance-mode-dark .mud-button-filled {
+    background: #ff6b35 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 8px rgba(255, 107, 53, 0.3) !important;
+}
+
+.performance-mode-dark .mud-button-outlined {
+    border: 2px solid #ff6b35 !important;
+    color: #ff6b35 !important;
+    font-weight: 600 !important;
+}
+
+/* ===== FLOATING ACTION BUTTONS ===== */
+/* Quick access toolbar for most common actions during performances */
+
+.fab-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fab-main {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #ff6b35;
+    color: white;
+    border: none;
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.fab-main:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.5);
+}
+
+.fab-secondary {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #333333;
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.fab-container.expanded .fab-secondary {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.fab-secondary:hover {
+    transform: scale(1.05);
+    background: #555555;
+}
+
+/* Quick access toolbar for landscape tablets */
+@media (orientation: landscape) and (max-width: 1024px) {
+    .quick-access-toolbar {
+        position: fixed;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        border-radius: 30px;
+        padding: 8px 16px;
+        display: flex;
+        gap: 8px;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+    }
+    
+    .quick-access-toolbar button {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: transparent;
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .quick-access-toolbar button:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.05);
+    }
+}
+
+/* ===== GESTURE NAVIGATION SUPPORT ===== */
+/* Touch-friendly interactions for swipe, pull-to-refresh, etc. */
+
+.swipe-container {
+    position: relative;
+    overflow-x: hidden;
+    touch-action: pan-y pinch-zoom;
+}
+
+.swipe-item {
+    transition: transform 0.3s ease;
+    user-select: none;
+}
+
+.swipe-item.swiping {
+    transition: none;
+}
+
+.swipe-actions-left,
+.swipe-actions-right {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    font-weight: bold;
+}
+
+.swipe-actions-left {
+    left: -80px;
+    background: #4caf50;
+}
+
+.swipe-actions-right {
+    right: -80px;
+    background: #f44336;
+}
+
+/* Pull to refresh indicator */
+.pull-refresh-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.pull-refresh-indicator {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ff6b35;
+    color: white;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.pull-refresh-indicator.visible {
+    top: 10px;
+}
+
+.pull-refresh-indicator.loading {
+    animation: spin 1s linear infinite;
+}
+
+/* ===== MOBILE-SPECIFIC LAYOUTS ===== */
+/* Optimized layouts for mobile devices */
+
+@media (max-width: 768px) {
+    /* Stack navigation vertically */
+    .mobile-nav-stack {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    
+    /* Full-width mobile cards */
+    .mobile-card {
+        margin: 8px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    /* Mobile-optimized data tables */
+    .mobile-table {
+        font-size: 0.9rem;
+    }
+    
+    .mobile-table .mud-table-cell {
+        padding: 12px 8px !important;
+        min-height: 48px !important;
+        vertical-align: middle !important;
+    }
+    
+    /* Hide less important columns on mobile */
+    .mobile-hide {
+        display: none !important;
+    }
+    
+    /* Mobile search bar */
+    .mobile-search {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: inherit;
+        backdrop-filter: blur(10px);
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+}
+
+/* ===== TABLET-SPECIFIC ENHANCEMENTS ===== */
+/* Optimizations for tablet use during rehearsals and performances */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+    /* Two-column layout for tablets */
+    .tablet-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 16px !important;
+    }
+    
+    /* Larger touch targets for tablet */
+    .mud-button {
+        min-height: 52px !important;
+        padding: 14px 28px !important;
+        font-size: 1.1rem !important;
+    }
+    
+    /* Optimized for split-screen multitasking */
+    .split-screen-ready {
+        min-width: 320px !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ===== ACCESSIBILITY FOR PERFORMANCE ENVIRONMENTS ===== */
+/* Enhanced accessibility for low-light and noisy environments */
+
+/* High contrast focus indicators */
+.performance-focus:focus {
+    outline: 3px solid #ff6b35 !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 6px rgba(255, 107, 53, 0.3) !important;
+}
+
+/* Large text mode for visibility */
+.large-text-mode {
+    font-size: 1.3rem !important;
+    line-height: 1.6 !important;
+    font-weight: 500 !important;
+}
+
+.large-text-mode .mud-typography-h6 {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+}
+
+.large-text-mode .mud-typography-body1 {
+    font-size: 1.4rem !important;
+    font-weight: 500 !important;
+}
+
+/* ===== PERFORMANCE OPTIMIZATIONS ===== */
+/* Reduce animations and improve performance on mobile */
+
+@media (max-width: 768px) {
+    /* Disable expensive animations on mobile */
+    .performance-optimized * {
+        animation: none !important;
+        transition: opacity 0.2s ease, transform 0.2s ease !important;
+    }
+    
+    /* Optimize scroll performance */
+    .scroll-optimized {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+        will-change: transform;
+    }
+    
+    /* Reduce box shadows on mobile for better performance */
+    .mobile-performance .mud-paper {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+    }
+}
+
+/* ===== CONNECTION STATUS ENHANCEMENTS ===== */
+/* Enhanced offline indicators for performance mode */
+
+.connection-status-mobile {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%) translateX(100%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px;
+    border-radius: 8px 0 0 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: transform 0.3s ease;
+    z-index: 9999;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+}
+
+.connection-status-mobile.show {
+    transform: translateY(-50%) translateX(0);
+}
+
+.connection-status-mobile.offline {
+    background: rgba(244, 67, 54, 0.9);
+}
+
+.connection-status-mobile.online {
+    background: rgba(76, 175, 80, 0.9);
+}
+
+/* ===== HAPTIC FEEDBACK SUPPORT ===== */
+/* Visual feedback for devices without haptic support */
+
+.haptic-feedback {
+    animation: hapticPulse 0.1s ease;
+}
+
+@keyframes hapticPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+/* ===== SAFE AREA SUPPORT FOR MOBILE DEVICES ===== */
+/* Support for devices with notches, home indicators */
+
+.safe-area-container {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-bottom {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.safe-area-top {
+    padding-top: max(20px, env(safe-area-inset-top));
+}
+
+/* ===== MOBILE-FIRST UTILITY CLASSES ===== */
+
+.mobile-only {
+    display: block;
+}
+
+.desktop-only {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .mobile-only {
+        display: none;
+    }
+    
+    .desktop-only {
+        display: block;
+    }
+}
+
+/* Touch-friendly spacing */
+.touch-spacing {
+    margin: 8px 0 !important;
+}
+
+.touch-spacing-large {
+    margin: 16px 0 !important;
+}
+
+/* Mobile-optimized loading states */
+.mobile-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    gap: 16px;
+}
+
+.mobile-loading .loading-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #666;
+}

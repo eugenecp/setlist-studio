@@ -1,0 +1,332 @@
+@* Mobile-Enhanced Setlist Card Component *@
+@* Optimized for touch interaction and performance scenarios *@
+
+@using Microsoft.AspNetCore.Components.Web
+@using MudBlazor
+@using SetlistStudio.Core.Entities
+@inject IJSRuntime JSRuntime
+
+<div class="swipe-container mobile-card">
+    <div class="swipe-item" data-setlist-id="@Setlist.Id">
+        <!-- Swipe Actions (Hidden by default, revealed by gesture) -->
+        <div class="swipe-actions-left">
+            ⭐
+        </div>
+        <div class="swipe-actions-right">
+            🗑️
+        </div>
+        
+        <MudCard Class="setlist-card mobile-touch-target" Style="height: 100%; border-radius: 12px;">
+            <!-- Performance Status Indicator -->
+            <div class="performance-status-indicator">
+                @if (Setlist.PerformanceDate.HasValue)
+                {
+                    var performanceDate = Setlist.PerformanceDate.Value;
+                    var isToday = performanceDate.Date == DateTime.Today;
+                    var isUpcoming = performanceDate > DateTime.Now;
+                    
+                    @if (isToday)
+                    {
+                        <MudChip T="string" Size="Size.Medium" Color="Color.Error" Variant="Variant.Filled" Class="performance-today">
+                            🎤 TODAY - @performanceDate.ToString("h:mm tt")
+                        </MudChip>
+                    }
+                    else if (isUpcoming)
+                    {
+                        <MudChip T="string" Size="Size.Medium" Color="Color.Success" Variant="Variant.Filled">
+                            📅 @performanceDate.ToString("MMM dd, h:mm tt")
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                            @performanceDate.ToString("MMM dd, yyyy")
+                        </MudChip>
+                    }
+                }
+            </div>
+            
+            <!-- Touch-Optimized Header -->
+            <MudCardHeader Class="touch-spacing">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" Class="setlist-title performance-mode">
+                        @Setlist.Name
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(Setlist.Venue))
+                    {
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="venue-name">
+                            📍 @Setlist.Venue
+                        </MudText>
+                    }
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton 
+                        Icon="@Icons.Material.Filled.MoreVert" 
+                        Color="Color.Default" 
+                        Size="Size.Large"
+                        Class="mobile-touch-target"
+                        OnClick="@ShowMenu" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            
+            <!-- Enhanced Content for Mobile -->
+            <MudCardContent Class="touch-spacing-large">
+                @if (!string.IsNullOrEmpty(Setlist.Description))
+                {
+                    <MudText Typo="Typo.body1" Class="mb-4 performance-mode">
+                        @Setlist.Description
+                    </MudText>
+                }
+                
+                <!-- Key Performance Metrics -->
+                <div class="performance-metrics">
+                    <div class="metric-item">
+                        <MudIcon Icon="@Icons.Material.Filled.QueueMusic" Color="Color.Primary" Size="Size.Medium" />
+                        <MudText Typo="Typo.h6" Class="performance-mode">
+                            @(Setlist.SetlistSongs?.Count ?? 0)
+                        </MudText>
+                        <MudText Typo="Typo.caption">Songs</MudText>
+                    </div>
+                    
+                    @if (Setlist.ExpectedDurationMinutes.HasValue)
+                    {
+                        <div class="metric-item">
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Secondary" Size="Size.Medium" />
+                            <MudText Typo="Typo.h6" Class="performance-mode">
+                                @FormatDuration(Setlist.ExpectedDurationMinutes.Value)
+                            </MudText>
+                            <MudText Typo="Typo.caption">Duration</MudText>
+                        </div>
+                    }
+                    
+                    @if (GetAverageBpm() > 0)
+                    {
+                        <div class="metric-item">
+                            <MudIcon Icon="@Icons.Material.Filled.Favorite" Color="Color.Error" Size="Size.Medium" />
+                            <MudText Typo="Typo.h6" Class="performance-mode">
+                                @GetAverageBpm()
+                            </MudText>
+                            <MudText Typo="Typo.caption">Avg BPM</MudText>
+                        </div>
+                    }
+                </div>
+                
+                <!-- Status Badges -->
+                <div class="status-badges">
+                    @if (Setlist.IsTemplate)
+                    {
+                        <MudChip T="string" Size="Size.Medium" Color="Color.Info" Variant="Variant.Filled">
+                            📋 Template
+                        </MudChip>
+                    }
+                    @if (Setlist.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Medium" Color="Color.Success" Variant="Variant.Filled">
+                            🎵 Active
+                        </MudChip>
+                    }
+                    @if (IsOfflineCached())
+                    {
+                        <MudChip T="string" Size="Size.Medium" Color="Color.Warning" Variant="Variant.Filled">
+                            📱 Cached
+                        </MudChip>
+                    }
+                </div>
+                
+                <!-- Mobile Offline Download -->
+                <div class="offline-download-mobile">
+                    <DownloadForOffline 
+                        Setlist="Setlist" 
+                        Songs="Setlist.SetlistSongs?.Select(ss => ss.Song).Where(s => s != null)" 
+                        ShowProgress="true" />
+                </div>
+            </MudCardContent>
+            
+            <!-- Touch-Optimized Actions -->
+            <MudCardActions Class="mobile-actions">
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Primary"
+                    Size="Size.Large"
+                    StartIcon="@Icons.Material.Filled.PlayArrow"
+                    Class="mobile-touch-target performance-focus"
+                    Href="@($"/setlists/{Setlist.Id}")"
+                    FullWidth="true">
+                    Start Performance
+                </MudButton>
+                
+                <div class="secondary-actions">
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Secondary"
+                        Size="Size.Medium"
+                        StartIcon="@Icons.Material.Filled.Edit"
+                        Class="mobile-touch-target"
+                        Href="@($"/setlists/{Setlist.Id}/edit")">
+                        Edit
+                    </MudButton>
+                    
+                    <MudButton 
+                        Variant="Variant.Outlined" 
+                        Color="Color.Default"
+                        Size="Size.Medium"
+                        StartIcon="@Icons.Material.Filled.Share"
+                        Class="mobile-touch-target"
+                        OnClick="@ShareSetlist">
+                        Share
+                    </MudButton>
+                </div>
+            </MudCardActions>
+        </MudCard>
+    </div>
+</div>
+
+<style>
+    .performance-metrics {
+        display: flex;
+        justify-content: space-around;
+        margin: 16px 0;
+        padding: 12px;
+        background: rgba(25, 118, 210, 0.1);
+        border-radius: 8px;
+    }
+    
+    .metric-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        text-align: center;
+    }
+    
+    .performance-status-indicator {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 10;
+    }
+    
+    .performance-today {
+        animation: pulse 2s infinite;
+        box-shadow: 0 0 15px rgba(244, 67, 54, 0.5) !important;
+    }
+    
+    .status-badges {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 12px 0;
+    }
+    
+    .mobile-actions {
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .secondary-actions {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .secondary-actions .mud-button {
+        flex: 1;
+    }
+    
+    .venue-name {
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        margin-top: 4px;
+    }
+    
+    .offline-download-mobile {
+        margin-top: 16px;
+        padding: 12px;
+        background: rgba(255, 152, 0, 0.1);
+        border-radius: 8px;
+        border: 1px dashed rgba(255, 152, 0, 0.3);
+    }
+    
+    /* Mobile-specific optimizations */
+    @@media (max-width: 768px) {
+        .setlist-card {
+            margin: 8px 0 !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+        }
+        
+        .performance-metrics {
+            padding: 16px 8px;
+        }
+        
+        .metric-item {
+            min-width: 70px;
+        }
+        
+        .status-badges .mud-chip {
+            font-size: 0.9rem !important;
+            height: 36px !important;
+        }
+    }
+    
+    /* Performance mode optimizations */
+    .performance-mode-dark .setlist-card {
+        background: #1a1a1a !important;
+        border: 1px solid #333 !important;
+    }
+    
+    .performance-mode-dark .performance-metrics {
+        background: rgba(255, 107, 53, 0.2) !important;
+    }
+</style>
+
+@code {
+    [Parameter] public Setlist Setlist { get; set; } = null!;
+    [Parameter] public EventCallback<int> OnShowMenu { get; set; }
+    [Parameter] public EventCallback<Setlist> OnShare { get; set; }
+    
+    private void ShowMenu()
+    {
+        OnShowMenu.InvokeAsync(Setlist.Id);
+    }
+    
+    private void ShareSetlist()
+    {
+        OnShare.InvokeAsync(Setlist);
+    }
+    
+    private string FormatDuration(int minutes)
+    {
+        if (minutes < 60)
+            return $"{minutes}m";
+        
+        var hours = minutes / 60;
+        var mins = minutes % 60;
+        return mins > 0 ? $"{hours}h {mins}m" : $"{hours}h";
+    }
+    
+    private int GetAverageBpm()
+    {
+        var songs = Setlist.SetlistSongs?.Select(ss => ss.Song).Where(s => s?.Bpm.HasValue == true).ToList();
+        if (songs?.Any() != true) return 0;
+        
+        return (int)songs.Average(s => s!.Bpm!.Value);
+    }
+    
+    private bool IsOfflineCached()
+    {
+        // Check if this setlist is cached for offline use
+        // This would integrate with the service worker cache
+        return false; // Placeholder - implement based on caching strategy
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Initialize gesture listeners for this card
+            await JSRuntime.InvokeVoidAsync("MobileEnhancements.initializeSwipeGesture", 
+                $"[data-setlist-id='{Setlist.Id}']");
+        }
+    }
+}
