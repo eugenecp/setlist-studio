@@ -23,7 +23,7 @@
             Color="Color.Inherit"
             Class="mobile-touch-target performance-focus"
             OnClick="@TogglePerformanceMode"
-            Title="Toggle Performance Mode" />
+            title="Toggle Performance Mode" />
     </MudAppBar>
 
     <!-- Mobile Test Content -->
@@ -278,22 +278,25 @@
     }
 
     [JSInvokable]
-    public static async Task HandleSwipeGesture(string direction)
+    public static Task HandleSwipeGesture(string direction)
     {
         // This would be implemented with proper component reference
         // For demo purposes, we'll use a simpler approach
+        return Task.CompletedTask;
     }
 
     [JSInvokable]
-    public static async Task HandlePullRefresh()
+    public static Task HandlePullRefresh()
     {
         // This would be implemented with proper component reference
+        return Task.CompletedTask;
     }
 
     [JSInvokable]
-    public static async Task IncrementTouchCount()
+    public static Task IncrementTouchCount()
     {
         // This would be implemented with proper component reference
+        return Task.CompletedTask;
     }
 
     private async Task ToggleDrawer()
