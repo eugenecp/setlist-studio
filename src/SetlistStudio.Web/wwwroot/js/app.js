@@ -207,13 +207,150 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Blazor reconnection helpers
 
-// Service Worker registration for PWA support
+// Service Worker registration for offline performance support
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js')
         .then(registration => {
-            console.log('Service Worker registered successfully');
+            console.log('[App] Service Worker registered - offline performance mode enabled');
+            
+            // Listen for updates to the service worker
+            registration.addEventListener('updatefound', () => {
+                console.log('[App] New Service Worker version available');
+                const newWorker = registration.installing;
+                
+                if (newWorker) {
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('[App] New Service Worker installed - refresh recommended');
+                            // Could show a notification to refresh the app
+                        }
+                    });
+                }
+            });
         })
         .catch(error => {
-            console.log('Service Worker registration failed');
+            console.error('[App] Service Worker registration failed:', error);
         });
+    
+    // Listen for service worker messages
+    navigator.serviceWorker.addEventListener('message', event => {
+        const { type, payload } = event.data;
+        
+        switch (type) {
+            case 'CACHE_STATUS':
+                console.log('[App] Cache status:', payload);
+                break;
+                
+            case 'OFFLINE_READY':
+                console.log('[App] Offline capabilities ready');
+                window.setlistStudioApp.showOfflineReady?.();
+                break;
+                
+            default:
+                console.log('[App] Unknown service worker message:', type);
+        }
+    });
 }
+
+// Offline functionality for performance scenarios
+window.setlistStudioApp.offline = {
+    // Cache specific setlist for offline access
+    cacheSetlist: function(setlistId) {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CACHE_SETLIST',
+                payload: { setlistId }
+            });
+            console.log('[App] Requested offline caching for setlist:', setlistId);
+        }
+    },
+    
+    // Cache multiple songs for offline access  
+    cacheSongs: function(songs) {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CACHE_SONGS', 
+                payload: { songs }
+            });
+            console.log('[App] Requested offline caching for songs:', songs.length);
+        }
+    },
+    
+    // Get current cache status
+    getCacheStatus: function() {
+        return new Promise((resolve) => {
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                const messageChannel = new MessageChannel();
+                
+                messageChannel.port1.onmessage = (event) => {
+                    if (event.data.type === 'CACHE_STATUS') {
+                        resolve(event.data.payload);
+                    }
+                };
+                
+                navigator.serviceWorker.controller.postMessage(
+                    { type: 'GET_CACHE_STATUS' },
+                    [messageChannel.port2]
+                );
+            } else {
+                resolve({});
+            }
+        });
+    },
+    
+    // Clear API cache (for troubleshooting)
+    clearCache: function() {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+            console.log('[App] Cache clear requested');
+        }
+    },
+    
+    // Check if app is currently offline
+    isOffline: function() {
+        return !navigator.onLine;
+    },
+    
+    // Show offline notification to users
+    showOfflineReady: function() {
+        // This will be called when offline capabilities are ready
+        // Can be hooked up to MudBlazor notifications later
+        console.log('[App] Offline mode ready for performance use');
+    }
+};
+
+// Connection status callbacks for Blazor components
+window.setlistStudioApp.connectionStatusCallback = null;
+
+window.setlistStudioApp.registerConnectionStatusCallback = function(dotNetRef) {
+    window.setlistStudioApp.connectionStatusCallback = dotNetRef;
+    console.log('[App] Connection status callback registered');
+};
+
+window.setlistStudioApp.unregisterConnectionStatusCallback = function() {
+    window.setlistStudioApp.connectionStatusCallback = null;
+    console.log('[App] Connection status callback unregistered');
+};
+
+// Connection status monitoring for live performance scenarios
+window.addEventListener('online', () => {
+    console.log('[App] Connection restored - sync mode enabled');
+    document.body.classList.remove('offline-mode');
+    document.body.classList.add('online-mode');
+    
+    // Notify Blazor component
+    if (window.setlistStudioApp.connectionStatusCallback) {
+        window.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', true);
+    }
+});
+
+window.addEventListener('offline', () => {
+    console.log('[App] Offline detected - performance mode activated');
+    document.body.classList.remove('online-mode'); 
+    document.body.classList.add('offline-mode');
+    
+    // Notify Blazor component
+    if (window.setlistStudioApp.connectionStatusCallback) {
+        window.setlistStudioApp.connectionStatusCallback.invokeMethodAsync('OnConnectionStatusChanged', false);
+    }
+});

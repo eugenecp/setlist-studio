@@ -1,0 +1,188 @@
+@using Microsoft.JSInterop
+@using MudBlazor
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<!-- Connection Status Indicator for Live Performance -->
+<!-- Critical for musicians to know when they're in offline mode -->
+<div class="connection-status-container">
+    @if (!IsOnline)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="performance-mode-alert">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CloudOff" Class="me-2" />
+                <div>
+                    <MudText Typo="Typo.caption" Class="font-weight-bold">Performance Mode Active</MudText>
+                    <MudText Typo="Typo.caption">Using cached setlists and songs</MudText>
+                </div>
+            </div>
+        </MudAlert>
+    }
+    
+    @if (ShowCacheStatus)
+    {
+        <MudPaper Elevation="1" Class="pa-2 mt-2">
+            <MudText Typo="Typo.caption" Class="font-weight-bold mb-1">Offline Cache Status</MudText>
+            <div class="d-flex flex-wrap gap-1">
+                @if (CacheInfo?.ContainsKey("setlist-studio-api-v1.0.0") == true)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                        @CacheInfo["setlist-studio-api-v1.0.0"] Songs/Setlists Cached
+                    </MudChip>
+                }
+                @if (CacheInfo?.ContainsKey("setlist-studio-v1.0.0") == true)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
+                        Core App Cached
+                    </MudChip>
+                }
+            </div>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    [Parameter] public bool ShowCacheStatus { get; set; } = false;
+    
+    private bool IsOnline { get; set; } = true;
+    private Dictionary<string, int>? CacheInfo { get; set; }
+    private DotNetObjectReference<ConnectionStatus>? _objRef;
+    private bool _disposed = false;
+
+    protected override void OnInitialized()
+    {
+        _objRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await UpdateConnectionStatus();
+                await UpdateCacheStatus();
+                
+                // Register for connection status updates
+                await JS.InvokeVoidAsync("setlistStudioApp.registerConnectionStatusCallback", _objRef);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued"))
+            {
+                // Ignore JS interop errors during static rendering
+                Console.WriteLine($"[ConnectionStatus] JS interop not available during static rendering: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ConnectionStatus] Error during initialization: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task UpdateConnectionStatus()
+    {
+        try
+        {
+            IsOnline = await JS.InvokeAsync<bool>("navigator.onLine");
+            StateHasChanged();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued"))
+        {
+            // Default to offline during static rendering
+            IsOnline = false;
+        }
+        catch (JSDisconnectedException)
+        {
+            // Default to offline when JS is disconnected
+            IsOnline = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ConnectionStatus] Error checking online status: {ex.Message}");
+            IsOnline = false;
+        }
+    }
+
+    private async Task UpdateCacheStatus()
+    {
+        if (!ShowCacheStatus) return;
+        
+        try
+        {
+            CacheInfo = await JS.InvokeAsync<Dictionary<string, int>>("setlistStudioApp.offline.getCacheStatus");
+            StateHasChanged();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued"))
+        {
+            // Default empty cache info during static rendering
+            CacheInfo = new Dictionary<string, int>();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Default empty cache info when JS is disconnected
+            CacheInfo = new Dictionary<string, int>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ConnectionStatus] Error getting cache status: {ex.Message}");
+            CacheInfo = new Dictionary<string, int>();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnConnectionStatusChanged(bool isOnline)
+    {
+        IsOnline = isOnline;
+        
+        if (isOnline && ShowCacheStatus)
+        {
+            await UpdateCacheStatus();
+        }
+        
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_disposed && _objRef != null)
+        {
+            try
+            {
+                // Only call JS if we're in an interactive context (not during static rendering)
+                if (JS != null)
+                {
+                    await JS.InvokeVoidAsync("setlistStudioApp.unregisterConnectionStatusCallback");
+                }
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("JavaScript interop calls cannot be issued"))
+            {
+                // Ignore JS interop errors during static rendering or disposal
+            }
+            catch (JSDisconnectedException)
+            {
+                // Ignore JS disconnection errors during disposal
+            }
+            finally
+            {
+                _objRef.Dispose();
+                _disposed = true;
+            }
+        }
+    }
+}
+
+<style>
+    .connection-status-container {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+    
+    .performance-mode-alert {
+        background: linear-gradient(90deg, rgba(255, 152, 0, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%);
+        border-left: 4px solid #ff9800;
+    }
+    
+    .performance-mode-alert .mud-alert-message {
+        padding: 8px 0;
+    }
+</style>

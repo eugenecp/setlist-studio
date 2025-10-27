@@ -1,0 +1,559 @@
+@page "/setlists"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using MudBlazor
+@using SetlistStudio.Core.Entities
+@using SetlistStudio.Core.Interfaces
+@using SetlistStudio.Web.Shared
+@using System.Net.Http
+@attribute [Authorize]
+@inject ISetlistService SetlistService
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject ILogger<Setlists> Logger
+
+<PageTitle>My Setlists - Setlist Studio</PageTitle>
+
+<!-- Connection Status at top for performance awareness -->
+<ConnectionStatus ShowCacheStatus="true" />
+
+<!-- Page Header -->
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="mb-2">My Setlists</MudText>
+            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                @if (!IsOnline)
+                {
+                    <span>🎵 Offline Mode: Showing cached setlists</span>
+                }
+                else
+                {
+                    <span>Manage your performance setlists</span>
+                }
+            </MudText>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <MudButton 
+                Variant="Variant.Filled" 
+                Color="Color.Primary" 
+                StartIcon="@Icons.Material.Filled.Add"
+                Href="/setlists/create"
+                Disabled="!IsOnline">
+                Create Setlist
+            </MudButton>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <div class="d-flex gap-4 align-center">
+            <MudTextField 
+                @bind-Value="SearchTerm" 
+                Label="Search setlists..." 
+                Variant="Variant.Outlined"
+                Adornment="Adornment.End"
+                AdornmentIcon="@Icons.Material.Filled.Search"
+                OnKeyUp="OnSearchKeyUp"
+                Disabled="IsLoading"
+                Class="flex-grow-1" />
+            
+            <MudIconButton 
+                Icon="@Icons.Material.Filled.Refresh" 
+                Color="Color.Primary"
+                OnClick="RefreshSetlists"
+                Disabled="!IsOnline || IsLoading"
+                title="Refresh from server">
+            </MudIconButton>
+            
+            <MudIconButton 
+                Icon="@Icons.Material.Filled.CloudDownload" 
+                Color="Color.Secondary"
+                OnClick="CacheAllSetlists"
+                Disabled="!IsOnline || IsLoading"
+                title="Cache all for offline">
+            </MudIconButton>
+        </div>
+    </MudPaper>
+
+    <!-- Loading Indicator -->
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Indeterminate="true" />
+            <MudText Class="ml-4">Loading setlists...</MudText>
+        </div>
+    }
+
+    <!-- Offline Message -->
+    @if (!IsOnline && !UserSetlists.Any() && !IsLoading)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            <MudText Typo="Typo.h6">Performance Mode - No Cached Setlists</MudText>
+            <MudText>
+                You're offline and no setlists are cached yet. 
+                Connect to the internet and visit your setlists to cache them for offline use.
+            </MudText>
+        </MudAlert>
+    }
+
+    <!-- Setlists Grid -->
+    @if (UserSetlists.Any())
+    {
+        <MudGrid>
+            @foreach (var setlist in UserSetlists)
+            {
+                <MudItem xs="12" sm="6" md="4" lg="3">
+                    <MudCard Class="setlist-card" Style="height: 100%;">
+                        <!-- Performance Date Badge -->
+                        @if (setlist.PerformanceDate.HasValue)
+                        {
+                            <div class="performance-date-badge">
+                                @if (setlist.PerformanceDate > DateTime.Now)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success">
+                                        Upcoming: @setlist.PerformanceDate.Value.ToString("MMM dd")
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                        @setlist.PerformanceDate.Value.ToString("MMM dd, yyyy")
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+                        
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Class="setlist-title">@setlist.Name</MudText>
+                                @if (!string.IsNullOrEmpty(setlist.Venue))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        📍 @setlist.Venue
+                                    </MudText>
+                                }
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton 
+                                    Icon="@Icons.Material.Filled.MoreVert" 
+                                    Color="Color.Default" 
+                                    OnClick="@(() => ShowSetlistMenu(setlist.Id))" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        
+                        <MudCardContent Class="pb-2">
+                            @if (!string.IsNullOrEmpty(setlist.Description))
+                            {
+                                <MudText Typo="Typo.body2" Class="mb-3">@setlist.Description</MudText>
+                            }
+                            
+                            <div class="d-flex justify-space-between align-center mb-2">
+                                <MudText Typo="Typo.caption">
+                                    🎵 @(setlist.SetlistSongs?.Count ?? 0) songs
+                                </MudText>
+                                
+                                @if (setlist.ExpectedDurationMinutes.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption">
+                                        ⏱️ @setlist.ExpectedDurationMinutes min
+                                    </MudText>
+                                }
+                            </div>
+                            
+                            <!-- Template/Active Status -->
+                            <div class="d-flex gap-1 mb-2">
+                                @if (setlist.IsTemplate)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                        Template
+                                    </MudChip>
+                                }
+                                @if (setlist.IsActive)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                        Active
+                                    </MudChip>
+                                }
+                            </div>
+                            
+                            <!-- Offline Download Component -->
+                            <DownloadForOffline 
+                                Setlist="setlist" 
+                                Songs="setlist.SetlistSongs?.Select(ss => ss.Song).Where(s => s != null)" />
+                        </MudCardContent>
+                        
+                        <MudCardActions Class="pt-0">
+                            <MudButton 
+                                Variant="Variant.Text" 
+                                Color="Color.Primary"
+                                StartIcon="@Icons.Material.Filled.Visibility"
+                                Href="@($"/setlists/{setlist.Id}")">
+                                View
+                            </MudButton>
+                            
+                            <MudButton 
+                                Variant="Variant.Text" 
+                                Color="Color.Secondary"
+                                StartIcon="@Icons.Material.Filled.Edit"
+                                Href="@($"/setlists/{setlist.Id}/edit")"
+                                Disabled="!IsOnline">
+                                Edit
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    
+    <!-- Empty State -->
+    @if (!UserSetlists.Any() && !IsLoading && IsOnline)
+    {
+        <div class="text-center pa-8">
+            <MudIcon Icon="@Icons.Material.Filled.PlaylistAdd" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+            <MudText Typo="Typo.h5" Class="mb-2">No Setlists Yet</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
+                Create your first setlist to start organizing your performances
+            </MudText>
+            <MudButton 
+                Variant="Variant.Filled" 
+                Color="Color.Primary" 
+                StartIcon="@Icons.Material.Filled.Add"
+                Href="/setlists/create">
+                Create Your First Setlist
+            </MudButton>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    private List<Setlist> UserSetlists { get; set; } = new();
+    private string SearchTerm { get; set; } = string.Empty;
+    private bool IsLoading { get; set; } = false;
+    private bool IsOnline { get; set; } = true;
+    private Timer? _searchTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckOnlineStatus();
+        await LoadSetlists();
+    }
+
+    private async Task CheckOnlineStatus()
+    {
+        try
+        {
+            IsOnline = await JS.InvokeAsync<bool>("navigator.onLine");
+        }
+        catch
+        {
+            IsOnline = true; // Default to online if check fails
+        }
+    }
+
+    private async Task LoadSetlists()
+    {
+        if (IsLoading) return;
+        
+        IsLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (IsOnline)
+            {
+                // Try to load from API when online
+                await LoadFromApi();
+            }
+            else
+            {
+                // Load from cache when offline
+                await LoadFromCache();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading setlists");
+            
+            // If online API fails, try cache as fallback
+            if (IsOnline)
+            {
+                await LoadFromCache();
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFromApi()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SetlistsResponse>("/api/setlists?limit=50");
+            
+            if (response?.Setlists != null)
+            {
+                UserSetlists = response.Setlists.ToList();
+                
+                // Cache the successful response for offline use
+                await CacheSetlistsData(UserSetlists);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            // Network error - try cache
+            IsOnline = false;
+            await LoadFromCache();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load setlists from API, trying cache");
+            await LoadFromCache();
+        }
+    }
+
+    private async Task LoadFromCache()
+    {
+        try
+        {
+            // Check if we have cached setlist data
+            var cachedData = await JS.InvokeAsync<string?>("localStorage.getItem", "cached_setlists");
+            
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                var cachedSetlists = System.Text.Json.JsonSerializer.Deserialize<List<Setlist>>(cachedData);
+                if (cachedSetlists != null)
+                {
+                    UserSetlists = cachedSetlists;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load setlists from cache");
+        }
+    }
+
+    private async Task CacheSetlistsData(List<Setlist> setlists)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(setlists);
+            await JS.InvokeVoidAsync("localStorage.setItem", "cached_setlists", json);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to cache setlists data");
+        }
+    }
+
+    private async Task RefreshSetlists()
+    {
+        await CheckOnlineStatus();
+        await LoadSetlists();
+    }
+
+    private async Task CacheAllSetlists()
+    {
+        if (!IsOnline || !UserSetlists.Any()) return;
+
+        try
+        {
+            foreach (var setlist in UserSetlists)
+            {
+                await JS.InvokeVoidAsync("setlistStudioApp.offline.cacheSetlist", setlist.Id);
+                await Task.Delay(200); // Small delay between requests
+            }
+            
+            Logger.LogInformation("Cached {Count} setlists for offline access", UserSetlists.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error caching setlists for offline access");
+        }
+    }
+
+    private void OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        // Debounce search
+        _searchTimer?.Dispose();
+        _searchTimer = new Timer(async _ => await PerformSearch(), null, 300, Timeout.Infinite);
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(SearchTerm))
+        {
+            await LoadSetlists();
+            return;
+        }
+
+        try
+        {
+            var searchTerm = NormalizeSearchTerm(SearchTerm);
+            
+            if (IsOnline)
+            {
+                await PerformOnlineSearch();
+            }
+            else
+            {
+                await PerformOfflineSearch(searchTerm);
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error performing search");
+        }
+    }
+
+    /// <summary>
+    /// Normalizes the search term for consistent matching
+    /// </summary>
+    /// <param name="term">The raw search term</param>
+    /// <returns>Normalized search term in lowercase</returns>
+    private static string NormalizeSearchTerm(string term)
+    {
+        return term.ToLower().Trim();
+    }
+
+    /// <summary>
+    /// Performs search via API when online
+    /// </summary>
+    private async Task PerformOnlineSearch()
+    {
+        var response = await Http.GetFromJsonAsync<SetlistsResponse>(
+            $"/api/setlists/search?query={Uri.EscapeDataString(SearchTerm)}");
+        
+        if (response?.Setlists != null)
+        {
+            UserSetlists = response.Setlists.ToList();
+        }
+    }
+
+    /// <summary>
+    /// Performs search on cached data when offline
+    /// </summary>
+    /// <param name="searchTerm">The normalized search term</param>
+    private async Task PerformOfflineSearch(string searchTerm)
+    {
+        var cachedData = await GetCachedSetlistData();
+        if (string.IsNullOrEmpty(cachedData))
+        {
+            return;
+        }
+
+        var cachedSetlists = DeserializeCachedSetlists(cachedData);
+        if (cachedSetlists != null)
+        {
+            UserSetlists = FilterSetlistsBySearchTerm(cachedSetlists, searchTerm);
+        }
+    }
+
+    /// <summary>
+    /// Retrieves cached setlist data from localStorage
+    /// </summary>
+    /// <returns>Cached setlist JSON data or null if not available</returns>
+    private async Task<string?> GetCachedSetlistData()
+    {
+        return await JS.InvokeAsync<string?>("localStorage.getItem", "cached_setlists");
+    }
+
+    /// <summary>
+    /// Deserializes cached setlist JSON data
+    /// </summary>
+    /// <param name="cachedData">JSON string of cached setlists</param>
+    /// <returns>List of deserialized setlists or null if deserialization fails</returns>
+    private static List<Setlist>? DeserializeCachedSetlists(string cachedData)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<Setlist>>(cachedData);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Return null for invalid JSON data
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Filters setlists based on search criteria (name, description, venue)
+    /// </summary>
+    /// <param name="setlists">List of setlists to filter</param>
+    /// <param name="searchTerm">Normalized search term</param>
+    /// <returns>Filtered list of setlists matching the search criteria</returns>
+    private static List<Setlist> FilterSetlistsBySearchTerm(List<Setlist> setlists, string searchTerm)
+    {
+        return setlists.Where(s =>
+            s.Name.ToLower().Contains(searchTerm) ||
+            (s.Description?.ToLower().Contains(searchTerm) ?? false) ||
+            (s.Venue?.ToLower().Contains(searchTerm) ?? false)
+        ).ToList();
+    }
+
+    private void ShowSetlistMenu(int setlistId)
+    {
+        // Future: Show context menu for setlist actions
+        Logger.LogInformation("Show menu for setlist {SetlistId}", setlistId);
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+
+    // Response models for API calls
+    public class SetlistsResponse
+    {
+        public IEnumerable<Setlist> Setlists { get; set; } = new List<Setlist>();
+        public int TotalCount { get; set; }
+    }
+}
+
+<style>
+    .setlist-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+    }
+    
+    .setlist-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    }
+    
+    .setlist-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+    }
+    
+    .performance-date-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 1;
+    }
+    
+    /* Offline mode styling */
+    body.offline-mode .setlist-card {
+        border-left: 4px solid #ff9800;
+    }
+    
+    body.offline-mode .setlist-card::after {
+        content: "🎵";
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        font-size: 1.2rem;
+        opacity: 0.7;
+    }
+</style>

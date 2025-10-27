@@ -1,11 +1,16 @@
 {
   "name": "Setlist Studio",
-  "short_name": "Setlist Studio",
-  "description": "Music performance management application for organizing songs and creating setlists",
+  "short_name": "Setlist Studio", 
+  "description": "Music performance management application for organizing songs and creating setlists with offline performance support",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#1976d2",
   "theme_color": "#1976d2",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["music", "productivity", "entertainment"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icon-192.png",
@@ -14,10 +19,71 @@
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon-512.png", 
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512", 
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Setlist Studio main interface for managing music performances"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Setlists",
+      "short_name": "Setlists",
+      "description": "Quick access to your performance setlists",
+      "url": "/setlists",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Song Library",
+      "short_name": "Songs", 
+      "description": "Browse and manage your song collection",
+      "url": "/songs",
+      "icons": [
+        {
+          "src": "icon-192.png", 
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Performance Mode",
+      "short_name": "Perform",
+      "description": "Offline-ready performance view",
+      "url": "/?mode=performance",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192" 
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "display_override": ["standalone", "minimal-ui"],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+setlist",
+      "url": "/setlist?id=%s"
     }
   ]
 }
