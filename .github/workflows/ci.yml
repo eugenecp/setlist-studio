@@ -94,7 +94,8 @@ jobs:
         export CI=true
 
         # Run comprehensive test suite with coverage collection
-        dotnet test SetlistStudio.sln --configuration Release --verbosity normal --logger trx --logger "console;verbosity=detailed" --collect "XPlat Code Coverage" --results-directory ./test-results
+        # Using coverlet.runsettings to exclude migration files from coverage analysis
+        dotnet test SetlistStudio.sln --configuration Release --verbosity normal --logger trx --logger "console;verbosity=detailed" --collect "XPlat Code Coverage" --settings coverlet.runsettings --results-directory ./test-results
     
     # Step 8: Upload test results and coverage data as artifacts
     # Preserves test results for analysis and reporting
