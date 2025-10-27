@@ -50,6 +50,66 @@
 - **User Experience**: Realistic musical data, smooth interactions
 - **Code Quality**: Zero build warnings in main and test projects
 
+### Customer Delight Assessment Framework
+
+**When reviewing this project, always evaluate from a customer and stakeholder perspective — not as a developer.**
+
+Assess the project for customer delight by focusing on the experience and value it provides to end users, not the technical implementation.
+
+#### Customer Delight Evaluation Criteria
+
+**User Problem & Value Proposition:**
+- Does the product clearly solve a real user or business problem?
+- Is the solution aligned with actual musician workflows and performance needs?
+- Does it address genuine pain points in setlist management and music organization?
+
+**User Experience Quality:**
+- Is it intuitive, easy to use, and visually pleasing?
+- Are there moments of delight — small touches that make it feel polished or special?
+- Does it feel reliable, responsive, and professional?
+- Would end users feel confident and satisfied using it daily?
+
+**Communication & Clarity:**
+- Does it communicate its purpose and value clearly to non-technical users?
+- Are features discoverable and self-explanatory to musicians?
+- Is the interface terminology familiar to music industry professionals?
+
+**Friction Analysis:**
+- Are there any friction points, confusing steps, or unmet expectations?
+- Does the workflow match how musicians naturally organize and perform music?
+- Are there barriers to adoption or daily usage?
+
+#### Assessment Deliverables
+
+When evaluating customer delight, always provide:
+
+1. **User Experience Summary**: A concise overview of the overall user experience quality
+2. **Delight Strengths**: Specific features, interactions, or design elements that contribute to customer satisfaction
+3. **Improvement Opportunities**: Concrete areas where user satisfaction could be enhanced
+4. **Customer Delight Rating**: A 1-10 rating of how much delight this product likely brings to its users
+5. **Usage Confidence**: Assessment of whether users would feel confident using this product in professional settings
+
+#### Focus Areas for Customer Assessment
+
+**Performance Context**: Always consider real-world usage scenarios:
+- Musicians using the app backstage before performances
+- Quick setlist adjustments during sound checks
+- Collaborative planning with band members
+- Professional presentation to venue coordinators and sound engineers
+
+**User Journey Evaluation**: Assess the complete user experience:
+- First-time setup and onboarding experience
+- Daily workflow efficiency and ease of use
+- Error handling and recovery scenarios
+- Mobile and tablet usage in performance environments
+
+**Professional Standards**: Evaluate against industry expectations:
+- Does it meet the reliability standards musicians expect for professional tools?
+- Is the interface polished enough for client-facing scenarios?
+- Does it integrate well with existing musician workflows and tools?
+
+**Remember**: Focus on how it feels to use, not how it's coded. The best technical implementation means nothing if users don't find it delightful, reliable, and valuable for their creative work.
+
 ### Maintainability & Business Continuity Standards
 - **Team Handover Readiness**: All code must facilitate smooth knowledge transfer to new developers
 - **Business Alignment**: Features must clearly serve musician workflows and creative processes
