@@ -124,3 +124,185 @@ html, body {
     background-position: left center;
     padding-left: 72px;
 }
+
+/* Offline Performance Mode Styles */
+/* Critical for live performance scenarios where connectivity is unreliable */
+
+.offline-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(244, 67, 54, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 9999;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: none;
+    animation: slideInFromRight 0.3s ease;
+}
+
+.online-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(76, 175, 80, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 9999;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: none;
+    animation: slideInFromRight 0.3s ease;
+}
+
+/* Performance Mode Body States */
+body.offline-mode {
+    position: relative;
+}
+
+body.offline-mode::before {
+    content: "🎵 Performance Mode";
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 152, 0, 0.95);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    z-index: 9999;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.online-mode::before {
+    display: none;
+}
+
+/* Cached Content Indicators */
+.cached-content {
+    position: relative;
+}
+
+.cached-content::after {
+    content: "📱";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Offline Action Buttons */
+.offline-actions {
+    background: rgba(255, 152, 0, 0.1);
+    border: 1px solid rgba(255, 152, 0, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 16px 0;
+}
+
+.download-for-offline {
+    background: rgba(33, 150, 243, 0.1);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    color: #1976d2;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.download-for-offline:hover {
+    background: rgba(33, 150, 243, 0.2);
+    transform: translateY(-1px);
+}
+
+.cached-badge {
+    background: rgba(76, 175, 80, 0.2);
+    color: #2e7d32;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+/* Connection Status Animations */
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Performance Mode Optimizations */
+/* Reduce animations and effects during offline mode for better performance */
+body.offline-mode * {
+    animation-duration: 0.1s !important;
+    transition-duration: 0.1s !important;
+}
+
+/* High contrast mode for stage lighting conditions */
+@media (prefers-contrast: high) {
+    .offline-indicator,
+    body.offline-mode::before {
+        background: #d32f2f !important;
+        border: 2px solid #ffffff !important;
+        font-weight: 700 !important;
+    }
+    
+    .cached-badge {
+        background: #1b5e20 !important;
+        color: #ffffff !important;
+        border: 1px solid #ffffff !important;
+    }
+}
+
+/* Mobile optimization for tablet/phone use during performances */
+@media (max-width: 768px) {
+    body.offline-mode::before {
+        top: 5px;
+        right: 5px;
+        padding: 6px 10px;
+        font-size: 0.7rem;
+    }
+    
+    .offline-actions {
+        margin: 8px 0;
+        padding: 8px;
+    }
+    
+    .download-for-offline {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+}

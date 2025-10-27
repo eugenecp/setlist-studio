@@ -210,13 +210,15 @@ public class SecurityHeadersTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.GetAsync("/");
         var cspHeader = response.Headers.GetValues("Content-Security-Policy").First();
 
-        // Assert - Blazor Server requires unsafe-inline but NOT unsafe-eval (security improvement)
-        cspHeader.Should().Contain("script-src 'self' 'unsafe-inline'",
-            "Blazor Server requires unsafe-inline for SignalR operation");
+        // Assert - CSP should either use nonces (production) or unsafe-inline (test fallback) but never unsafe-eval
+        cspHeader.Should().Match(pattern => 
+            pattern.Contains("script-src 'self' 'nonce-") || pattern.Contains("script-src 'self' 'unsafe-inline'"),
+            "Blazor Server should use nonces for better security or fallback to unsafe-inline in test environments");
         cspHeader.Should().NotContain("unsafe-eval",
             "unsafe-eval should be removed for better security");
-        cspHeader.Should().Contain("style-src 'self' 'unsafe-inline'",
-            "MudBlazor requires unsafe-inline styles");
+        cspHeader.Should().Match(pattern => 
+            pattern.Contains("style-src 'self' 'nonce-") || pattern.Contains("style-src 'self' 'unsafe-inline'"),
+            "MudBlazor should use nonces for better security or fallback to unsafe-inline in test environments");
     }
 
     [Fact]

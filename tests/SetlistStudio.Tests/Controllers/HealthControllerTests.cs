@@ -325,6 +325,186 @@ public class HealthControllerTests : IDisposable
         routeAttribute!.Template.Should().Be("api/[controller]", "HealthController should use the correct route template");
     }
 
+    [Fact]
+    public async Task GetDetailed_ShouldReturnDetailedHealthStatus_WithSystemMetrics()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, _context);
+
+        // Act
+        var result = await controller.GetDetailed();
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult!.Value.Should().NotBeNull();
+
+        // Verify the response contains expected properties
+        var value = okResult.Value!;
+        value.GetType().GetProperty("Status")!.GetValue(value).Should().Be("Healthy");
+        value.GetType().GetProperty("Service")!.GetValue(value).Should().Be("Setlist Studio");
+        value.GetType().GetProperty("Database")!.GetValue(value).Should().NotBeNull();
+        
+        // Verify system metrics are included
+        var systemInfo = value.GetType().GetProperty("System")!.GetValue(value);
+        systemInfo.Should().NotBeNull();
+        
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Detailed health check")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetReadiness_ShouldReturnReadyStatus_WhenDatabaseIsHealthy()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, _context);
+
+        // Act
+        var result = await controller.GetReadiness();
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult!.Value.Should().NotBeNull();
+
+        var value = okResult.Value!;
+        value.GetType().GetProperty("Ready")!.GetValue(value).Should().Be(true);
+        value.GetType().GetProperty("Database")!.GetValue(value).Should().Be("Connected");
+        
+        var instanceProperty = value.GetType().GetProperty("Instance")!.GetValue(value);
+        instanceProperty.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetReadiness_ShouldReturnNotReady_WhenDatabaseIsUnhealthy()
+    {
+        // Arrange - Use null context to simulate database failure
+        var controller = new HealthController(_mockLogger.Object, null);
+
+        // Act
+        var result = await controller.GetReadiness();
+
+        // Assert
+        result.Should().BeOfType<ObjectResult>();
+        
+        var objectResult = result as ObjectResult;
+        objectResult.Should().NotBeNull();
+        objectResult!.StatusCode.Should().Be(503); // Service Unavailable
+        objectResult.Value.Should().NotBeNull();
+
+        var value = objectResult.Value!;
+        value.GetType().GetProperty("Ready")!.GetValue(value).Should().Be(false);
+        value.GetType().GetProperty("Database")!.GetValue(value).Should().Be("Database context not available");
+    }
+
+    [Fact]
+    public void GetLiveness_ShouldReturnAliveStatus_Always()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, _context);
+
+        // Act
+        var result = controller.GetLiveness();
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult!.Value.Should().NotBeNull();
+
+        var value = okResult.Value!;
+        value.GetType().GetProperty("Alive")!.GetValue(value).Should().Be(true);
+        
+        var timestampProperty = value.GetType().GetProperty("Timestamp")!.GetValue(value);
+        timestampProperty.Should().BeOfType<DateTime>();
+        ((DateTime)timestampProperty!).Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
+        
+        var instanceProperty = value.GetType().GetProperty("Instance")!.GetValue(value);
+        instanceProperty.Should().NotBeNull();
+        
+        var uptimeProperty = value.GetType().GetProperty("Uptime")!.GetValue(value);
+        uptimeProperty.Should().BeOfType<TimeSpan>();
+    }
+
+    [Fact]
+    public void GetLiveness_ShouldReturnAliveStatus_EvenWithNullContext()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, null);
+
+        // Act
+        var result = controller.GetLiveness();
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult!.Value.Should().NotBeNull();
+
+        var value = okResult.Value!;
+        value.GetType().GetProperty("Alive")!.GetValue(value).Should().Be(true);
+    }
+
+    [Fact]
+    public async Task GetDetailed_ShouldContainCorrectSystemInformation()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, _context);
+
+        // Act
+        var result = await controller.GetDetailed();
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        
+        var okResult = result as OkObjectResult;
+        var value = okResult!.Value!;
+        
+        var systemInfo = value.GetType().GetProperty("System")!.GetValue(value);
+        systemInfo.Should().NotBeNull();
+        
+        // Verify system info contains expected properties
+        var systemType = systemInfo!.GetType();
+        systemType.GetProperty("Platform").Should().NotBeNull();
+        systemType.GetProperty("Framework").Should().NotBeNull();
+        systemType.GetProperty("Architecture").Should().NotBeNull();
+        systemType.GetProperty("ProcessorCount").Should().NotBeNull();
+        systemType.GetProperty("WorkingSet").Should().NotBeNull();
+        systemType.GetProperty("TotalMemory").Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetReadiness_ShouldLogCorrectInformation()
+    {
+        // Arrange
+        var controller = new HealthController(_mockLogger.Object, _context);
+
+        // Act
+        await controller.GetReadiness();
+
+        // Assert
+        _mockLogger.Verify(
+            x => x.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Readiness check")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
     public void Dispose()
     {
         _context?.Dispose();

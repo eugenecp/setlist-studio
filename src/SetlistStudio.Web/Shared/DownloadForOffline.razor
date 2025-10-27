@@ -1,0 +1,325 @@
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using MudBlazor
+@using SetlistStudio.Core.Entities
+@inject IJSRuntime JS
+
+<!-- Download for Offline Component -->
+<!-- Allows musicians to manually cache setlists for performance reliability -->
+<div class="offline-download-container">
+    @if (Setlist != null)
+    {
+        @SetlistCacheSection
+    }
+    
+    @if (HasSongsToCache)
+    {
+        @SongsCacheSection
+    }
+</div>
+
+@code {
+    [Parameter] public Setlist? Setlist { get; set; }
+    [Parameter] public IEnumerable<Song>? Songs { get; set; }
+    [Parameter] public bool ShowRemove { get; set; } = true;
+    [Parameter] public EventCallback OnCached { get; set; }
+    [Parameter] public EventCallback OnRemoved { get; set; }
+    
+    private bool IsDownloading { get; set; } = false;
+    private bool IsDownloaded { get; set; } = false;
+    private bool IsCachingSongs { get; set; } = false;
+
+    /// <summary>
+    /// Determines if there are songs available to cache
+    /// </summary>
+    private bool HasSongsToCache => Songs != null && Songs.Any();
+
+    /// <summary>
+    /// Render fragment for setlist caching section
+    /// </summary>
+    private RenderFragment SetlistCacheSection => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "d-flex align-center gap-2");
+        
+        if (IsDownloading)
+        {
+            RenderDownloadingState(builder);
+        }
+        else if (IsDownloaded)
+        {
+            RenderDownloadedState(builder);
+        }
+        else
+        {
+            RenderDownloadButton(builder);
+        }
+        
+        builder.CloseElement();
+    };
+
+    /// <summary>
+    /// Render fragment for songs caching section
+    /// </summary>
+    private RenderFragment SongsCacheSection => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "d-flex align-center gap-2 mt-1");
+        
+        if (IsCachingSongs)
+        {
+            RenderSongsCachingState(builder);
+        }
+        else
+        {
+            RenderCacheSongsButton(builder);
+        }
+        
+        builder.CloseElement();
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckCacheStatus();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CheckCacheStatus();
+    }
+
+    /// <summary>
+    /// Renders the downloading state UI
+    /// </summary>
+    private static void RenderDownloadingState(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+    {
+        builder.OpenComponent<MudProgressCircular>(0);
+        builder.AddAttribute(1, "Size", Size.Small);
+        builder.AddAttribute(2, "Indeterminate", true);
+        builder.CloseComponent();
+        
+        builder.OpenComponent<MudText>(3);
+        builder.AddAttribute(4, "Typo", Typo.caption);
+        builder.AddContent(5, "Caching for offline...");
+        builder.CloseComponent();
+    }
+
+    /// <summary>
+    /// Renders the downloaded state UI with optional remove button
+    /// </summary>
+    private void RenderDownloadedState(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+    {
+        builder.OpenComponent<MudIcon>(0);
+        builder.AddAttribute(1, "Icon", Icons.Material.Filled.CloudDone);
+        builder.AddAttribute(2, "Color", Color.Success);
+        builder.AddAttribute(3, "Size", Size.Small);
+        builder.CloseComponent();
+        
+        builder.OpenComponent<MudText>(4);
+        builder.AddAttribute(5, "Typo", Typo.caption);
+        builder.AddAttribute(6, "Class", "text-success");
+        builder.AddContent(7, "Available offline");
+        builder.CloseComponent();
+
+        if (ShowRemove)
+        {
+            builder.OpenComponent<MudIconButton>(8);
+            builder.AddAttribute(9, "Icon", Icons.Material.Filled.Delete);
+            builder.AddAttribute(10, "Size", Size.Small);
+            builder.AddAttribute(11, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => RemoveFromCache(args)));
+            builder.AddAttribute(12, "title", "Remove from offline cache");
+            builder.CloseComponent();
+        }
+    }
+
+    /// <summary>
+    /// Renders the download button
+    /// </summary>
+    private void RenderDownloadButton(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+    {
+        builder.OpenComponent<MudButton>(0);
+        builder.AddAttribute(1, "StartIcon", Icons.Material.Filled.CloudDownload);
+        builder.AddAttribute(2, "Size", Size.Small);
+        builder.AddAttribute(3, "Variant", Variant.Outlined);
+        builder.AddAttribute(4, "Color", Color.Primary);
+        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => CacheForOffline(args)));
+        builder.AddAttribute(6, "Class", "download-button");
+        builder.AddContent(7, "Cache for Offline");
+        builder.CloseComponent();
+    }
+
+    /// <summary>
+    /// Renders the songs caching state UI
+    /// </summary>
+    private void RenderSongsCachingState(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+    {
+        builder.OpenComponent<MudProgressCircular>(0);
+        builder.AddAttribute(1, "Size", Size.Small);
+        builder.AddAttribute(2, "Indeterminate", true);
+        builder.CloseComponent();
+        
+        builder.OpenComponent<MudText>(3);
+        builder.AddAttribute(4, "Typo", Typo.caption);
+        builder.AddContent(5, $"Caching {Songs?.Count() ?? 0} songs...");
+        builder.CloseComponent();
+    }
+
+    /// <summary>
+    /// Renders the cache songs button
+    /// </summary>
+    private void RenderCacheSongsButton(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+    {
+        builder.OpenComponent<MudButton>(0);
+        builder.AddAttribute(1, "StartIcon", Icons.Material.Filled.LibraryMusic);
+        builder.AddAttribute(2, "Size", Size.Small);
+        builder.AddAttribute(3, "Variant", Variant.Text);
+        builder.AddAttribute(4, "Color", Color.Secondary);
+        builder.AddAttribute(5, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, (MouseEventArgs args) => CacheSongs(args)));
+        builder.AddAttribute(6, "Class", "cache-songs-button");
+        builder.AddContent(7, "Cache All Songs");
+        builder.CloseComponent();
+    }
+
+    private async Task CheckCacheStatus()
+    {
+        if (Setlist == null) return;
+        
+        try
+        {
+            // Check if setlist is already cached
+            var cacheStatus = await JS.InvokeAsync<Dictionary<string, int>>("setlistStudioApp.offline.getCacheStatus");
+            int versionCachedCount;
+            IsDownloaded = cacheStatus.TryGetValue("setlist-studio-api-v1.0.0", out versionCachedCount) && 
+                           versionCachedCount > 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DownloadForOffline] Error checking cache status: {ex.Message}");
+        }
+    }
+
+    private async Task CacheForOffline()
+    {
+        if (Setlist == null || IsDownloading) return;
+        
+        IsDownloading = true;
+        StateHasChanged();
+        
+        try
+        {
+            // Cache the setlist
+            await JS.InvokeVoidAsync("setlistStudioApp.offline.cacheSetlist", Setlist.Id);
+            
+            // Wait a moment for caching to complete
+            await Task.Delay(1500);
+            
+            IsDownloaded = true;
+            await OnCached.InvokeAsync();
+            
+            Console.WriteLine($"[DownloadForOffline] Setlist {Setlist.Id} cached for offline use");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DownloadForOffline] Error caching setlist: {ex.Message}");
+        }
+        finally
+        {
+            IsDownloading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CacheForOffline(MouseEventArgs args)
+    {
+        await CacheForOffline();
+    }
+
+    private async Task CacheSongs()
+    {
+        if (Songs == null || !Songs.Any() || IsCachingSongs) return;
+        
+        IsCachingSongs = true;
+        StateHasChanged();
+        
+        try
+        {
+            var songList = Songs.ToList();
+            await JS.InvokeVoidAsync("setlistStudioApp.offline.cacheSongs", songList);
+            
+            // Wait for caching to complete
+            await Task.Delay(2000);
+            
+            Console.WriteLine($"[DownloadForOffline] {songList.Count} songs cached for offline use");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DownloadForOffline] Error caching songs: {ex.Message}");
+        }
+        finally
+        {
+            IsCachingSongs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CacheSongs(MouseEventArgs args)
+    {
+        await CacheSongs();
+    }
+
+    private async Task RemoveFromCache()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("setlistStudioApp.offline.clearCache");
+            IsDownloaded = false;
+            await OnRemoved.InvokeAsync();
+            StateHasChanged();
+            
+            Console.WriteLine("[DownloadForOffline] Cache cleared");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DownloadForOffline] Error clearing cache: {ex.Message}");
+        }
+    }
+
+    private async Task RemoveFromCache(MouseEventArgs args)
+    {
+        await RemoveFromCache();
+    }
+}
+
+<style>
+    .offline-download-container {
+        padding: 8px 0;
+    }
+    
+    .download-button {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        height: 28px;
+        border-color: rgba(25, 118, 210, 0.5);
+    }
+    
+    .download-button:hover {
+        background-color: rgba(25, 118, 210, 0.04);
+        border-color: #1976d2;
+    }
+    
+    .cache-songs-button {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        height: 24px;
+        color: rgba(0, 0, 0, 0.6);
+    }
+    
+    .cache-songs-button:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+    }
+    
+    .text-success {
+        color: #2e7d32 !important;
+    }
+</style>
