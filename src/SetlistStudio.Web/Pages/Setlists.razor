@@ -102,26 +102,27 @@
     @if (UserSetlists.Any())
     {
         <MudGrid>
-            @foreach (var setlist in UserSetlists)
+            @foreach (var setlist in UserSetlists.Where(s => s is not null))
             {
-                @if (setlist is not null)
-                {
                 <MudItem xs="12" sm="6" md="4" lg="3">
                     <MudCard Class="setlist-card" Style="height: 100%;">
                         <!-- Performance Date Badge -->
                         @if (setlist.PerformanceDate.HasValue)
                         {
                             <div class="performance-date-badge">
-                                @if (setlist.PerformanceDate.Value > DateTime.Now)
+                                @{
+                                    var performanceDate = setlist.PerformanceDate!.Value;
+                                }
+                                @if (performanceDate > DateTime.Now)
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Success">
-                                        Upcoming: @setlist.PerformanceDate.Value.ToString("MMM dd")
+                                        Upcoming: @performanceDate.ToString("MMM dd")
                                     </MudChip>
                                 }
                                 else
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Default">
-                                        @setlist.PerformanceDate.Value.ToString("MMM dd, yyyy")
+                                        @performanceDate.ToString("MMM dd, yyyy")
                                     </MudChip>
                                 }
                             </div>
@@ -206,7 +207,6 @@
                         </MudCardActions>
                     </MudCard>
                 </MudItem>
-                }
             }
         </MudGrid>
     }

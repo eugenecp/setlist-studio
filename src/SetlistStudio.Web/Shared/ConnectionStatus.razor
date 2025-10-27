@@ -143,7 +143,7 @@
 
     public async ValueTask DisposeAsync()
     {
-        if (!_disposed && _objRef != null)
+        if (!_disposed)
         {
             try
             {
@@ -163,7 +163,11 @@
             }
             finally
             {
-                _objRef?.Dispose();
+                // Use proper disposal pattern - CodeQL prefers using statement
+                if (_objRef is not null)
+                {
+                    using (_objRef) { }
+                }
                 _disposed = true;
             }
         }
