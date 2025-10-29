@@ -222,8 +222,8 @@ public class SetlistExportServiceTests : IDisposable
         // Arrange
         var setlist = CreateTestSetlist("Test Setlist", TestUserId);
         var song = CreateTestSong("Test Song", "Test Artist", TestUserId);
-        song.BPM = 120;
-        song.Key = "C";
+        song.Bpm = 120;
+        song.MusicalKey = "C";
         _context.Songs.Add(song);
         await _context.SaveChangesAsync();
 
@@ -446,8 +446,8 @@ public class SetlistExportServiceTests : IDisposable
         {
             Title = title,
             Artist = artist,
-            BPM = 120,
-            Key = "C",
+            Bpm = 120,
+            MusicalKey = "C",
             UserId = userId,
             CreatedAt = DateTime.UtcNow
         };
@@ -461,11 +461,11 @@ public class SetlistExportServiceTests : IDisposable
         var song2 = CreateTestSong("Second Song", "Artist 2", TestUserId);
 
         song1.Genre = "Rock";
-        song1.Difficulty = 3;
+        song1.DifficultyRating = 3;
         song1.DurationSeconds = 240;
 
         song2.Genre = "Pop";
-        song2.Difficulty = 2;
+        song2.DifficultyRating = 2;
         song2.DurationSeconds = 180;
 
         setlist.SetlistSongs.Add(new SetlistSong
