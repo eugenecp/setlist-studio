@@ -189,21 +189,31 @@
                         </MudCardContent>
                         
                         <MudCardActions Class="pt-0">
-                            <MudButton 
-                                Variant="Variant.Text" 
+                            <MudButton
+                                Variant="Variant.Text"
                                 Color="Color.Primary"
                                 StartIcon="@Icons.Material.Filled.Visibility"
                                 Href="@($"/setlists/{setlist.Id}")">
                                 View
                             </MudButton>
-                            
-                            <MudButton 
-                                Variant="Variant.Text" 
+
+                            <MudButton
+                                Variant="Variant.Text"
                                 Color="Color.Secondary"
                                 StartIcon="@Icons.Material.Filled.Edit"
                                 Href="@($"/setlists/{setlist.Id}/edit")"
                                 Disabled="!IsOnline">
                                 Edit
+                            </MudButton>
+
+                            <MudButton
+                                Variant="Variant.Text"
+                                Color="Color.Tertiary"
+                                StartIcon="@Icons.Material.Filled.Download"
+                                Href="@($"/api/SetlistExport/{setlist.Id}/csv")"
+                                Target="_blank"
+                                Disabled="!IsOnline">
+                                Export
                             </MudButton>
                         </MudCardActions>
                     </MudCard>
