@@ -554,7 +554,8 @@ static void ConfigureApplicationServices(IServiceCollection services)
     // Register application services
     services.AddScoped<ISongService, SongService>();
     services.AddScoped<ISetlistService, SetlistService>();
-    
+    services.AddScoped<ISetlistExportService, SetlistExportService>();
+
     // Register CSP nonce service for enhanced Content Security Policy
     services.AddCspNonce();
 }
