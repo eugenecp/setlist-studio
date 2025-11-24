@@ -34,7 +34,7 @@ RUN dotnet publish "SetlistStudio.Web.csproj" \
     --verbosity minimal
 
 # Runtime stage with minimal attack surface
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 
 # Security: Update packages and install minimal required packages
 RUN apk update && \
