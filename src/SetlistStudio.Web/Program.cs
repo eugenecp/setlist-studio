@@ -529,7 +529,7 @@ static List<SetlistSong> CreateJazzSetlistSongs(int setlistId, Dictionary<string
 /// </summary>
 static void ConfigureServices(IServiceCollection services, IWebHostEnvironment environment, IConfiguration configuration)
 {
-    ConfigureApplicationServices(services);
+    ConfigureApplicationServices(services, configuration);
     ConfigureSecurityServices(services);
     ConfigureAntiForgeryTokens(services, environment);
     ConfigureCookiesAndSessions(services, environment);
@@ -542,7 +542,7 @@ static void ConfigureServices(IServiceCollection services, IWebHostEnvironment e
 /// <summary>
 /// Configures core application services
 /// </summary>
-static void ConfigureApplicationServices(IServiceCollection services)
+static void ConfigureApplicationServices(IServiceCollection services, IConfiguration configuration)
 {
     // Register caching services
     services.AddMemoryCache();
@@ -557,6 +557,12 @@ static void ConfigureApplicationServices(IServiceCollection services)
     
     // Register CSP nonce service for enhanced Content Security Policy
     services.AddCspNonce();
+
+    // Register duration/transition services and options
+    services.Configure<SetlistStudio.Core.Configuration.SetlistOptions>(
+        configuration.GetSection("SetlistOptions"));
+    services.AddScoped<SetlistStudio.Core.Interfaces.ITransitionPredictionService, SetlistStudio.Infrastructure.Services.TransitionPredictionService>();
+    services.AddScoped<SetlistStudio.Core.Interfaces.ISetlistDurationService, SetlistStudio.Infrastructure.Services.SetlistDurationService>();
 }
 
 /// <summary>

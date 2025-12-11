@@ -1,0 +1,30 @@
+@using Microsoft.AspNetCore.Components
+@using MudBlazor
+
+<div class="d-flex gap-2 align-center">
+    <MudSelect T="int" @bind-Value="Selected" Label="Slot duration (min)">
+        @foreach (var slot in Slots)
+        {
+            <MudSelectItem Value="@slot">@slot min</MudSelectItem>
+        }
+    </MudSelect>
+</div>
+
+@code {
+    [Parameter] public IEnumerable<int> Slots { get; set; } = Enumerable.Empty<int>();
+    [Parameter] public int SelectedSlot { get; set; }
+    [Parameter] public EventCallback<int> SelectedSlotChanged { get; set; }
+
+    private int Selected
+    {
+        get => SelectedSlot;
+        set
+        {
+            if (value != SelectedSlot)
+            {
+                SelectedSlot = value;
+                SelectedSlotChanged.InvokeAsync(value);
+            }
+        }
+    }
+}

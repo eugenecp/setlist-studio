@@ -6,6 +6,7 @@ using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Web.Models;
 using SetlistStudio.Web.Security;
+using SetlistStudio.Core.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace SetlistStudio.Web.Controllers;
@@ -21,11 +22,13 @@ namespace SetlistStudio.Web.Controllers;
 public class SetlistsController : ControllerBase
 {
     private readonly ISetlistService _setlistService;
+    private readonly ISetlistDurationService _setlistDurationService;
     private readonly ILogger<SetlistsController> _logger;
 
-    public SetlistsController(ISetlistService setlistService, ILogger<SetlistsController> logger)
+    public SetlistsController(ISetlistService setlistService, ISetlistDurationService setlistDurationService, ILogger<SetlistsController> logger)
     {
         _setlistService = setlistService;
+        _setlistDurationService = setlistDurationService;
         _logger = logger;
     }
 
@@ -249,6 +252,45 @@ public class SetlistsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving setlist {SetlistId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Get calculated duration (songs + predicted transitions) for a setlist
+    /// </summary>
+    [HttpGet("{id}/duration")]
+    public async Task<ActionResult<SetlistDurationResult>> GetSetlistDuration(int id)
+    {
+        try
+        {
+            var userId = User.Identity?.Name;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var result = await _setlistDurationService.CalculateDurationAsync(id, userId);
+            if (result == null) return NotFound();
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to setlist duration {SetlistId}", id);
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid arguments for setlist duration {SetlistId}", id);
+            return BadRequest("Invalid parameters");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Service unavailable when calculating duration for setlist {SetlistId}", id);
+            return StatusCode(503, "Service temporarily unavailable");
+        }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error calculating duration for setlist {SetlistId}", id);
             return StatusCode(500, "Internal server error");
         }
     }

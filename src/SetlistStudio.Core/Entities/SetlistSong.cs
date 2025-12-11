@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System;
 
 namespace SetlistStudio.Core.Entities;
 
@@ -57,6 +58,12 @@ public class SetlistSong
     public string? CustomKey { get; set; }
 
     /// <summary>
+    /// Custom duration override for this song in this setlist (e.g., shortened or extended performance)
+    /// Stored as TimeSpan when available and used by duration calculation service.
+    /// </summary>
+    public TimeSpan? CustomDurationOverride { get; set; }
+
+    /// <summary>
     /// When this song was added to the setlist
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -99,4 +106,22 @@ public class SetlistSong
     public bool HasCustomSettings => CustomBpm.HasValue || 
                                     !string.IsNullOrEmpty(CustomKey) || 
                                     !string.IsNullOrEmpty(PerformanceNotes);
+
+    /// <summary>
+    /// Effective duration to use for calculations. Preference order:
+    /// 1. CustomDurationOverride (per-setlist override)
+    /// 2. Song.EstimatedDuration (if present)
+    /// 3. Song.DurationSeconds (if present)
+    /// 4. null - caller should apply fallback from configuration
+    /// </summary>
+    public TimeSpan? EffectiveDuration
+    {
+        get
+        {
+            if (CustomDurationOverride.HasValue) return CustomDurationOverride.Value;
+            if (Song?.EstimatedDuration.HasValue == true) return Song!.EstimatedDuration;
+            if (Song?.DurationSeconds.HasValue == true) return TimeSpan.FromSeconds(Song!.DurationSeconds.Value);
+            return null;
+        }
+    }
 }

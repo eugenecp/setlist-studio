@@ -393,6 +393,9 @@ namespace SetlistStudio.Web.Migrations
                     b.Property<int?>("CustomBpm")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("CustomDurationOverrideTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("CustomKey")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
@@ -460,6 +463,9 @@ namespace SetlistStudio.Web.Migrations
 
                     b.Property<int?>("DurationSeconds")
                         .HasColumnType("integer");
+
+                    b.Property<long?>("EstimatedDurationTicks")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Genre")
                         .HasMaxLength(50)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using SetlistStudio.Core.Validation;
+using System;
 
 namespace SetlistStudio.Core.Entities;
 
@@ -62,6 +63,13 @@ public class Song
     /// </summary>
     [Range(1, 3600)] // 1 second to 1 hour
     public int? DurationSeconds { get; set; }
+
+    /// <summary>
+    /// Estimated duration for the song as a TimeSpan. This can be used when a more precise
+    /// duration is available (e.g., imported from metadata) and supersedes DurationSeconds
+    /// for duration calculations when present.
+    /// </summary>
+    public TimeSpan? EstimatedDuration { get; set; }
 
     /// <summary>
     /// User notes about the song (lyrics, chords, performance notes)

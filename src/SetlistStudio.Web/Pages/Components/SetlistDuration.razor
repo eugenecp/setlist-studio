@@ -1,0 +1,107 @@
+@using System.Net.Http.Json
+@using Microsoft.Extensions.Options
+@using SetlistStudio.Core.Configuration
+@using SetlistStudio.Core.Models
+@inject HttpClient Http
+@inject IOptions<SetlistOptions> Options
+@inject ILogger<SetlistDuration> Logger
+
+<MudCard Class="mb-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">Setlist Duration</MudText>
+            <MudText Typo="Typo.caption">Total song time, transitions, and slot comparison</MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        @if (IsLoading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (Result is not null)
+        {
+            <div class="d-flex justify-space-between align-center mb-2">
+                <div>
+                    <MudText Typo="Typo.h6">Total: @FormatSeconds(Result.CombinedTotalSeconds)</MudText>
+                    <MudText Typo="Typo.caption">Songs: @FormatSeconds(Result.TotalSongSeconds), Transitions: @FormatSeconds(Result.TotalTransitionSeconds)</MudText>
+                </div>
+                <div>
+                    <SlotSelection Slots="Options.Value.SlotDurationsMinutes" SelectedSlot="SelectedSlot" SelectedSlotChanged="OnSlotChanged" />
+                </div>
+            </div>
+
+            <MudProgressLinear Value="@ProgressPercent" Color="@(ProgressPercent>100?Color.Error: (ProgressPercent>90?Color.Warning:Color.Success))" />
+
+            <MudTable Items="Result.Items" Dense="true" Hover="true" Class="mt-3">
+                <HeaderContent>
+                    <MudTh>Pos</MudTh>
+                    <MudTh>Title</MudTh>
+                    <MudTh>Duration</MudTh>
+                    <MudTh>Transition</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Position</MudTd>
+                    <MudTd>@context.SongTitle</MudTd>
+                    <MudTd>@FormatSeconds(context.ResolvedDurationSeconds)</MudTd>
+                    <MudTd>@FormatSeconds(context.PredictedTransitionSecondsToNext)</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        else
+        {
+            <MudText>No duration data available.</MudText>
+        }
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Variant="Variant.Outlined" OnClick="Refresh">Refresh</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter] public int SetlistId { get; set; }
+
+    private SetlistDurationResult? Result { get; set; }
+    private bool IsLoading { get; set; }
+    private int SelectedSlot { get; set; }
+
+    protected override void OnInitialized()
+    {
+        SelectedSlot = Options.Value.SlotDurationsMinutes.FirstOrDefault();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Refresh();
+    }
+
+    public async Task Refresh()
+    {
+        IsLoading = true;
+        try
+        {
+            Result = await Http.GetFromJsonAsync<SetlistDurationResult>($"/api/setlists/{SetlistId}/duration");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load setlist duration");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OnSlotChanged(int slot)
+    {
+        SelectedSlot = slot;
+    }
+
+    private double ProgressPercent => Result == null || SelectedSlot == 0 ? 0 : (Result!.CombinedTotalSeconds / (SelectedSlot * 60.0)) * 100.0;
+
+    private static string FormatSeconds(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.ToString(@"hh\:mm\:ss");
+    }
+}

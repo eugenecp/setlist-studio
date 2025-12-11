@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SetlistStudio.Core.Entities;
 using SetlistStudio.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System;
 
 namespace SetlistStudio.Infrastructure.Data;
 
@@ -60,6 +62,11 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
 
+        // Value converters for TimeSpan? to long? (ticks) to persist across providers
+        var nullableTimeSpanToTicksConverter = new ValueConverter<TimeSpan?, long?>(
+            v => v.HasValue ? v.Value.Ticks : (long?)null,
+            v => v.HasValue ? TimeSpan.FromTicks(v.Value) : (TimeSpan?)null);
+
         // Configure Song entity
         builder.Entity<Song>(entity =>
         {
@@ -72,6 +79,11 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(s => s.Notes).HasMaxLength(2000);
             entity.Property(s => s.Tags).HasMaxLength(500);
             entity.Property(s => s.UserId).IsRequired();
+
+            // Map EstimatedDuration to ticks
+            entity.Property(s => s.EstimatedDuration)
+                  .HasConversion(nullableTimeSpanToTicksConverter)
+                  .HasColumnName("EstimatedDurationTicks");
 
             // Foreign key relationship to User
             entity.HasOne(s => s.User)
@@ -127,6 +139,11 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(ss => ss.CustomKey).HasMaxLength(10);
             entity.Property(ss => ss.SetlistId).IsRequired();
             entity.Property(ss => ss.SongId).IsRequired();
+
+            // Map CustomDurationOverride to ticks
+            entity.Property(ss => ss.CustomDurationOverride)
+                  .HasConversion(nullableTimeSpanToTicksConverter)
+                  .HasColumnName("CustomDurationOverrideTicks");
 
             // Foreign key relationships
             entity.HasOne(ss => ss.Setlist)
