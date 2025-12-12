@@ -41,7 +41,7 @@ jobs:
     # Step 1: Checkout source code with full Git history
     # Full history needed for security analysis and change detection
     - name: 🔄 Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0                # Fetch complete Git history for analysis tools
     
@@ -287,7 +287,7 @@ jobs:
     steps:
     # Step 1: Checkout source code for Docker build
     - name: 🔄 Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     
     # Step 2: Setup Docker Buildx for advanced build features
     # Enables multi-platform builds and advanced caching
@@ -304,7 +304,7 @@ jobs:
     # Step 4: Build Docker image with optimized settings
     # Creates containerized version of the application
     - name: 🏗️ Build Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .                      # Build context (current directory)
         file: ./Dockerfile              # Dockerfile location
