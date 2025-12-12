@@ -21,11 +21,16 @@ namespace SetlistStudio.Web.Controllers;
 public class SetlistsController : ControllerBase
 {
     private readonly ISetlistService _setlistService;
+    private readonly IPerformanceDateService _performanceDateService;
     private readonly ILogger<SetlistsController> _logger;
 
-    public SetlistsController(ISetlistService setlistService, ILogger<SetlistsController> logger)
+    public SetlistsController(
+        ISetlistService setlistService, 
+        IPerformanceDateService performanceDateService,
+        ILogger<SetlistsController> logger)
     {
         _setlistService = setlistService;
+        _performanceDateService = performanceDateService;
         _logger = logger;
     }
 
@@ -249,6 +254,165 @@ public class SetlistsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error retrieving setlist {SetlistId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Get all performance dates for a specific setlist
+    /// </summary>
+    /// <param name="setlistId">The setlist ID</param>
+    /// <returns>List of performance dates for the setlist</returns>
+    [HttpGet("{setlistId}/dates")]
+    [Authorize]
+    [EnableRateLimiting("ApiPolicy")]
+    public async Task<ActionResult<IEnumerable<PerformanceDateResponse>>> GetPerformanceDates(int setlistId)
+    {
+        try
+        {
+            var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException("User not authenticated");
+            _logger.LogInformation("Retrieving performance dates for setlist {SetlistId}, user {UserId}", setlistId, userId);
+
+            var performanceDates = await _performanceDateService.GetPerformanceDatesAsync(setlistId, userId);
+            
+            if (performanceDates == null)
+            {
+                _logger.LogWarning("Unauthorized access: User {UserId} attempted to access performance dates for setlist {SetlistId}", 
+                    userId, setlistId);
+                return Forbid();
+            }
+
+            var response = performanceDates.Select(pd => new PerformanceDateResponse
+            {
+                Id = pd.Id,
+                SetlistId = pd.SetlistId,
+                Date = pd.Date,
+                Venue = pd.Venue,
+                Notes = pd.Notes,
+                SetlistName = pd.Setlist?.Name
+            });
+
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to performance dates");
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving performance dates for setlist {SetlistId}", setlistId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Schedule a new performance date for a setlist
+    /// </summary>
+    /// <param name="setlistId">The setlist ID</param>
+    /// <param name="request">The performance date details</param>
+    /// <returns>The created performance date</returns>
+    [HttpPost("{setlistId}/dates")]
+    [Authorize]
+    [EnableRateLimiting("ApiPolicy")]
+    public async Task<ActionResult<PerformanceDateResponse>> CreatePerformanceDate(
+        int setlistId, 
+        [FromBody] CreatePerformanceDateRequest request)
+    {
+        try
+        {
+            var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException("User not authenticated");
+            _logger.LogInformation("Creating performance date for setlist {SetlistId}, user {UserId}", setlistId, userId);
+
+            // Validate date is not in the past
+            if (request.Date < DateTime.UtcNow.Date)
+            {
+                return BadRequest("Cannot schedule performance date in the past");
+            }
+
+            var performanceDate = new PerformanceDate
+            {
+                SetlistId = setlistId,
+                Date = request.Date,
+                UserId = userId,
+                Venue = request.Venue,
+                Notes = request.Notes
+            };
+
+            var created = await _performanceDateService.CreatePerformanceDateAsync(performanceDate);
+            
+            if (created == null)
+            {
+                _logger.LogWarning("Unauthorized: User {UserId} attempted to create performance date for setlist {SetlistId}", 
+                    userId, setlistId);
+                return Forbid();
+            }
+
+            var response = new PerformanceDateResponse
+            {
+                Id = created.Id,
+                SetlistId = created.SetlistId,
+                Date = created.Date,
+                Venue = created.Venue,
+                Notes = created.Notes,
+                SetlistName = created.Setlist?.Name
+            };
+
+            return CreatedAtAction(nameof(GetPerformanceDates), new { setlistId }, response);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to create performance date");
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid argument for performance date creation");
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating performance date for setlist {SetlistId}", setlistId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Delete a scheduled performance date
+    /// </summary>
+    /// <param name="setlistId">The setlist ID</param>
+    /// <param name="dateId">The performance date ID</param>
+    /// <returns>No content on success</returns>
+    [HttpDelete("{setlistId}/dates/{dateId}")]
+    [Authorize]
+    [EnableRateLimiting("ApiPolicy")]
+    public async Task<ActionResult> DeletePerformanceDate(int setlistId, int dateId)
+    {
+        try
+        {
+            var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException("User not authenticated");
+            _logger.LogInformation("Deleting performance date {DateId} for setlist {SetlistId}, user {UserId}", 
+                dateId, setlistId, userId);
+
+            var deleted = await _performanceDateService.DeletePerformanceDateAsync(dateId, userId);
+            
+            if (!deleted)
+            {
+                _logger.LogWarning("Unauthorized or not found: User {UserId} attempted to delete performance date {DateId}", 
+                    userId, dateId);
+                return NotFound("Performance date not found or unauthorized");
+            }
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access to delete performance date");
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting performance date {DateId}", dateId);
             return StatusCode(500, "Internal server error");
         }
     }

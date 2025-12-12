@@ -42,6 +42,11 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SetlistSong> SetlistSongs { get; set; } = null!;
 
     /// <summary>
+    /// Scheduled performance dates for setlists
+    /// </summary>
+    public DbSet<PerformanceDate> PerformanceDates { get; set; } = null!;
+
+    /// <summary>
     /// Audit logs for tracking data changes
     /// </summary>
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
@@ -144,6 +149,36 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             
             // Index for ordering
             entity.HasIndex(ss => new { ss.SetlistId, ss.Position });
+        });
+
+        // Configure PerformanceDate entity
+        builder.Entity<PerformanceDate>(entity =>
+        {
+            entity.HasKey(pd => pd.Id);
+            entity.Property(pd => pd.SetlistId).IsRequired();
+            entity.Property(pd => pd.Date).IsRequired();
+            entity.Property(pd => pd.UserId).IsRequired();
+            entity.Property(pd => pd.Venue).HasMaxLength(200);
+            entity.Property(pd => pd.Notes).HasMaxLength(1000);
+            entity.Property(pd => pd.CreatedAt).IsRequired();
+
+            // Foreign key relationship to Setlist
+            entity.HasOne(pd => pd.Setlist)
+                  .WithMany(sl => sl.ScheduledDates)
+                  .HasForeignKey(pd => pd.SetlistId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Foreign key relationship to User
+            entity.HasOne(pd => pd.User)
+                  .WithMany()
+                  .HasForeignKey(pd => pd.UserId)
+                  .OnDelete(DeleteBehavior.Restrict); // Prevent user deletion if performance dates exist
+
+            // Indexes for performance
+            entity.HasIndex(pd => pd.UserId);
+            entity.HasIndex(pd => new { pd.UserId, pd.Date });
+            entity.HasIndex(pd => new { pd.SetlistId, pd.Date });
+            entity.HasIndex(pd => pd.Date); // For upcoming performances queries
         });
 
         // Configure AuditLog entity

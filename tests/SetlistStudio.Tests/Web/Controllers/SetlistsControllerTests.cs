@@ -18,14 +18,19 @@ namespace SetlistStudio.Tests.Web.Controllers;
 public class SetlistsControllerTests
 {
     private readonly Mock<ISetlistService> _mockSetlistService;
+    private readonly Mock<IPerformanceDateService> _mockPerformanceDateService;
     private readonly Mock<ILogger<SetlistsController>> _mockLogger;
     private readonly SetlistsController _controller;
 
     public SetlistsControllerTests()
     {
         _mockSetlistService = new Mock<ISetlistService>();
+        _mockPerformanceDateService = new Mock<IPerformanceDateService>();
         _mockLogger = new Mock<ILogger<SetlistsController>>();
-        _controller = new SetlistsController(_mockSetlistService.Object, _mockLogger.Object);
+        _controller = new SetlistsController(
+            _mockSetlistService.Object, 
+            _mockPerformanceDateService.Object,
+            _mockLogger.Object);
 
         // Setup authenticated user context
         SetupAuthenticatedUser("test-user");
@@ -223,6 +228,232 @@ public class SetlistsControllerTests
         statusResult.StatusCode.Should().Be(500);
         statusResult.Value.Should().Be("Internal server error");
     }
+
+    #region Performance Date Endpoint Tests
+
+    [Fact]
+    public async Task GetPerformanceDates_WithAuthorizedUser_ReturnsOkWithDates()
+    {
+        // Arrange
+        var setlistId = 1;
+        var performanceDates = new List<PerformanceDate>
+        {
+            new PerformanceDate
+            {
+                Id = 1,
+                SetlistId = setlistId,
+                Date = DateTime.UtcNow.AddDays(7),
+                UserId = "test-user",
+                Venue = "Test Venue",
+                Setlist = new Setlist { Id = setlistId, Name = "Test Setlist", UserId = "test-user" }
+            }
+        };
+
+        _mockPerformanceDateService
+            .Setup(s => s.GetPerformanceDatesAsync(setlistId, "test-user"))
+            .ReturnsAsync(performanceDates);
+
+        // Act
+        var result = await _controller.GetPerformanceDates(setlistId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeAssignableTo<IEnumerable<PerformanceDateResponse>>().Subject;
+        response.Should().HaveCount(1);
+        response.First().Venue.Should().Be("Test Venue");
+    }
+
+    [Fact]
+    public async Task GetPerformanceDates_WithUnauthorizedUser_ReturnsForbid()
+    {
+        // Arrange
+        var setlistId = 1;
+        _mockPerformanceDateService
+            .Setup(s => s.GetPerformanceDatesAsync(setlistId, "test-user"))
+            .ReturnsAsync((IEnumerable<PerformanceDate>?)null);
+
+        // Act
+        var result = await _controller.GetPerformanceDates(setlistId);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task GetPerformanceDates_WhenServiceThrowsException_ReturnsInternalServerError()
+    {
+        // Arrange
+        var setlistId = 1;
+        _mockPerformanceDateService
+            .Setup(s => s.GetPerformanceDatesAsync(setlistId, "test-user"))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.GetPerformanceDates(setlistId);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+    }
+
+    [Fact]
+    public async Task CreatePerformanceDate_WithValidRequest_ReturnsCreatedAtAction()
+    {
+        // Arrange
+        var setlistId = 1;
+        var request = new CreatePerformanceDateRequest
+        {
+            Date = DateTime.UtcNow.AddDays(7),
+            Venue = "New Venue",
+            Notes = "Performance notes"
+        };
+
+        var created = new PerformanceDate
+        {
+            Id = 1,
+            SetlistId = setlistId,
+            Date = request.Date,
+            Venue = request.Venue,
+            Notes = request.Notes,
+            UserId = "test-user",
+            Setlist = new Setlist { Id = setlistId, Name = "Test Setlist", UserId = "test-user" }
+        };
+
+        _mockPerformanceDateService
+            .Setup(s => s.CreatePerformanceDateAsync(It.IsAny<PerformanceDate>()))
+            .ReturnsAsync(created);
+
+        // Act
+        var result = await _controller.CreatePerformanceDate(setlistId, request);
+
+        // Assert
+        var createdResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
+        var response = createdResult.Value.Should().BeOfType<PerformanceDateResponse>().Subject;
+        response.Venue.Should().Be("New Venue");
+        response.Notes.Should().Be("Performance notes");
+    }
+
+    [Fact]
+    public async Task CreatePerformanceDate_WithPastDate_ReturnsBadRequest()
+    {
+        // Arrange
+        var setlistId = 1;
+        var request = new CreatePerformanceDateRequest
+        {
+            Date = DateTime.UtcNow.AddDays(-7), // Past date
+            Venue = "Test Venue"
+        };
+
+        // Act
+        var result = await _controller.CreatePerformanceDate(setlistId, request);
+
+        // Assert
+        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequestResult.Value.Should().Be("Cannot schedule performance date in the past");
+    }
+
+    [Fact]
+    public async Task CreatePerformanceDate_WithUnauthorizedSetlist_ReturnsForbid()
+    {
+        // Arrange
+        var setlistId = 1;
+        var request = new CreatePerformanceDateRequest
+        {
+            Date = DateTime.UtcNow.AddDays(7),
+            Venue = "Test Venue"
+        };
+
+        _mockPerformanceDateService
+            .Setup(s => s.CreatePerformanceDateAsync(It.IsAny<PerformanceDate>()))
+            .ReturnsAsync((PerformanceDate?)null);
+
+        // Act
+        var result = await _controller.CreatePerformanceDate(setlistId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task CreatePerformanceDate_WhenServiceThrowsException_ReturnsInternalServerError()
+    {
+        // Arrange
+        var setlistId = 1;
+        var request = new CreatePerformanceDateRequest
+        {
+            Date = DateTime.UtcNow.AddDays(7),
+            Venue = "Test Venue"
+        };
+
+        _mockPerformanceDateService
+            .Setup(s => s.CreatePerformanceDateAsync(It.IsAny<PerformanceDate>()))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.CreatePerformanceDate(setlistId, request);
+
+        // Assert
+        var statusResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+    }
+
+    [Fact]
+    public async Task DeletePerformanceDate_WithAuthorizedUser_ReturnsNoContent()
+    {
+        // Arrange
+        var setlistId = 1;
+        var dateId = 1;
+
+        _mockPerformanceDateService
+            .Setup(s => s.DeletePerformanceDateAsync(dateId, "test-user"))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.DeletePerformanceDate(setlistId, dateId);
+
+        // Assert
+        result.Should().BeOfType<NoContentResult>();
+    }
+
+    [Fact]
+    public async Task DeletePerformanceDate_WithUnauthorizedUser_ReturnsNotFound()
+    {
+        // Arrange
+        var setlistId = 1;
+        var dateId = 1;
+
+        _mockPerformanceDateService
+            .Setup(s => s.DeletePerformanceDateAsync(dateId, "test-user"))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.DeletePerformanceDate(setlistId, dateId);
+
+        // Assert
+        var notFoundResult = result.Should().BeOfType<NotFoundObjectResult>().Subject;
+        notFoundResult.Value.Should().Be("Performance date not found or unauthorized");
+    }
+
+    [Fact]
+    public async Task DeletePerformanceDate_WhenServiceThrowsException_ReturnsInternalServerError()
+    {
+        // Arrange
+        var setlistId = 1;
+        var dateId = 1;
+
+        _mockPerformanceDateService
+            .Setup(s => s.DeletePerformanceDateAsync(dateId, "test-user"))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.DeletePerformanceDate(setlistId, dateId);
+
+        // Assert
+        var statusResult = result.Should().BeOfType<ObjectResult>().Subject;
+        statusResult.StatusCode.Should().Be(500);
+    }
+
+    #endregion
 
     private void SetupAuthenticatedUser(string userId)
     {

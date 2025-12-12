@@ -89,6 +89,12 @@ public class Setlist
     public virtual ICollection<SetlistSong> SetlistSongs { get; set; } = new List<SetlistSong>();
 
     /// <summary>
+    /// Navigation property to the scheduled performance dates for this setlist
+    /// Allows a single setlist to be performed multiple times
+    /// </summary>
+    public virtual ICollection<PerformanceDate> ScheduledDates { get; set; } = new List<PerformanceDate>();
+
+    /// <summary>
     /// Helper property to get total estimated duration
     /// </summary>
     public int CalculatedDurationMinutes => SetlistSongs
