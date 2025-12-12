@@ -155,6 +155,9 @@ try
     var authBuilder = builder.Services.AddAuthentication();
     ConfigureExternalAuthentication(authBuilder, builder.Configuration);
 
+    // Register health checks (simple readiness/liveness endpoints)
+    builder.Services.AddHealthChecks();
+
     // Configure services and security
     ConfigureServices(builder.Services, builder.Environment, builder.Configuration);
 
@@ -175,6 +178,37 @@ try
     // Log application startup information
     LogApplicationStartupInfo(app);
     
+    // Add a simple health endpoint for readiness/liveness probes
+    try
+    {
+        // Simple liveness endpoint
+        app.MapHealthChecks("/health");
+
+        // Readiness endpoint with JSON details
+        app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = _ => true,
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                var result = new
+                {
+                    status = report.Status.ToString(),
+                    checks = report.Entries.Select(e => new {
+                        name = e.Key,
+                        status = e.Value.Status.ToString(),
+                        description = e.Value.Description
+                    })
+                };
+                await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(result));
+            }
+        });
+    }
+    catch
+    {
+        // If health checks mapping fails, continue without readiness endpoint
+    }
+
     app.Run();
 }
 // CodeQL[cs/catch-of-all-exceptions] - Top-level application exception handler
@@ -553,6 +587,8 @@ static void ConfigureApplicationServices(IServiceCollection services)
     
     // Register application services
     services.AddScoped<ISongService, SongService>();
+    services.AddScoped<SongFilterService>();
+    services.AddScoped<SongRecommendationService>();
     services.AddScoped<ISetlistService, SetlistService>();
     
     // Register CSP nonce service for enhanced Content Security Policy
@@ -1797,8 +1833,9 @@ public partial class Program
             app.UseHsts();
         }
 
-        // Only use HTTPS redirection if not in test environment
-        if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+        // Only use HTTPS redirection in Production or Staging environments
+        // (disable in Development and Testing so localhost runs HTTP-only)
+        if (app.Environment.IsProduction() || app.Environment.IsStaging())
         {
             app.UseHttpsRedirection();
         }

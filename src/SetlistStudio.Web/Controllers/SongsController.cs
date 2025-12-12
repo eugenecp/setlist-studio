@@ -2,8 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SetlistStudio.Core.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
 using SetlistStudio.Core.Interfaces;
+using SetlistStudio.Core.Models;
 using SetlistStudio.Core.Security;
+using SetlistStudio.Infrastructure.Services;
 using SetlistStudio.Web.Security;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
@@ -104,6 +107,113 @@ public class SongsController : ControllerBase
         }
     }
 
+    [HttpPost("filter")]
+    public async Task<IActionResult> FilterSongs(
+        [FromBody] SongFilterCriteria criteria,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var filterService = HttpContext.RequestServices.GetService(typeof(SongFilterService)) as SongFilterService;
+            if (filterService == null)
+            {
+                _logger.LogError("SongFilterService not available from IServiceProvider");
+                return StatusCode(500, new { error = "Filter service unavailable" });
+            }
+            var result = await filterService.FilterSongsAsync(userId, criteria, pageNumber, pageSize);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Unauthorized filter access for user {UserId}", sanitizedUserId);
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Invalid filter criteria for user {UserId}", sanitizedUserId);
+            return BadRequest(new { error = "Invalid filter parameters" });
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error filtering songs for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "An error occurred while filtering songs" });
+        }
+    }
+
+    [HttpGet("filter/genres")]
+    public async Task<IActionResult> GetAvailableGenres()
+    {
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var filterService = HttpContext.RequestServices.GetService(typeof(SongFilterService)) as SongFilterService;
+            if (filterService == null)
+            {
+                _logger.LogError("SongFilterService not available from IServiceProvider");
+                return StatusCode(500, new { error = "Filter service unavailable" });
+            }
+            var genres = await filterService.GetAvailableGenresAsync(userId);
+            return Ok(genres);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error retrieving genres for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "An error occurred while retrieving genres" });
+        }
+    }
+
+    [HttpGet("filter/keys")]
+    public async Task<IActionResult> GetAvailableKeys()
+    {
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var filterService = HttpContext.RequestServices.GetService(typeof(SongFilterService)) as SongFilterService;
+            if (filterService == null)
+            {
+                _logger.LogError("SongFilterService not available from IServiceProvider");
+                return StatusCode(500, new { error = "Filter service unavailable" });
+            }
+            var keys = await filterService.GetAvailableKeysAsync(userId);
+            return Ok(keys);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error retrieving keys for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "An error occurred while retrieving keys" });
+        }
+    }
+
+    [HttpGet("filter/tags")]
+    public async Task<IActionResult> GetAvailableTags()
+    {
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var filterService = HttpContext.RequestServices.GetService(typeof(SongFilterService)) as SongFilterService;
+            if (filterService == null)
+            {
+                _logger.LogError("SongFilterService not available from IServiceProvider");
+                return StatusCode(500, new { error = "Filter service unavailable" });
+            }
+            var tags = await filterService.GetAvailableTagsAsync(userId);
+            return Ok(tags);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error retrieving tags for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "An error occurred while retrieving tags" });
+        }
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateSong([FromBody] CreateSongRequest request)
@@ -170,6 +280,69 @@ public class SongsController : ControllerBase
 
         return maliciousPatterns.Any(pattern => 
             input.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Gets intelligent song recommendations for the next song in a setlist.
+    /// Scores candidates based on BPM flow, genre, key transitions, and difficulty balance.
+    /// </summary>
+    /// <param name="currentSongId">The ID of the current song in the setlist</param>
+    /// <param name="excludeSongIds">Optional list of song IDs to exclude (already in setlist)</param>
+    /// <param name="maxResults">Maximum number of recommendations (default 5, max 20)</param>
+    [HttpGet("recommendations/{currentSongId}")]
+    [Authorize]
+    [EnableRateLimiting("AuthenticatedApiPolicy")]
+    public async Task<IActionResult> GetSongRecommendations(
+        int currentSongId,
+        [FromQuery] List<int>? excludeSongIds = null,
+        [FromQuery] int maxResults = 5)
+    {
+        try
+        {
+            // Validate input
+            if (currentSongId <= 0)
+                return BadRequest(new { error = "Invalid current song ID" });
+
+            maxResults = Math.Min(maxResults, 20);
+            maxResults = Math.Max(maxResults, 1);
+
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var recommendationService = HttpContext.RequestServices.GetRequiredService<SongRecommendationService>();
+
+            var recommendations = await recommendationService.GetNextSongRecommendationsAsync(
+                currentSongId,
+                userId,
+                excludeSongIds ?? new List<int>(),
+                maxResults);
+
+            return Ok(new
+            {
+                currentSongId,
+                recommendedSongs = recommendations,
+                count = recommendations.Count,
+                message = recommendations.Any() 
+                    ? "Song recommendations based on BPM, genre, key, and difficulty compatibility" 
+                    : "No recommendations available"
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Invalid argument for song recommendations for user {UserId}", sanitizedUserId);
+            return BadRequest(new { error = "Invalid request parameters" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogWarning(ex, "Unauthorized recommendation access for user {UserId}", sanitizedUserId);
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+            _logger.LogError(ex, "Error generating song recommendations for user {UserId}", sanitizedUserId);
+            return StatusCode(500, new { error = "Failed to generate recommendations" });
+        }
     }
 }
 
