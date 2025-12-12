@@ -268,6 +268,69 @@ public class SongServiceTests : IDisposable
         totalCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task GetSongsAsync_ShouldFilterByGenre_CaseInsensitive()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Song 1", Artist = "Rock Artist 1", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "Rock Song 2", Artist = "Rock Artist 2", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "Jazz Song", Artist = "Jazz Artist", Genre = "Jazz", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - provide genre in lowercase
+        var (resultLower, countLower) = await _songService.GetSongsAsync(_testUserId, genre: "rock");
+
+        // Assert
+        resultLower.Should().HaveCount(2);
+        countLower.Should().Be(2);
+        resultLower.Should().OnlyContain(s => s.Genre != null && s.Genre.Equals("Rock"));
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldClampPageSize_WhenExcessivePageSizeProvided()
+    {
+        // Arrange - create 150 songs for the user
+        var songs = new List<Song>();
+        for (int i = 0; i < 150; i++)
+        {
+            songs.Add(new Song { Title = $"Song {i}", Artist = "Artist", UserId = _testUserId });
+        }
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - request an excessively large pageSize (should be clamped to 100)
+        var (paged, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 1, pageSize: 1000);
+
+        // Assert
+        paged.Should().HaveCount(100);
+        totalCount.Should().Be(150);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldTrimAndCaseInsensitiveSearchTerm()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Hello World", Artist = "Artist A", Album = "Album X", UserId = _testUserId },
+            new Song { Title = "Another Song", Artist = "Artist B", Album = "Album Y", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - search with surrounding whitespace and mixed case
+        var (result, count) = await _songService.GetSongsAsync(_testUserId, searchTerm: "  hELLo  ");
+
+        // Assert
+        result.Should().HaveCount(1);
+        count.Should().Be(1);
+        result.First().Title.Should().Be("Hello World");
+    }
+
     #endregion
 
     #region GetSongByIdAsync Comprehensive Tests

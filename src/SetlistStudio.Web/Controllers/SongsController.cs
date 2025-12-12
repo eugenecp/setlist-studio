@@ -27,13 +27,17 @@ public class SongsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetSongs()
+    public async Task<IActionResult> GetSongs([FromQuery] string? genre = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
     {
         try
         {
             var userId = SecureUserContext.GetSanitizedUserId(User);
-            var (songs, totalCount) = await _songService.GetSongsAsync(userId);
-            return Ok(new { songs, totalCount });
+            var (songs, totalCount) = await _songService.GetSongsAsync(userId, genre: genre, pageNumber: pageNumber, pageSize: pageSize);
+
+            // Include total count header for client convenience
+            Response.Headers["X-Total-Count"] = totalCount.ToString();
+
+            return Ok(new { songs, totalCount, pageNumber, pageSize });
         }
         catch (UnauthorizedAccessException ex)
         {

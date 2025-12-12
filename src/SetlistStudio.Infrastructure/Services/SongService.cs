@@ -37,22 +37,31 @@ public class SongService : ISongService
     {
         try
         {
-            var query = _context.Songs.Where(s => s.UserId == userId);
+            // Validate and clamp pagination parameters to prevent DoS or heavy queries
+            pageNumber = Math.Max(1, pageNumber);
+            const int maxPageSize = 100;
+            pageSize = Math.Clamp(pageSize, 1, maxPageSize);
+
+            var query = _context.Songs
+                .AsNoTracking()
+                .Where(s => s.UserId == userId);
 
             // Apply search filter
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var lowerSearch = searchTerm.ToLower();
-                query = query.Where(s => 
-                    s.Title.ToLower().Contains(lowerSearch) ||
-                    s.Artist.ToLower().Contains(lowerSearch) ||
+                var lowerSearch = searchTerm.Trim().ToLower();
+                query = query.Where(s =>
+                    s.Title!.ToLower().Contains(lowerSearch) ||
+                    s.Artist!.ToLower().Contains(lowerSearch) ||
                     (s.Album != null && s.Album.ToLower().Contains(lowerSearch)));
             }
 
             // Apply genre filter
             if (!string.IsNullOrWhiteSpace(genre))
             {
-                query = query.Where(s => s.Genre == genre);
+                // Use case-insensitive comparison for genre to be resilient to client casing
+                var normalizedGenre = genre.Trim().ToLower();
+                query = query.Where(s => s.Genre != null && s.Genre.ToLower() == normalizedGenre);
             }
 
             // Apply tags filter
@@ -61,13 +70,32 @@ public class SongService : ISongService
                 query = query.Where(s => s.Tags != null && s.Tags.Contains(tags));
             }
 
+            // Compute total count for UI needs (keeps behavior consistent with existing callers)
             var totalCount = await query.CountAsync();
 
+            // Project to lightweight Song instances (AsNoTracking prevents EF from tracking)
             var songs = await query
                 .OrderBy(s => s.Artist)
                 .ThenBy(s => s.Title)
+                .ThenBy(s => s.Id)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
+                .Select(s => new Song
+                {
+                    Id = s.Id,
+                    Title = s.Title,
+                    Artist = s.Artist,
+                    Album = s.Album,
+                    Genre = s.Genre,
+                    Bpm = s.Bpm,
+                    MusicalKey = s.MusicalKey,
+                    DurationSeconds = s.DurationSeconds,
+                    Tags = s.Tags,
+                    DifficultyRating = s.DifficultyRating,
+                    UserId = s.UserId,
+                    CreatedAt = s.CreatedAt,
+                    UpdatedAt = s.UpdatedAt
+                })
                 .ToListAsync();
 
             var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);

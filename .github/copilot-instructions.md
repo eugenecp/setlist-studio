@@ -9,6 +9,22 @@
 - **Architecture**: Clean Architecture (Core/Infrastructure/Web)
 - **Framework**: .NET 8 + Blazor Server + MudBlazor + xUnit
 
+### CRITICAL: Feature Development Workflow
+**MANDATORY: Use the Five Principles for EVERY feature, regardless of size.**
+
+All features must apply the **Five Principles** (Works, Secure, Scales, Maintainable, User Delight):
+- See **[FEATURE_DEVELOPMENT_CHECKLIST.md](../FEATURE_DEVELOPMENT_CHECKLIST.md)** for comprehensive requirements
+- Use this checklist **before starting** any new feature
+- Complete all applicable checklist items **before submitting PR**
+- Copilot will reference this checklist when generating feature code
+
+**Quick Five-Principles Reminder:**
+- ✅ **Works**: Core functionality, API contracts, error handling, async operations
+- 🔒 **Secure**: Input validation, authorization, authentication, audit logging, no hardcoded secrets
+- 📈 **Scales**: Database queries optimized, caching, pagination clamped, N+1 avoided
+- 📚 **Maintainable**: Unit/integration tests, 80%+ coverage, clear documentation, code review ready
+- ✨ **User Delight**: Real musician workflows, intuitive UX, measurable business value, small delights
+
 ### CRITICAL: Test File Creation Workflow
 1. **Check existing**: Use `file_search` for `{SourceClass}Tests.cs`
 2. **Enhance first**: Add to base test file before creating new ones
@@ -117,6 +133,96 @@ When evaluating customer delight, always provide:
 - **Dependency Management**: Technology choices prioritize long-term sustainability over cutting-edge features
 - **Onboarding Efficiency**: New team members should be productive within days, not months
 - **Creative Industry Focus**: All development decisions must consider real-world music performance needs
+
+---
+
+## Feature Development Workflow
+
+**Every feature—no matter how small—MUST use the Five Principles Checklist.**
+
+### Mandatory Workflow Steps
+
+1. **Before Development**
+   - Read [FEATURE_DEVELOPMENT_CHECKLIST.md](../FEATURE_DEVELOPMENT_CHECKLIST.md)
+   - Identify all applicable checklist items for your feature
+   - Use the checklist to plan implementation before coding
+
+2. **During Development**
+   - Reference checklist items while writing code
+   - Implement all items in the ✅ Works section first
+   - Add security requirements from 🔒 Secure section early
+   - Consider 📈 Scales items for database queries and caching
+   - Include 📚 Maintainable items (tests, documentation) as you code
+   - Verify ✨ User Delight items for real musician workflows
+
+3. **Before PR Submission**
+   - Verify every applicable checklist item is completed
+   - Run security validation: CodeQL analysis must show zero high/critical issues
+   - Ensure tests pass: 100% success rate required
+   - Check coverage: 80%+ line and branch coverage for new code
+   - Include in PR description: "Applied FEATURE_DEVELOPMENT_CHECKLIST.md; all applicable items verified"
+
+### Five Principles at a Glance
+
+| Principle | Purpose | Key Checklist Items |
+|-----------|---------|-------------------|
+| ✅ **Works** | Core functionality that solves the problem | Implementation, API contracts, error handling, async operations, testing |
+| 🔒 **Secure** | Security-first design preventing vulnerabilities | Input validation, authorization, data protection, audit logging, no hardcoded secrets |
+| 📈 **Scales** | Handles growth from 1 to 10,000+ users | Optimized queries, caching, pagination limits, connection pooling, performance benchmarks |
+| 📚 **Maintainable** | Clean code that team members can understand quickly | Unit tests, 80%+ coverage, documentation, consistent patterns, code review ready |
+| ✨ **User Delight** | Real musician value and intuitive experience | Authentic workflows, professional UX, measurable business value, small polished touches |
+
+### PR Checklist Template
+
+Use this checklist in every pull request description:
+
+```markdown
+## Feature Development Checklist ✅
+
+- [ ] Applied FEATURE_DEVELOPMENT_CHECKLIST.md before development
+- [ ] ✅ Works: Core functionality implemented and tested
+- [ ] 🔒 Secure: Input validation, authorization, no hardcoded secrets
+- [ ] 📈 Scales: Queries optimized, pagination/caching implemented
+- [ ] 📚 Maintainable: 80%+ test coverage, documentation updated
+- [ ] ✨ User Delight: Real musician workflows, intuitive UX
+- [ ] 100% test success rate (all tests pass)
+- [ ] Zero build warnings in main and test projects
+- [ ] CodeQL security analysis: zero high/critical issues
+- [ ] Code review ready: clear commit messages, documented decisions
+```
+
+### Example: Applying Five Principles to "Filter Songs by Genre"
+
+**Feature**: Users can filter their song library by genre with pagination
+
+**Checklist Application**:
+
+| Phase | Principle | Action | Status |
+|-------|-----------|--------|--------|
+| Planning | Works | Define API: `GET /songs?genre=rock&pageNumber=1&pageSize=20` | ✅ |
+| Implementation | Works | Build SongService.GetSongsAsync() with filtering and pagination | ✅ |
+| Security | Secure | Add input validation: clamp pageSize to 100, trim genre, sanitize search terms | ✅ |
+| Authorization | Secure | Verify user ownership: filter by UserId in database query | ✅ |
+| Performance | Scales | Add AsNoTracking() for read queries, create index on (UserId, Genre, Artist) | ✅ |
+| Testing | Maintainable | Write 3 unit tests covering pagination, case-insensitive filters, edge cases | ✅ |
+| Documentation | Maintainable | Document pattern in copilot-instructions.md with code examples | ✅ |
+| UX | User Delight | Include pagination metadata (hasNext, totalPages) for smooth pagination | ✅ |
+
+**Result**: See the **Filtering & Pagination Pattern** section further below for the complete implementation example.
+
+### When to Apply the Checklist
+
+**Apply checklist for:**
+- ✅ New endpoints or API routes
+- ✅ Data models and database schema changes
+- ✅ Service layer implementations
+- ✅ UI components and Blazor pages
+- ✅ Authentication or authorization changes
+- ✅ Database query optimizations
+- ✅ Performance improvements
+- ✅ Security enhancements
+
+**In all cases**: Use the checklist to ensure consistency and quality across the entire codebase.
 
 ---
 
@@ -1429,6 +1535,401 @@ When contributing to Setlist Studio:
 2. **Phase 2 (300-1000 users)**: Migrate to PostgreSQL with connection pooling
 3. **Phase 3 (1000+ users)**: Implement Redis caching and load balancing
 4. **Phase 4 (5000+ users)**: Add read replicas and horizontal scaling
+
+---
+
+## Filtering & Pagination Pattern
+
+**Recommended Approach: Server-Side Genre Filtering with Offset Pagination**
+
+This pattern is implemented in `SongService.GetSongsAsync()` and `SongsController.GetSongs()` and is suitable for most query scenarios with moderate to large datasets.
+
+### The Five Principles Applied
+
+#### ✅ **Works: How the Pattern Functions**
+- **Server-side filtering** runs WHERE conditions in the database (not in memory)
+- **Offset pagination** uses `Skip().Take()` to retrieve bounded pages
+- **Stable ordering** (Artist → Title → Id) ensures deterministic results across page boundaries
+- **AsNoTracking()** read mode eliminates EF change-tracking overhead
+- **Projection to lightweight DTOs** reduces payload and clarifies contracts
+- **Returns pagination metadata** (`pageNumber`, `pageSize`, `totalCount`) for UI controls
+- **Exposes X-Total-Count header** for REST API compliance and client convenience
+
+#### 🔒 **Secure: Validation and Security Requirements**
+- **Input validation at service boundary**: All pagination parameters are validated and clamped
+  - `pageNumber` must be ≥ 1 (enforced via `Math.Max(1, pageNumber)`)
+  - `pageSize` must be between 1 and 100 (enforced via `Math.Clamp()`)
+- **Case-insensitive filtering**: Genre and search terms trimmed and lowercased to prevent case-based bypasses
+- **User ownership verification**: Query always filtered by `UserId` first to prevent cross-user data leaks
+- **No hardcoded query strings**: Use parameterized LINQ queries exclusively (prevents SQL injection)
+- **Sanitized logging**: All logged data uses `SecureLoggingHelper.Sanitize*` to avoid leaking sensitive information
+- **Rate limiting on endpoints**: Apply `[EnableRateLimiting]` attribute to prevent DoS attacks via deep pagination
+- **Anti-forgery tokens**: For state-changing operations, enforce `[ValidateAntiForgeryToken]`
+- **Authorization checks**: Endpoints require `[Authorize]` to ensure authenticated access
+- **InputSanitization middleware**: Applied via `[InputSanitization]` attribute to all public actions
+
+#### 📈 **Scales: Performance Considerations**
+- **Database-level filtering**: WHERE conditions execute in the DB, not in memory, allowing efficient use of indexes
+- **Composite index optimization**: Create index on `(UserId, Genre, Artist, Title, Id)` to support filter + sort queries in <10ms
+- **Clamped page size**: Max pageSize of 100 prevents memory spikes from huge result sets
+- **COUNT replaced with hasMore pattern** (optional): For very large tables, fetch `pageSize+1` rows and return `hasMore` boolean instead of expensive COUNT
+- **Cache invalidation on writes**: `InvalidateUserCacheAsync()` keeps cached genre/artist lists fresh
+- **Memory efficiency**: `AsNoTracking()` + projection saves 30-50% memory vs loading full tracked entities
+- **Async/await consistency**: All database operations use async methods to free thread pool threads
+- **Connection pooling**: EF Core connection pooling is enabled by default; monitor for exhaustion at 100+ concurrent users
+
+**Scaling thresholds:**
+- **< 100K songs**: Offset pagination with COUNT is sufficient
+- **100K - 1M songs**: Use covering index and caching; consider keyset pagination for deep pages
+- **> 1M songs**: Switch to keyset (cursor) pagination; avoid COUNT; implement read replicas
+
+#### 📚 **Maintainable: Code Example and Conventions**
+
+**Service Method (Infrastructure Layer)**
+```csharp
+public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
+    string userId,
+    string? searchTerm = null,
+    string? genre = null,
+    string? tags = null,
+    int pageNumber = 1,
+    int pageSize = 20)
+{
+    // SECURITY: Validate and clamp pagination parameters to prevent DoS
+    pageNumber = Math.Max(1, pageNumber);
+    const int maxPageSize = 100;
+    pageSize = Math.Clamp(pageSize, 1, maxPageSize);
+
+    // SECURITY: Always filter by UserId first to prevent cross-user data leaks
+    var query = _context.Songs
+        .AsNoTracking()  // PERFORMANCE: Read-only, avoid change tracking overhead
+        .Where(s => s.UserId == userId);
+
+    // MAINTAINABILITY: Apply search filter (case-insensitive, resilient to user input variations)
+    if (!string.IsNullOrWhiteSpace(searchTerm))
+    {
+        var lowerSearch = searchTerm.Trim().ToLower();
+        query = query.Where(s =>
+            s.Title!.ToLower().Contains(lowerSearch) ||
+            s.Artist!.ToLower().Contains(lowerSearch) ||
+            (s.Album != null && s.Album.ToLower().Contains(lowerSearch)));
+    }
+
+    // SECURITY: Case-insensitive genre comparison (prevents case-based filtering bypasses)
+    if (!string.IsNullOrWhiteSpace(genre))
+    {
+        var normalizedGenre = genre.Trim().ToLower();
+        query = query.Where(s => s.Genre != null && s.Genre.ToLower() == normalizedGenre);
+    }
+
+    // Apply tags filter
+    if (!string.IsNullOrWhiteSpace(tags))
+    {
+        query = query.Where(s => s.Tags != null && s.Tags.Contains(tags));
+    }
+
+    // Get total count for pagination metadata
+    var totalCount = await query.CountAsync();
+
+    // CORRECTNESS: Stable ordering (Artist → Title → Id) prevents duplicates/skips across page boundaries
+    var songs = await query
+        .OrderBy(s => s.Artist)
+        .ThenBy(s => s.Title)
+        .ThenBy(s => s.Id)
+        .Skip((pageNumber - 1) * pageSize)
+        .Take(pageSize)
+        .Select(s => new Song
+        {
+            Id = s.Id,
+            Title = s.Title,
+            Artist = s.Artist,
+            Genre = s.Genre,
+            Bpm = s.Bpm,
+            MusicalKey = s.MusicalKey,
+            DurationSeconds = s.DurationSeconds,
+            UserId = s.UserId,
+            // ... other fields
+        })
+        .ToListAsync();
+
+    return (songs, totalCount);
+}
+```
+
+**Controller Action (Web Layer)**
+```csharp
+/// <summary>
+/// Get paginated songs with optional genre, search, and tag filtering.
+/// SECURITY: Requires authentication and rate limiting
+/// WORKS: Returns filtered, paginated results with stable ordering
+/// SCALES: Pagination clamped to max 100 items per page; uses AsNoTracking() for performance
+/// </summary>
+[HttpGet]
+[Authorize]  // SECURITY: Require authentication
+[EnableRateLimiting("ApiPolicy")]  // SECURITY: Rate limit to prevent DoS
+[InputSanitization]  // SECURITY: Sanitize all inputs
+public async Task<IActionResult> GetSongs(
+    [FromQuery] string? genre = null,
+    [FromQuery] string? searchTerm = null,
+    [FromQuery] int pageNumber = 1,
+    [FromQuery] int pageSize = 20,
+    CancellationToken cancellationToken = default)
+{
+    try
+    {
+        // SECURITY: Extract and validate user identity
+        var userId = SecureUserContext.GetSanitizedUserId(User);
+        
+        // WORKS: Call service with all filter parameters
+        var (songs, totalCount) = await _songService.GetSongsAsync(
+            userId,
+            searchTerm: searchTerm,
+            genre: genre,
+            pageNumber: pageNumber,
+            pageSize: pageSize);
+
+        // WORKS: Include pagination metadata in response
+        Response.Headers["X-Total-Count"] = totalCount.ToString();
+
+        return Ok(new
+        {
+            songs,
+            totalCount,
+            pageNumber,
+            pageSize,
+            totalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            hasNext = pageNumber < Math.Ceiling(totalCount / (double)pageSize),
+            hasPrevious = pageNumber > 1
+        });
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+        _logger.LogWarning(ex, "Unauthorized access to songs for user {UserId}", sanitizedUserId);
+        return Forbid();
+    }
+    catch (Exception ex)
+    {
+        var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+        _logger.LogError(ex, "Unexpected error retrieving songs for user {UserId}", sanitizedUserId);
+        return StatusCode(500, new { error = "An error occurred while retrieving songs" });
+    }
+}
+```
+
+**Naming & Convention Rules**
+- Service methods: `Get{EntityName}Async(userId, filters..., pageNumber, pageSize)`
+- Query parameters: camelCase (`?genre=rock&pageNumber=1&pageSize=20`)
+- Response payload: Include `totalCount`, `pageNumber`, `pageSize` for UX pagination
+- Headers: Use `X-Total-Count` for REST API standard
+- Error messages: Never expose internal details; use sanitized logging for diagnostics
+
+#### ✨ **User Delight: Business Value**
+- **Musicians stay in the flow**: Fast, responsive filtering lets performers find songs quickly during setups
+- **Confidence in accuracy**: Stable pagination ensures no songs are skipped or duplicated when scrolling
+- **Works offline context**: Filtering happens server-side; clients can cache filtered results for offline use
+- **Backstage-friendly**: Clamped page sizes and case-insensitive matching mean queries work reliably even with typos or muscle-memory mistakes
+- **Professional UI**: Pagination controls show clear page counts and navigation hints (`hasNext`, `hasPrevious`)
+- **Scales with their library**: Pattern supports growth from 100 to 100K+ songs without breaking; caching and indexing keep it fast
+- **Genre discovery**: Case-insensitive genre filtering encourages exploration; musicians can search for "rock" or "ROCK" equally
+- **Real-world data**: Uses authentic musical genres and BPM ranges; aligns with how musicians organize their repertoire
+
+### Pattern Overview
+
+Filter and paginate data efficiently at the database layer using **server-side filtering** and **offset pagination** with stable ordering:
+
+**Service Method (Infrastructure Layer)**
+```csharp
+public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
+    string userId,
+    string? searchTerm = null,
+    string? genre = null,
+    string? tags = null,
+    int pageNumber = 1,
+    int pageSize = 20)
+{
+    // Validate and clamp pagination parameters to prevent DoS
+    pageNumber = Math.Max(1, pageNumber);
+    const int maxPageSize = 100;
+    pageSize = Math.Clamp(pageSize, 1, maxPageSize);
+
+    var query = _context.Songs
+        .AsNoTracking()  // Read-only: avoid change tracking overhead
+        .Where(s => s.UserId == userId);
+
+    // Apply search filter (case-insensitive)
+    if (!string.IsNullOrWhiteSpace(searchTerm))
+    {
+        var lowerSearch = searchTerm.Trim().ToLower();
+        query = query.Where(s =>
+            s.Title!.ToLower().Contains(lowerSearch) ||
+            s.Artist!.ToLower().Contains(lowerSearch) ||
+            (s.Album != null && s.Album.ToLower().Contains(lowerSearch)));
+    }
+
+    // Apply genre filter (case-insensitive)
+    if (!string.IsNullOrWhiteSpace(genre))
+    {
+        var normalizedGenre = genre.Trim().ToLower();
+        query = query.Where(s => s.Genre != null && s.Genre.ToLower() == normalizedGenre);
+    }
+
+    // Apply tags filter
+    if (!string.IsNullOrWhiteSpace(tags))
+    {
+        query = query.Where(s => s.Tags != null && s.Tags.Contains(tags));
+    }
+
+    // Get total count for pagination metadata
+    var totalCount = await query.CountAsync();
+
+    // Stable ordering: Artist → Title → Id (prevents duplicates across pages)
+    var songs = await query
+        .OrderBy(s => s.Artist)
+        .ThenBy(s => s.Title)
+        .ThenBy(s => s.Id)
+        .Skip((pageNumber - 1) * pageSize)
+        .Take(pageSize)
+        .Select(s => new Song
+        {
+            Id = s.Id,
+            Title = s.Title,
+            Artist = s.Artist,
+            Genre = s.Genre,
+            Bpm = s.Bpm,
+            MusicalKey = s.MusicalKey,
+            DurationSeconds = s.DurationSeconds,
+            UserId = s.UserId,
+            // ... other fields
+        })
+        .ToListAsync();
+
+    return (songs, totalCount);
+}
+```
+
+**Controller Action (Web Layer)**
+```csharp
+[HttpGet]
+public async Task<IActionResult> GetSongs(
+    [FromQuery] string? genre = null,
+    [FromQuery] int pageNumber = 1,
+    [FromQuery] int pageSize = 20)
+{
+    try
+    {
+        var userId = SecureUserContext.GetSanitizedUserId(User);
+        var (songs, totalCount) = await _songService.GetSongsAsync(
+            userId,
+            genre: genre,
+            pageNumber: pageNumber,
+            pageSize: pageSize);
+
+        // Include total count header for REST API standards
+        Response.Headers["X-Total-Count"] = totalCount.ToString();
+
+        return Ok(new { songs, totalCount, pageNumber, pageSize });
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+        _logger.LogWarning(ex, "Unauthorized access to songs for user {UserId}", sanitizedUserId);
+        return Forbid();
+    }
+    catch (Exception ex)
+    {
+        var sanitizedUserId = SecureUserContext.GetSanitizedUserId(User);
+        _logger.LogError(ex, "Unexpected error retrieving songs for user {UserId}", sanitizedUserId);
+        return StatusCode(500, new { error = "An error occurred while retrieving songs" });
+    }
+}
+```
+
+### Key Design Decisions
+
+| Aspect | Choice | Rationale |
+|--------|--------|-----------|
+| **Filtering Location** | Database (WHERE clause) | Scales better, leverages indexes, reduces network traffic |
+| **Pagination Type** | Offset (Skip/Take) | Simple, supports arbitrary page jumps, familiar to UIs expecting total counts |
+| **Ordering** | Stable (Artist, Title, Id) | Deterministic results across page boundaries; no duplicates/skips with concurrent writes |
+| **Tracking** | `AsNoTracking()` | Reduces EF change-tracking overhead for read-only queries |
+| **Projection** | Select to DTO | Minimizes payload, clarifies API contract, reduces accidental field exposure |
+| **Input Validation** | Clamp pageSize, validate pageNumber | Prevents DoS attacks via huge page requests; ensures reasonable defaults |
+| **Case Sensitivity** | Case-insensitive filters | Resilient to user input variations ("Rock" = "rock" = "ROCK") |
+
+### Performance Optimization
+
+**Database Index** (PostgreSQL example):
+```sql
+CREATE INDEX IF NOT EXISTS IX_Songs_UserId_Genre_Artist_Title_Id
+ON "Songs" ("UserId", "Genre", "Artist", "Title", "Id");
+```
+This composite index supports `WHERE UserId AND Genre` + `ORDER BY Artist, Title, Id` queries efficiently.
+
+### When to Use This Pattern
+
+✅ **Use offset pagination when:**
+- UI expects total page count and "page X of Y" navigation
+- Dataset is small to moderate (< 1M rows with indexes)
+- Users access early pages frequently
+- Predictable page numbers are important
+
+❌ **Consider keyset/cursor pagination instead when:**
+- Dataset is very large (millions of rows)
+- Users access deep pages (page 1000+)
+- Results change frequently between requests
+- You want stable cursors across inserts/deletes
+
+### Testing
+
+Add unit tests covering:
+```csharp
+[Fact]
+public async Task GetSongsAsync_ShouldFilterByGenre_CaseInsensitive()
+{
+    // Arrange
+    var songs = new List<Song>
+    {
+        new Song { Title = "Rock Song", Genre = "Rock", UserId = userId },
+        new Song { Title = "Jazz Song", Genre = "Jazz", UserId = userId }
+    };
+    _context.Songs.AddRange(songs);
+    await _context.SaveChangesAsync();
+
+    // Act - provide genre in lowercase
+    var (result, count) = await _songService.GetSongsAsync(userId, genre: "rock");
+
+    // Assert
+    result.Should().HaveCount(1);
+    count.Should().Be(1);
+}
+
+[Fact]
+public async Task GetSongsAsync_ShouldClampPageSize_WhenExcessivePageSizeProvided()
+{
+    // Act - request pageSize=1000 (should clamp to 100)
+    var (paged, totalCount) = await _songService.GetSongsAsync(userId, pageSize: 1000);
+
+    // Assert
+    paged.Should().HaveCount(100); // Clamped to max
+    totalCount.Should().Be(expectedTotal);
+}
+```
+
+### Security & Authorization
+
+- **User Isolation**: Always filter by `UserId` first to ensure cross-user data leaks are prevented
+- **Input Sanitization**: Trim and validate all filter parameters
+- **Rate Limiting**: Apply `[EnableRateLimiting]` to endpoints to prevent abuse of deep pagination
+- **Audit Logging**: Log filtering operations for security event tracking (integrated via `IAuditLogService`)
+
+### Future Scaling
+
+When moving to **keyset (cursor) pagination** for deep-page optimization:
+- Replace `Skip/Take` with cursor-based WHERE conditions
+- Return `hasMore` flag instead of `TotalCount` for infinite-scroll UIs
+- Update API contract to use encoded cursor instead of page numbers
+- Keep stable ordering (tie-breaker with Id) to ensure cursor stability
 
 ---
 

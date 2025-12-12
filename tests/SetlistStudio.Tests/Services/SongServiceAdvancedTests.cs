@@ -503,6 +503,608 @@ public class SongServiceAdvancedTests : IDisposable
 
     #endregion
 
+    #region Pagination Boundary Edge Cases
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldConvertPageNumberZeroToOne_WhenPageNumberIsZero()
+    {
+        // Arrange
+        var song = new Song { Title = "Test Song", Artist = "Artist", UserId = _testUserId };
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 0, pageSize: 10);
+
+        // Assert - Should treat page 0 as page 1
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldConvertNegativePageNumberToOne_WhenPageNumberIsNegative()
+    {
+        // Arrange
+        var song = new Song { Title = "Test Song", Artist = "Artist", UserId = _testUserId };
+        _context.Songs.Add(song);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: -5, pageSize: 10);
+
+        // Assert - Should treat negative as 1
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldClampPageSizeToOne_WhenPageSizeIsZero()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist 2", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 1, pageSize: 0);
+
+        // Assert - Should clamp to minimum 1
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldClampPageSizeToOne_WhenPageSizeIsNegative()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist 2", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 1, pageSize: -50);
+
+        // Assert - Should clamp to minimum 1
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldReturnExactlyMaxPageSize_WhenPageSizeIsExactlyOneHundred()
+    {
+        // Arrange
+        var songs = new List<Song>();
+        for (int i = 0; i < 100; i++)
+        {
+            songs.Add(new Song { Title = $"Song {i:D3}", Artist = $"Artist {i}", UserId = _testUserId });
+        }
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 1, pageSize: 100);
+
+        // Assert - Should return exactly 100 items
+        result.Should().HaveCount(100);
+        totalCount.Should().Be(100);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldReturnSingleSongWhenMultipleExist_WhenPageSizeIsOne()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist A", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist B", UserId = _testUserId },
+            new Song { Title = "Song 3", Artist = "Artist C", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, pageNumber: 1, pageSize: 1);
+
+        // Assert
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(3);
+    }
+
+    #endregion
+
+    #region Filter Input Edge Cases - Whitespace and Null Handling
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldIgnoreGenreFilter_WhenGenreIsWhitespaceOnly()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Song", Artist = "Artist", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "Jazz Song", Artist = "Artist", Genre = "Jazz", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "   ");
+
+        // Assert - Whitespace should be treated as null filter
+        result.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldIgnoreSearchTermFilter_WhenSearchTermIsWhitespaceOnly()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Test Song", Artist = "Artist", UserId = _testUserId },
+            new Song { Title = "Another Song", Artist = "Another", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, searchTerm: "\t\n  ");
+
+        // Assert - Whitespace should be treated as null
+        result.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldSkipSongWithNullGenre_WhenGenreFilterApplied()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Song", Artist = "Artist 1", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "No Genre Song", Artist = "Artist 2", Genre = null, UserId = _testUserId },
+            new Song { Title = "Another Rock", Artist = "Artist 3", Genre = "Rock", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "Rock");
+
+        // Assert - Should exclude null genre
+        result.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+        result.Should().OnlyContain(s => s.Genre == "Rock");
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldSkipSongWithNullTags_WhenTagsFilterApplied()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Tagged Song 1", Artist = "Artist 1", Tags = "guitar, rock", UserId = _testUserId },
+            new Song { Title = "No Tags Song", Artist = "Artist 2", Tags = null, UserId = _testUserId },
+            new Song { Title = "Tagged Song 2", Artist = "Artist 3", Tags = "guitar, acoustic", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, tags: "guitar");
+
+        // Assert - Should not crash, should skip null tags
+        result.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+        result.Should().OnlyContain(s => s.Tags != null && s.Tags.Contains("guitar"));
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldHandleSongWithEmptyStringGenre_WhenGenreFilterApplied()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Song", Artist = "Artist 1", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "Empty Genre Song", Artist = "Artist 2", Genre = "", UserId = _testUserId },
+            new Song { Title = "Another Rock", Artist = "Artist 3", Genre = "Rock", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "Rock");
+
+        // Assert - Empty string genre is distinct from "Rock"
+        result.Should().HaveCount(2);
+        result.Should().OnlyContain(s => s.Genre == "Rock");
+    }
+
+    #endregion
+
+    #region Genre Filtering Edge Cases
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldMatchGenreWithLeadingAndTrailingSpaces_WhenGenreHasWhitespace()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Song", Artist = "Artist", Genre = "Rock", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "  Rock  ");
+
+        // Assert - Should trim and match
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldMatchGenreWithMixedCases_WhenProvidingDifferentCases()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Heavy Metal Song", Artist = "Artist", Genre = "Heavy Metal", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - Test various case combinations
+        var (result1, _) = await _songService.GetSongsAsync(_testUserId, genre: "heavy metal");
+        var (result2, _) = await _songService.GetSongsAsync(_testUserId, genre: "HEAVY METAL");
+        var (result3, _) = await _songService.GetSongsAsync(_testUserId, genre: "HeAvY mEtAl");
+
+        // Assert - All should match despite case differences
+        result1.Should().HaveCount(1);
+        result2.Should().HaveCount(1);
+        result3.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldNotPartialMatchGenre_WhenGenreHasSpacesInName()
+    {
+        // Arrange - "Heavy Metal" should not match "Heavy" alone
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", Genre = "Heavy Metal", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist 2", Genre = "Rock", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "Heavy");
+
+        // Assert - Should not match (looking for exact "Heavy", not "Heavy Metal")
+        result.Should().HaveCount(0);
+        totalCount.Should().Be(0);
+    }
+
+    #endregion
+
+    #region Tags Filtering Edge Cases
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldMatchTagsWithCommaSpaceSeparation_WhenTagsAreCommaSeparated()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", Tags = "rock, guitar, classic", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist 2", Tags = "jazz, piano, smooth", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, tags: "guitar");
+
+        // Assert
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+        result.First().Title.Should().Be("Song 1");
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldNotPartialMatchTags_WhenSearchingSubstring()
+    {
+        // Arrange - "guitar" should NOT match "gutarra"
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "Artist 1", Tags = "gutarra, spanish, classic", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Artist 2", Tags = "guitar, acoustic, rock", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, tags: "guitar");
+
+        // Assert - Should only match exact "guitar", not "gutarra"
+        result.Should().HaveCount(1);
+        result.First().Tags.Should().Contain("guitar");
+    }
+
+    #endregion
+
+    #region Unicode and Special Character Tests
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldFilterWithUnicodeCharacters_WhenSearchTermContainsUnicode()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "いのちの火", Artist = "日本のアーティスト", Genre = "J-Pop", UserId = _testUserId },
+            new Song { Title = "Ode to Joy", Artist = "Beethoven", Genre = "Classical", UserId = _testUserId },
+            new Song { Title = "Café Music", Artist = "French Artist", Genre = "Jazz", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (jpResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "日本");
+        var (frResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "café");
+
+        // Assert
+        jpResult.Should().HaveCount(1);
+        jpResult.First().Artist.Should().Contain("日本");
+        frResult.Should().HaveCount(1);
+        frResult.First().Title.Should().Contain("Café");
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldFilterWithSpecialCharactersInArtist_WhenArtistNameHasSpecialChars()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Song 1", Artist = "AC/DC", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "Song 2", Artist = "Wu-Tang Clan", Genre = "Hip-Hop", UserId = _testUserId },
+            new Song { Title = "Song 3", Artist = "a.m. radio", Genre = "Pop", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (acResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "AC/DC");
+        var (wuResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "Wu-Tang");
+        var (radioResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "a.m.");
+
+        // Assert
+        acResult.Should().HaveCount(1);
+        wuResult.Should().HaveCount(1);
+        radioResult.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldFilterWithDiacriticalMarks_WhenTitleContainsDiacriticals()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Café Au Lait", Artist = "Artist 1", Genre = "Jazz", UserId = _testUserId },
+            new Song { Title = "Zürich Nights", Artist = "Artist 2", Genre = "Electronic", UserId = _testUserId },
+            new Song { Title = "São Paulo Dreams", Artist = "Artist 3", Genre = "Bossa Nova", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (cafeResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "café");
+        var (zurichResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "zürich");
+        var (saoResult, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "são");
+
+        // Assert
+        cafeResult.Should().HaveCount(1);
+        zurichResult.Should().HaveCount(1);
+        saoResult.Should().HaveCount(1);
+    }
+
+    #endregion
+
+    #region Data Consistency and Ordering Tests
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldNotReturnDuplicates_WhenPaginatingLargeResultSet()
+    {
+        // Arrange - Create 250 songs with same artist to stress ordering
+        var songs = new List<Song>();
+        for (int i = 0; i < 250; i++)
+        {
+            songs.Add(new Song
+            {
+                Title = $"Song {i:D3}",
+                Artist = "The Same Artist",
+                Genre = "Rock",
+                UserId = _testUserId
+            });
+        }
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - Get all pages
+        var allResults = new List<Song>();
+        for (int page = 1; page <= 3; page++)
+        {
+            var (pageResults, _) = await _songService.GetSongsAsync(_testUserId, pageNumber: page, pageSize: 100);
+            allResults.AddRange(pageResults);
+        }
+
+        // Assert - No duplicates despite pagination
+        allResults.Should().HaveCount(250);
+        allResults.Select(s => s.Id).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldUseIdTiebreaker_WhenSongsHaveIdenticalArtistAndTitle()
+    {
+        // Arrange
+        var song1 = new Song { Title = "Same Title", Artist = "Same Artist", UserId = _testUserId };
+        var song2 = new Song { Title = "Same Title", Artist = "Same Artist", UserId = _testUserId };
+        var song3 = new Song { Title = "Same Title", Artist = "Same Artist", UserId = _testUserId };
+
+        _context.Songs.AddRange(song1, song2, song3);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId);
+
+        // Assert - All returned in ID order without duplicates
+        result.Should().HaveCount(3);
+        totalCount.Should().Be(3);
+        var resultList = result.ToList();
+        resultList[0].Id.Should().BeLessThan(resultList[1].Id);
+        resultList[1].Id.Should().BeLessThan(resultList[2].Id);
+    }
+
+    #endregion
+
+    #region Authorization and User Isolation Tests
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldNotReturnOtherUsersSongsWithGenreFilter_WhenFilteringByGenre()
+    {
+        // Arrange
+        var otherUserId = "other-user-999";
+        var testUserSongs = new List<Song>
+        {
+            new Song { Title = "My Rock Song 1", Genre = "Rock", UserId = _testUserId },
+            new Song { Title = "My Rock Song 2", Genre = "Rock", UserId = _testUserId }
+        };
+        var otherUserSongs = new List<Song>
+        {
+            new Song { Title = "Other Rock Song", Genre = "Rock", UserId = otherUserId },
+            new Song { Title = "Other Jazz Song", Genre = "Jazz", UserId = otherUserId }
+        };
+
+        _context.Songs.AddRange(testUserSongs);
+        _context.Songs.AddRange(otherUserSongs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(_testUserId, genre: "Rock");
+
+        // Assert - Should only return test user's songs
+        result.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+        result.Should().OnlyContain(s => s.UserId == _testUserId);
+    }
+
+    #endregion
+
+    #region Search Term Edge Cases
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldPerformPartialWordSearch_WhenSearchTermIsPartialWord()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Bohemian Rhapsody", Artist = "Queen", UserId = _testUserId },
+            new Song { Title = "Bohemian Grove", Artist = "Artist", UserId = _testUserId },
+            new Song { Title = "Rhapsody in Blue", Artist = "Gershwin", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "bohemi");
+
+        // Assert - Should find partial matches
+        result.Should().HaveCount(2);
+        result.Should().OnlyContain(s => s.Title.ToLower().Contains("bohemi"));
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldFindSongByTitlePartial_WhenSearchTermMatchesPartOfTitle()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Welcome to the Machine", Artist = "Artist", UserId = _testUserId },
+            new Song { Title = "Machine Learning 101", Artist = "Tech Artist", UserId = _testUserId },
+            new Song { Title = "Welcome Back", Artist = "Another", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, _) = await _songService.GetSongsAsync(_testUserId, searchTerm: "machine");
+
+        // Assert
+        result.Should().HaveCount(2);
+    }
+
+    #endregion
+
+    #region Combination Filter Tests
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldReturnEmpty_WhenAllFiltersAppliedButNoMatch()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Guitar Song", Artist = "Rock Artist", Genre = "Rock", Tags = "rock, guitar", UserId = _testUserId },
+            new Song { Title = "Jazz Piano Song", Artist = "Jazz Artist", Genre = "Jazz", Tags = "jazz, piano", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var (result, totalCount) = await _songService.GetSongsAsync(
+            _testUserId,
+            searchTerm: "Jazz",
+            genre: "Rock", // Conflicting with search
+            tags: "guitar");
+
+        // Assert
+        result.Should().BeEmpty();
+        totalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSongsAsync_ShouldApplyAllFiltersWithAnd_WhenMultipleFiltersProvided()
+    {
+        // Arrange
+        var songs = new List<Song>
+        {
+            new Song { Title = "Rock Guitar Song", Artist = "Rock Artist", Genre = "Rock", Tags = "rock, guitar, classic", UserId = _testUserId },
+            new Song { Title = "Electric Guitar Song", Artist = "Rock Artist", Genre = "Rock", Tags = "rock, electric, modern", UserId = _testUserId },
+            new Song { Title = "Jazz Guitar Song", Artist = "Jazz Artist", Genre = "Jazz", Tags = "jazz, guitar, smooth", UserId = _testUserId },
+            new Song { Title = "Rock Piano Song", Artist = "Rock Artist", Genre = "Rock", Tags = "rock, piano, classic", UserId = _testUserId }
+        };
+        _context.Songs.AddRange(songs);
+        await _context.SaveChangesAsync();
+
+        // Act - All filters must match
+        var (result, totalCount) = await _songService.GetSongsAsync(
+            _testUserId,
+            searchTerm: "Guitar",
+            genre: "Rock",
+            tags: "classic");
+
+        // Assert
+        result.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+        result.First().Title.Should().Be("Rock Guitar Song");
+    }
+
+    #endregion
+
     public void Dispose()
     {
         _context?.Dispose();
