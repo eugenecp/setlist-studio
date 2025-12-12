@@ -2103,6 +2103,122 @@ public class SongServiceTests : IDisposable
 
     #endregion
 
+    #region GetSongsByGenreAsync Comprehensive Tests
+
+
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldReturnEmpty_WhenNoSongsMatchGenre()
+    {
+        // Arrange
+        _context.Songs.Add(new Song { Title = "Song A", Genre = "Rock", UserId = _testUserId });
+        await _context.SaveChangesAsync();
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 1, 10);
+        // Assert
+        songs.Should().BeEmpty();
+        total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldReturnEmpty_WhenUserHasNoSongs()
+    {
+        // Arrange: No songs for user
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 1, 10);
+        // Assert
+        songs.Should().BeEmpty();
+        total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldNotReturnOtherUsersSongs()
+    {
+        // Arrange
+        _context.Songs.Add(new Song { Title = "Other's Jazz", Genre = "Jazz", UserId = _otherUserId });
+        await _context.SaveChangesAsync();
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 1, 10);
+        // Assert
+        songs.Should().BeEmpty();
+        total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldReturnEmpty_WhenPageBeyondData()
+    {
+        // Arrange
+        _context.Songs.Add(new Song { Title = "Jazz 1", Genre = "Jazz", UserId = _testUserId });
+        await _context.SaveChangesAsync();
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 2, 10);
+        // Assert
+        songs.Should().BeEmpty();
+        total.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldBeCaseInsensitiveForGenre()
+    {
+        // Arrange
+        _context.Songs.Add(new Song { Title = "Jazz 1", Genre = "Jazz", UserId = _testUserId });
+        await _context.SaveChangesAsync();
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "jAzZ", 1, 10);
+        // Assert
+        songs.Should().HaveCount(1);
+        total.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldThrow_WhenGenreIsNullOrEmpty()
+    {
+        // Arrange
+        Func<Task> actNull = () => _songService.GetSongsByGenreAsync(_testUserId, null!, 1, 10);
+        Func<Task> actEmpty = () => _songService.GetSongsByGenreAsync(_testUserId, "", 1, 10);
+        // Assert
+        await actNull.Should().ThrowAsync<ArgumentException>();
+        await actEmpty.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldThrow_WhenUserIdIsNullOrEmpty()
+    {
+        // Arrange
+        Func<Task> actNull = () => _songService.GetSongsByGenreAsync(null!, "Jazz", 1, 10);
+        Func<Task> actEmpty = () => _songService.GetSongsByGenreAsync("", "Jazz", 1, 10);
+        // Assert
+        await actNull.Should().ThrowAsync<ArgumentException>();
+        await actEmpty.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldThrow_WhenPageNumberOrSizeInvalid()
+    {
+        // Arrange
+        Func<Task> actPage = () => _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 0, 10);
+        Func<Task> actSize = () => _songService.GetSongsByGenreAsync(_testUserId, "Jazz", 1, 0);
+        // Assert
+        await actPage.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        await actSize.Should().ThrowAsync<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public async Task GetSongsByGenreAsync_ShouldHandleSpecialCharactersAndUnicode()
+    {
+        // Arrange
+        var special = new Song { Title = "Café del Mar", Genre = "Électronique", UserId = _testUserId };
+        _context.Songs.Add(special);
+        await _context.SaveChangesAsync();
+        // Act
+        var (songs, total) = await _songService.GetSongsByGenreAsync(_testUserId, "Électronique", 1, 10);
+        // Assert
+        songs.Should().ContainSingle(s => s.Title == "Café del Mar");
+        total.Should().Be(1);
+    }
+
+    #endregion
+
     public void Dispose()
     {
         _context.Dispose();

@@ -14,6 +14,68 @@ namespace SetlistStudio.Infrastructure.Services;
 /// </summary>
 public class SongService : ISongService
 {
+    /// <summary>
+    /// Gets songs filtered by genre with pagination for a specific user
+    /// </summary>
+    /// <param name="userId">The user's ID</param>
+    /// <param name="genre">Genre to filter by</param>
+    /// <param name="pageNumber">Page number (1-based)</param>
+    /// <param name="pageSize">Number of items per page</param>
+    /// <returns>Paged result of songs and total count</returns>
+    public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsByGenreAsync(
+        string userId,
+        string genre,
+        int pageNumber = 1,
+        int pageSize = 20)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("UserId is required", nameof(userId));
+        if (string.IsNullOrWhiteSpace(genre))
+            throw new ArgumentException("Genre is required", nameof(genre));
+        if (pageNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be at least 1");
+        if (pageSize < 1 || pageSize > 200)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be between 1 and 200");
+
+        try
+        {
+            var genreNormalized = genre.ToLower();
+            var query = _context.Songs
+                .Where(s => s.UserId == userId && s.Genre.ToLower() == genreNormalized);
+
+            var totalCount = await query.CountAsync();
+
+            var songs = await query
+                .OrderBy(s => s.Title)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogInformation("Retrieved {Count} songs for user {UserId} in genre {Genre} (page {Page})", 
+                songs.Count, sanitizedUserId, genre, pageNumber);
+
+            return (songs, totalCount);
+        }
+        catch (DbUpdateException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Database error retrieving songs by genre for user {UserId}", sanitizedUserId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid argument retrieving songs by genre for user {UserId}", sanitizedUserId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Invalid operation retrieving songs by genre for user {UserId}", sanitizedUserId);
+            throw;
+        }
+    }
     private readonly SetlistStudioDbContext _context;
     private readonly ILogger<SongService> _logger;
     private readonly IAuditLogService _auditLogService;

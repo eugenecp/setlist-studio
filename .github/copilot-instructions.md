@@ -1,3 +1,4 @@
+
 # Copilot Instructions for Setlist Studio
 
 ## Quick Reference
@@ -1433,3 +1434,66 @@ When contributing to Setlist Studio:
 ---
 
 **Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, **secure**, scalable, and delightful experience for artists sharing their music with the world.
+
+
+## Song Filtering by Genre with Pagination Pattern
+
+### ✅ Works: How the Pattern Functions
+This pattern enables efficient retrieval of a user's songs filtered by genre, with support for pagination. It uses Entity Framework Core LINQ queries to filter by `userId` and `genre`, applies ordering, and paginates results using `Skip` and `Take`. The method returns both the paged song list and the total count for UI pagination controls.
+
+### 🔒 Secure: Validation and Security Requirements
+- All user input parameters (`userId`, `genre`, `pageNumber`, `pageSize`) are validated for null/empty and range constraints.
+- Only songs belonging to the requesting user (`userId`) are returned, enforcing resource-based authorization.
+- Queries are parameterized via LINQ, preventing SQL injection.
+- Logging uses sanitized user and song data to avoid leaking sensitive information.
+
+### 📈 Scales: Performance Considerations
+- Filtering and pagination are performed at the database level for efficiency.
+- Results are always ordered (by `Title`) before pagination to ensure consistent paging.
+- The method supports large datasets, but for very deep paging, consider keyset/cursor pagination for optimal performance.
+- Indexes on `UserId` and `Genre` columns are recommended for fast lookups.
+
+### 📚 Maintainable: Code Example and Conventions
+**Service Method Example:**
+
+```csharp
+public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsByGenreAsync(
+  string userId, string genre, int pageNumber = 1, int pageSize = 20)
+{
+  if (string.IsNullOrWhiteSpace(userId))
+    throw new ArgumentException("UserId is required", nameof(userId));
+  if (string.IsNullOrWhiteSpace(genre))
+    throw new ArgumentException("Genre is required", nameof(genre));
+  if (pageNumber < 1)
+    throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be at least 1");
+  if (pageSize < 1 || pageSize > 200)
+    throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be between 1 and 200");
+
+  var query = _context.Songs
+    .Where(s => s.UserId == userId && s.Genre == genre);
+
+  var totalCount = await query.CountAsync();
+  var songs = await query
+    .OrderBy(s => s.Title)
+    .Skip((pageNumber - 1) * pageSize)
+    .Take(pageSize)
+    .ToListAsync();
+
+  return (songs, totalCount);
+}
+```
+
+**Conventions:**
+- Method is defined in both the service interface and implementation.
+- All parameters are validated and exceptions are logged securely.
+- Use async/await for non-blocking database access.
+- Always order results before paginating.
+
+---### ✨ User Delight: Business Value
+This pattern directly supports musicians and performers by making it fast and intuitive to find songs by genre, even in large libraries. It enables:
+- Quick setlist planning for specific genres (e.g., jazz night, rock gig)
+- Effortless navigation and discovery, even with thousands of songs
+- Responsive, reliable experience on both desktop and mobile
+- Confidence for users that their data is secure and personalized
+
+By aligning with real-world musician workflows, this feature increases user satisfaction, reduces friction, and helps musicians focus on creativity and performance rather than data management.

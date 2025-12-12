@@ -9,6 +9,19 @@ namespace SetlistStudio.Core.Interfaces;
 public interface ISongService
 {
     /// <summary>
+    /// Gets songs filtered by genre with pagination for a specific user
+    /// </summary>
+    /// <param name="userId">The user's ID</param>
+    /// <param name="genre">Genre to filter by</param>
+    /// <param name="pageNumber">Page number (1-based)</param>
+    /// <param name="pageSize">Number of items per page</param>
+    /// <returns>Paged result of songs and total count</returns>
+    Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsByGenreAsync(
+        string userId,
+        string genre,
+        int pageNumber = 1,
+        int pageSize = 20);
+    /// <summary>
     /// Gets all songs for a specific user with optional filtering and pagination
     /// </summary>
     /// <param name="userId">The user's ID</param>
