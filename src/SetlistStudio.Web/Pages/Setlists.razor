@@ -205,6 +205,15 @@
                                 Disabled="!IsOnline">
                                 Edit
                             </MudButton>
+                            
+                            <MudButton 
+                                Variant="Variant.Text" 
+                                Color="Color.Info"
+                                StartIcon="@Icons.Material.Filled.CalendarMonth"
+                                OnClick="@(() => OpenPerformanceDatesDialog(setlist.Id))"
+                                Disabled="!IsOnline">
+                                Dates
+                            </MudButton>
                         </MudCardActions>
                     </MudCard>
                 </MudItem>
@@ -232,12 +241,151 @@
     }
 </MudContainer>
 
+<!-- Performance Dates Dialog -->
+<MudDialog @bind-IsVisible="ShowPerformanceDatesDialog" Options="DialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Class="mr-2" />
+            Schedule Performance Dates
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (IsLoadingDates)
+        {
+            <div class="text-center pa-4">
+                <MudProgressCircular Indeterminate="true" />
+                <MudText Class="mt-2">Loading performance dates...</MudText>
+            </div>
+        }
+        else
+        {
+            <!-- Add New Performance Date -->
+            <MudCard Class="mb-4" Outlined="true">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Schedule New Performance</MudText>
+                    
+                    <MudDatePicker 
+                        @bind-Date="NewPerformanceDate" 
+                        Label="Performance Date" 
+                        MinDate="DateTime.Today"
+                        Required="true"
+                        Variant="Variant.Outlined"
+                        Class="mb-3" />
+                    
+                    <MudTextField 
+                        @bind-Value="NewPerformanceVenue"
+                        Label="Venue (Optional)"
+                        Variant="Variant.Outlined"
+                        MaxLength="200"
+                        Class="mb-3" />
+                    
+                    <MudTextField 
+                        @bind-Value="NewPerformanceNotes"
+                        Label="Performance Notes (Optional)"
+                        Variant="Variant.Outlined"
+                        Lines="3"
+                        MaxLength="1000" />
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton 
+                        Variant="Variant.Filled" 
+                        Color="Color.Primary"
+                        StartIcon="@Icons.Material.Filled.Add"
+                        OnClick="AddPerformanceDate"
+                        Disabled="!NewPerformanceDate.HasValue || IsSavingDate">
+                        @if (IsSavingDate)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span class="ml-2">Scheduling...</span>
+                        }
+                        else
+                        {
+                            <span>Schedule Performance</span>
+                        }
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+            
+            <!-- Existing Performance Dates -->
+            @if (CurrentPerformanceDates.Any())
+            {
+                <MudText Typo="Typo.subtitle1" Class="mb-3">Scheduled Performances</MudText>
+                
+                <MudList T="string" Dense="true">
+                    @foreach (var perfDate in CurrentPerformanceDates.OrderBy(pd => pd.Date))
+                    {
+                        <MudListItem>
+                            <div class="d-flex justify-space-between align-center w-100">
+                                <div>
+                                    <MudText Typo="Typo.body1">
+                                        <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" Class="mr-2" />
+                                        @perfDate.Date.ToString("MMM dd, yyyy")
+                                        @if (perfDate.Date >= DateTime.Today)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">Upcoming</MudChip>
+                                        }
+                                    </MudText>
+                                    @if (!string.IsNullOrEmpty(perfDate.Venue))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            📍 @perfDate.Venue
+                                        </MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(perfDate.Notes))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            📝 @perfDate.Notes
+                                        </MudText>
+                                    }
+                                </div>
+                                <MudIconButton 
+                                    Icon="@Icons.Material.Filled.Delete" 
+                                    Color="Color.Error"
+                                    Size="Size.Small"
+                                    OnClick="@(() => DeletePerformanceDate(perfDate.Id))"
+                                    title="Delete performance date" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    No performance dates scheduled yet. Add your first performance date above.
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="ClosePerformanceDatesDialog" Color="Color.Primary">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private List<Setlist> UserSetlists { get; set; } = new();
     private string SearchTerm { get; set; } = string.Empty;
     private bool IsLoading { get; set; } = false;
     private bool IsOnline { get; set; } = true;
     private Timer? _searchTimer;
+    
+    // Performance Dates Dialog State
+    private bool ShowPerformanceDatesDialog { get; set; } = false;
+    private int CurrentSetlistId { get; set; }
+    private List<PerformanceDateDto> CurrentPerformanceDates { get; set; } = new();
+    private bool IsLoadingDates { get; set; } = false;
+    private bool IsSavingDate { get; set; } = false;
+    private DateTime? NewPerformanceDate { get; set; }
+    private string? NewPerformanceVenue { get; set; }
+    private string? NewPerformanceNotes { get; set; }
+    
+    private DialogOptions DialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+        CloseButton = true,
+        CloseOnEscapeKey = true
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -523,6 +671,123 @@
     {
         ShowSetlistMenu(setlistId);
     }
+    
+    // Performance Dates Management
+    private async Task OpenPerformanceDatesDialog(int setlistId)
+    {
+        CurrentSetlistId = setlistId;
+        ShowPerformanceDatesDialog = true;
+        
+        // Reset form
+        NewPerformanceDate = null;
+        NewPerformanceVenue = null;
+        NewPerformanceNotes = null;
+        
+        await LoadPerformanceDates();
+    }
+    
+    private void ClosePerformanceDatesDialog()
+    {
+        ShowPerformanceDatesDialog = false;
+        CurrentPerformanceDates.Clear();
+    }
+    
+    private async Task LoadPerformanceDates()
+    {
+        IsLoadingDates = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<List<PerformanceDateDto>>(
+                $"api/setlists/{CurrentSetlistId}/dates");
+            
+            if (response != null)
+            {
+                CurrentPerformanceDates = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading performance dates for setlist {SetlistId}", CurrentSetlistId);
+        }
+        finally
+        {
+            IsLoadingDates = false;
+        }
+    }
+    
+    private async Task AddPerformanceDate()
+    {
+        if (!NewPerformanceDate.HasValue)
+        {
+            return;
+        }
+        
+        IsSavingDate = true;
+        try
+        {
+            var request = new CreatePerformanceDateDto
+            {
+                Date = NewPerformanceDate.Value,
+                Venue = NewPerformanceVenue,
+                Notes = NewPerformanceNotes
+            };
+            
+            var response = await Http.PostAsJsonAsync(
+                $"api/setlists/{CurrentSetlistId}/dates", 
+                request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Reset form
+                NewPerformanceDate = null;
+                NewPerformanceVenue = null;
+                NewPerformanceNotes = null;
+                
+                // Reload performance dates
+                await LoadPerformanceDates();
+                
+                Logger.LogInformation("Performance date added successfully for setlist {SetlistId}", CurrentSetlistId);
+            }
+            else
+            {
+                Logger.LogWarning("Failed to add performance date: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error adding performance date for setlist {SetlistId}", CurrentSetlistId);
+        }
+        finally
+        {
+            IsSavingDate = false;
+        }
+    }
+    
+    private async Task DeletePerformanceDate(int performanceDateId)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync(
+                $"api/setlists/{CurrentSetlistId}/dates/{performanceDateId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Reload performance dates
+                await LoadPerformanceDates();
+                
+                Logger.LogInformation("Performance date {DateId} deleted successfully", performanceDateId);
+            }
+            else
+            {
+                Logger.LogWarning("Failed to delete performance date {DateId}: {StatusCode}", 
+                    performanceDateId, response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting performance date {DateId}", performanceDateId);
+        }
+    }
 
     public void Dispose()
     {
@@ -534,6 +799,23 @@
     {
         public IEnumerable<Setlist> Setlists { get; set; } = new List<Setlist>();
         public int TotalCount { get; set; }
+    }
+    
+    public class PerformanceDateDto
+    {
+        public int Id { get; set; }
+        public int SetlistId { get; set; }
+        public DateTime Date { get; set; }
+        public string? Venue { get; set; }
+        public string? Notes { get; set; }
+        public string? SetlistName { get; set; }
+    }
+    
+    public class CreatePerformanceDateDto
+    {
+        public DateTime Date { get; set; }
+        public string? Venue { get; set; }
+        public string? Notes { get; set; }
     }
 }
 
