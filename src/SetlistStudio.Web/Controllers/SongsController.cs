@@ -136,15 +136,21 @@ public class SongsController : ControllerBase
             _logger.LogWarning(ex, "Invalid song data provided");
             return BadRequest(new { error = "Invalid song data provided" });
         }
+        catch (InvalidOperationException ex)
+        {
+            // Check if this is a duplicate song error
+            if (ex.Message.Contains("already exists in your library"))
+            {
+                _logger.LogWarning(ex, "Duplicate song creation attempt");
+                return Conflict(new { error = ex.Message });
+            }
+            _logger.LogError(ex, "Song service unavailable");
+            return StatusCode(503, new { error = "Song service temporarily unavailable" });
+        }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized song creation attempt");
             return Forbid();
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogError(ex, "Song service unavailable");
-            return StatusCode(503, new { error = "Song service temporarily unavailable" });
         }
         // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
         catch (Exception ex)
@@ -152,6 +158,68 @@ public class SongsController : ControllerBase
             // Log the actual exception for debugging but don't expose details to client
             _logger.LogError(ex, "Unexpected error creating song for user");
             return StatusCode(500, new { error = "An error occurred while creating the song" });
+        }
+    }
+
+    [HttpPut("{id}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateSong(int id, [FromBody] CreateSongRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var song = new Song
+            {
+                Id = id,
+                Title = request.Title,
+                Artist = request.Artist,
+                Bpm = request.Bpm,
+                MusicalKey = request.Key,
+                Genre = request.Genre,
+                DurationSeconds = request.Duration.HasValue && request.Duration.Value.TotalSeconds > 0 ? (int)Math.Round(request.Duration.Value.TotalSeconds) : null,
+                Notes = request.Notes,
+                UserId = userId
+            };
+
+            var updatedSong = await _songService.UpdateSongAsync(song, userId);
+            if (updatedSong == null)
+            {
+                return NotFound(new { error = "Song not found" });
+            }
+            return Ok(updatedSong);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid song data provided");
+            return BadRequest(new { error = "Invalid song data provided" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Check if this is a duplicate song error
+            if (ex.Message.Contains("already exists in your library"))
+            {
+                _logger.LogWarning(ex, "Duplicate song update attempt");
+                return Conflict(new { error = ex.Message });
+            }
+            _logger.LogError(ex, "Song service unavailable");
+            return StatusCode(503, new { error = "Song service temporarily unavailable" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized song update attempt");
+            return Forbid();
+        }
+        // CodeQL[cs/catch-of-all-exceptions] - Final safety net for controller boundary
+        catch (Exception ex)
+        {
+            // Log the actual exception for debugging but don't expose details to client
+            _logger.LogError(ex, "Unexpected error updating song for user");
+            return StatusCode(500, new { error = "An error occurred while updating the song" });
         }
     }
 

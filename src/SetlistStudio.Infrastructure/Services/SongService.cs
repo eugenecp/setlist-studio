@@ -18,13 +18,20 @@ public class SongService : ISongService
     private readonly ILogger<SongService> _logger;
     private readonly IAuditLogService _auditLogService;
     private readonly IQueryCacheService _cacheService;
+    private readonly ISongDuplicateDetectionService _duplicateDetectionService;
 
-    public SongService(SetlistStudioDbContext context, ILogger<SongService> logger, IAuditLogService auditLogService, IQueryCacheService cacheService)
+    public SongService(
+        SetlistStudioDbContext context,
+        ILogger<SongService> logger,
+        IAuditLogService auditLogService,
+        IQueryCacheService cacheService,
+        ISongDuplicateDetectionService duplicateDetectionService)
     {
         _context = context;
         _logger = logger;
         _auditLogService = auditLogService;
         _cacheService = cacheService;
+        _duplicateDetectionService = duplicateDetectionService;
     }
 
     public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
@@ -150,17 +157,29 @@ public class SongService : ISongService
                 throw new ArgumentException(errorBuilder.ToString());
             }
 
+            // Check for duplicate songs before creating
+            var existingDuplicate = await _duplicateDetectionService.FindDuplicateAsync(song, song.UserId);
+            if (existingDuplicate != null)
+            {
+                var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+                var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
+                _logger.LogWarning("Duplicate song detected: '{Title}' by '{Artist}' for user {UserId}. Existing ID: {ExistingId}",
+                    sanitizedTitle, sanitizedArtist, sanitizedUserId, existingDuplicate.Id);
+                throw new InvalidOperationException($"A song with the title '{song.Title}' by '{song.Artist}' already exists in your library (ID: {existingDuplicate.Id})");
+            }
+
             song.CreatedAt = DateTime.UtcNow;
             song.UpdatedAt = null;
 
             _context.Songs.Add(song);
             await _context.SaveChangesAsync();
 
-            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
-            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
-            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(song.UserId);
+            var sanitizedTitleLog = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtistLog = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserIdLog = SecureLoggingHelper.SanitizeUserId(song.UserId);
             _logger?.LogInformation("Created song {SongId} '{Title}' by '{Artist}' for user {UserId}", 
-                song.Id, sanitizedTitle, sanitizedArtist, sanitizedUserId);
+                song.Id, sanitizedTitleLog, sanitizedArtistLog, sanitizedUserIdLog);
 
             // Log audit trail for song creation
             await _auditLogService.LogAuditAsync(
@@ -232,6 +251,21 @@ public class SongService : ISongService
                     first = false;
                 }
                 throw new ArgumentException(errorBuilder.ToString());
+            }
+
+            // Check for duplicates, excluding the current song being updated
+            if (existingSong.Title != song.Title || existingSong.Artist != song.Artist)
+            {
+                var existingDuplicate = await _duplicateDetectionService.FindDuplicateAsync(song, userId, excludeSongId: song.Id);
+                if (existingDuplicate != null)
+                {
+                    var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+                    var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+                    var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                    _logger.LogWarning("Duplicate song detected during update: '{Title}' by '{Artist}' for user {UserId}. Existing ID: {ExistingId}",
+                        sanitizedTitle, sanitizedArtist, sanitizedUserId, existingDuplicate.Id);
+                    throw new InvalidOperationException($"A song with the title '{song.Title}' by '{song.Artist}' already exists in your library (ID: {existingDuplicate.Id})");
+                }
             }
 
             // Update properties
@@ -553,6 +587,43 @@ public class SongService : ISongService
         if (value.HasValue && (value < min || value > max))
         {
             errors.Add(customMessage);
+        }
+    }
+
+    public async Task<Song?> CheckForDuplicateAsync(Song song, string userId, int? excludeSongId = null)
+    {
+        try
+        {
+            return await _duplicateDetectionService.FindDuplicateAsync(song, userId, excludeSongId);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error checking for duplicate song '{Title}' by '{Artist}' for user {UserId}",
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
+            throw;
+        }
+    }
+
+    public async Task<List<(Song Song, double SimilarityScore)>> GetPotentialDuplicatesAsync(
+        Song song,
+        string userId,
+        double similarityThreshold = 0.8)
+    {
+        try
+        {
+            return await _duplicateDetectionService.FindPotentialDuplicatesAsync(song, userId, similarityThreshold);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedTitle = SecureLoggingHelper.SanitizeMessage(song.Title);
+            var sanitizedArtist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogError(ex, "Error finding potential duplicates for '{Title}' by '{Artist}' for user {UserId}",
+                sanitizedTitle, sanitizedArtist, sanitizedUserId);
+            throw;
         }
     }
 }

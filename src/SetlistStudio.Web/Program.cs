@@ -552,6 +552,7 @@ static void ConfigureApplicationServices(IServiceCollection services)
     services.AddSingleton<IPerformanceMonitoringService, PerformanceMonitoringService>();
     
     // Register application services
+    services.AddScoped<ISongDuplicateDetectionService, SongDuplicateDetectionService>();
     services.AddScoped<ISongService, SongService>();
     services.AddScoped<ISetlistService, SetlistService>();
     

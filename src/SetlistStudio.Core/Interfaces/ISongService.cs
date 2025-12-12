@@ -84,4 +84,26 @@ public interface ISongService
     /// <param name="song">The song to validate</param>
     /// <returns>List of validation errors, empty if valid</returns>
     IEnumerable<string> ValidateSong(Song song);
+
+    /// <summary>
+    /// Checks if a song already exists in the user's library (duplicate detection)
+    /// Handles fuzzy matching for variations in title/artist
+    /// </summary>
+    /// <param name="song">The song to check</param>
+    /// <param name="userId">The user's ID</param>
+    /// <param name="excludeSongId">Optional song ID to exclude from comparison (for updates)</param>
+    /// <returns>The duplicate song if found, null otherwise</returns>
+    Task<Song?> CheckForDuplicateAsync(Song song, string userId, int? excludeSongId = null);
+
+    /// <summary>
+    /// Gets potential duplicates for a song with similarity scores
+    /// </summary>
+    /// <param name="song">The song to check</param>
+    /// <param name="userId">The user's ID</param>
+    /// <param name="similarityThreshold">Similarity threshold (0.0 - 1.0)</param>
+    /// <returns>List of similar songs with similarity scores</returns>
+    Task<List<(Song Song, double SimilarityScore)>> GetPotentialDuplicatesAsync(
+        Song song,
+        string userId,
+        double similarityThreshold = 0.8);
 }
