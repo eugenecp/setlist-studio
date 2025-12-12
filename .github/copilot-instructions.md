@@ -1726,6 +1726,711 @@ Setlist Studio maintains **strict security standards** that must be followed for
 
 ---
 
+## Detailed Security Implementation Guide
+
+### Musical Data Validation Rules
+
+**Setlist Studio enforces specific validation rules for musical data to ensure data integrity and prevent malicious inputs.**
+
+#### **Song Entity Validation**
+
+```csharp
+// CORRECT: Comprehensive song validation
+private IEnumerable<string> ValidateSong(Song song)
+{
+    var errors = new List<string>();
+    
+    // Title validation
+    if (string.IsNullOrWhiteSpace(song.Title))
+        errors.Add("Title is required");
+    else if (song.Title.Length > 200)
+        errors.Add("Title cannot exceed 200 characters");
+    
+    // Artist validation
+    if (string.IsNullOrWhiteSpace(song.Artist))
+        errors.Add("Artist is required");
+    else if (song.Artist.Length > 200)
+        errors.Add("Artist cannot exceed 200 characters");
+    
+    // BPM validation (realistic musical tempo range)
+    if (song.Bpm.HasValue && (song.Bpm.Value < 40 || song.Bpm.Value > 250))
+        errors.Add("BPM must be between 40 and 250");
+    
+    // Duration validation (1 second to 1 hour)
+    if (song.DurationSeconds.HasValue && 
+        (song.DurationSeconds.Value < 1 || song.DurationSeconds.Value > 3600))
+        errors.Add("Duration must be between 1 and 3600 seconds");
+    
+    // Difficulty validation (1-5 scale)
+    if (song.Difficulty.HasValue && 
+        (song.Difficulty.Value < 1 || song.Difficulty.Value > 5))
+        errors.Add("Difficulty must be between 1 and 5");
+    
+    // Optional field length limits
+    if (!string.IsNullOrWhiteSpace(song.Album) && song.Album.Length > 200)
+        errors.Add("Album cannot exceed 200 characters");
+    
+    if (!string.IsNullOrWhiteSpace(song.Genre) && song.Genre.Length > 100)
+        errors.Add("Genre cannot exceed 100 characters");
+    
+    if (!string.IsNullOrWhiteSpace(song.Key) && song.Key.Length > 10)
+        errors.Add("Musical key cannot exceed 10 characters");
+    
+    if (!string.IsNullOrWhiteSpace(song.Notes) && song.Notes.Length > 2000)
+        errors.Add("Notes cannot exceed 2000 characters");
+    
+    return errors;
+}
+```
+
+#### **Musical Key Validation**
+
+```csharp
+// Valid musical keys for validation
+private static readonly HashSet<string> ValidKeys = new()
+{
+    // Major keys
+    "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", 
+    "G", "G#", "Ab", "A", "A#", "Bb", "B",
+    
+    // Minor keys
+    "Cm", "C#m", "Dbm", "Dm", "D#m", "Ebm", "Em", "Fm", "F#m", 
+    "Gbm", "Gm", "G#m", "Abm", "Am", "A#m", "Bbm", "Bm"
+};
+
+// Validation attribute
+[AttributeUsage(AttributeTargets.Property)]
+public class ValidMusicalKeyAttribute : ValidationAttribute
+{
+    protected override ValidationResult IsValid(object value, ValidationContext context)
+    {
+        if (value == null || string.IsNullOrWhiteSpace(value.ToString()))
+            return ValidationResult.Success; // Allow null/empty for optional fields
+        
+        var key = value.ToString();
+        if (!ValidKeys.Contains(key))
+            return new ValidationResult($"'{key}' is not a valid musical key");
+        
+        return ValidationResult.Success;
+    }
+}
+```
+
+#### **BPM (Tempo) Validation**
+
+```csharp
+// Custom validation attribute for realistic BPM ranges
+[AttributeUsage(AttributeTargets.Property)]
+public class SafeBpmAttribute : ValidationAttribute
+{
+    private readonly int _minBpm;
+    private readonly int _maxBpm;
+    
+    public SafeBpmAttribute(int minBpm = 40, int maxBpm = 250)
+    {
+        _minBpm = minBpm;
+        _maxBpm = maxBpm;
+        ErrorMessage = $"BPM must be between {_minBpm} and {_maxBpm}";
+    }
+    
+    protected override ValidationResult IsValid(object value, ValidationContext context)
+    {
+        if (value == null) return ValidationResult.Success; // Optional field
+        
+        if (value is int bpm)
+        {
+            if (bpm >= _minBpm && bpm <= _maxBpm)
+                return ValidationResult.Success;
+            
+            return new ValidationResult(ErrorMessage);
+        }
+        
+        return new ValidationResult("BPM must be a valid integer");
+    }
+}
+
+// Usage in entity
+public class Song
+{
+    [SafeBpm(40, 250)]
+    public int? Bpm { get; set; }
+}
+```
+
+---
+
+### Authorization Patterns & Implementation
+
+**Setlist Studio implements defense-in-depth authorization with multiple layers of security.**
+
+#### **Pattern 1: User-Scoped Queries (PRIMARY DEFENSE)**
+
+**ALWAYS filter by UserId FIRST in all database queries:**
+
+```csharp
+// ✅ CORRECT: User-scoped query (MANDATORY PATTERN)
+public async Task<List<Song>> GetSongsAsync(string userId, string? searchTerm = null)
+{
+    var query = _context.Songs
+        .Where(s => s.UserId == userId)  // ← ALWAYS FIRST: User ownership
+        .AsQueryable();
+    
+    if (!string.IsNullOrWhiteSpace(searchTerm))
+    {
+        query = query.Where(s => 
+            s.Title.Contains(searchTerm) || 
+            s.Artist.Contains(searchTerm));
+    }
+    
+    return await query.ToListAsync();
+}
+
+// ❌ INCORRECT: No user scoping (SECURITY VULNERABILITY)
+public async Task<List<Song>> GetSongsAsync(string? searchTerm = null)
+{
+    // SECURITY FLAW: Returns ALL users' songs!
+    return await _context.Songs
+        .Where(s => s.Title.Contains(searchTerm))
+        .ToListAsync();
+}
+```
+
+#### **Pattern 2: Ownership Verification (SECONDARY DEFENSE)**
+
+**Always verify ownership before operations on specific entities:**
+
+```csharp
+// ✅ CORRECT: Ownership verification in query
+public async Task<Song?> GetSongByIdAsync(int songId, string userId)
+{
+    return await _context.Songs
+        .FirstOrDefaultAsync(s => 
+            s.Id == songId &&           // ← Entity ID
+            s.UserId == userId);        // ← Ownership verification
+}
+
+// ✅ CORRECT: Ownership check before update
+public async Task<Song?> UpdateSongAsync(int songId, string userId, Song updatedSong)
+{
+    // Verify ownership before allowing modification
+    var existingSong = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+    
+    if (existingSong == null)
+    {
+        _logger.LogWarning("Unauthorized update attempt: Song {SongId} by user {UserId}",
+            songId, SecureLoggingHelper.SanitizeUserId(userId));
+        return null; // Don't reveal if song exists
+    }
+    
+    // Update properties
+    existingSong.Title = updatedSong.Title;
+    existingSong.Artist = updatedSong.Artist;
+    // ... other properties
+    
+    await _context.SaveChangesAsync();
+    return existingSong;
+}
+
+// ❌ INCORRECT: Missing ownership verification
+public async Task<Song?> UpdateSongAsync(int songId, Song updatedSong)
+{
+    // SECURITY FLAW: Can update ANY user's song!
+    var song = await _context.Songs.FindAsync(songId);
+    if (song != null)
+    {
+        song.Title = updatedSong.Title;
+        await _context.SaveChangesAsync();
+    }
+    return song;
+}
+```
+
+#### **Pattern 3: Secure Delete Operations**
+
+```csharp
+// ✅ CORRECT: Secure delete with ownership verification and audit trail
+public async Task<bool> DeleteSongAsync(int songId, string userId)
+{
+    // Verify ownership before deletion
+    var song = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+    
+    if (song == null)
+    {
+        _logger.LogWarning("Unauthorized delete attempt: Song {SongId} by user {UserId}",
+            songId, SecureLoggingHelper.SanitizeUserId(userId));
+        return false;
+    }
+    
+    // Capture deleted values for audit trail BEFORE removing
+    await _auditLogService.LogDeleteAsync(
+        userId, 
+        "Song", 
+        songId.ToString(), 
+        new { song.Title, song.Artist });
+    
+    _context.Songs.Remove(song);
+    await _context.SaveChangesAsync();
+    
+    // Invalidate user cache
+    await _cacheService.InvalidateUserCacheAsync(userId);
+    
+    _logger.LogInformation("Song {SongId} deleted by user {UserId}",
+        songId, SecureLoggingHelper.SanitizeUserId(userId));
+    
+    return true;
+}
+
+// ❌ INCORRECT: No ownership check, no audit trail
+public async Task<bool> DeleteSongAsync(int songId)
+{
+    // SECURITY FLAW: Can delete ANY user's song!
+    var song = await _context.Songs.FindAsync(songId);
+    if (song != null)
+    {
+        _context.Songs.Remove(song);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+    return false;
+}
+```
+
+#### **Pattern 4: Controller Authorization**
+
+```csharp
+// ✅ CORRECT: Controller with user identity verification
+[Authorize] // Require authentication
+[ApiController]
+[Route("api/[controller]")]
+public class SongsController : ControllerBase
+{
+    private readonly ISongService _songService;
+    
+    [HttpGet]
+    public async Task<ActionResult<List<Song>>> GetSongs([FromQuery] string? search = null)
+    {
+        // Extract user identity from authenticated context
+        var userId = User.Identity?.Name;
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            _logger.LogWarning("Unauthenticated access attempt to GetSongs");
+            return Unauthorized();
+        }
+        
+        var songs = await _songService.GetSongsAsync(userId, search);
+        return Ok(songs);
+    }
+    
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteSong(int id)
+    {
+        var userId = User.Identity?.Name;
+        
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized();
+        
+        var deleted = await _songService.DeleteSongAsync(id, userId);
+        
+        if (!deleted)
+        {
+            // Don't reveal if song exists - return 404 for both cases
+            return NotFound();
+        }
+        
+        return NoContent();
+    }
+}
+
+// ❌ INCORRECT: No authentication, missing user context
+[ApiController]
+[Route("api/[controller]")]
+public class SongsController : ControllerBase
+{
+    // SECURITY FLAW: No [Authorize] attribute!
+    [HttpGet]
+    public async Task<ActionResult<List<Song>>> GetSongs()
+    {
+        // SECURITY FLAW: No user filtering - exposes all songs!
+        var songs = await _songService.GetAllSongsAsync();
+        return Ok(songs);
+    }
+}
+```
+
+---
+
+### Security Anti-Patterns (WHAT NOT TO DO)
+
+**These patterns represent CRITICAL SECURITY VULNERABILITIES. Never implement these in your code.**
+
+#### **❌ Anti-Pattern 1: SQL Injection Vulnerability**
+
+```csharp
+// ❌ NEVER DO THIS: String concatenation with user input
+public async Task<List<Song>> SearchSongs(string searchTerm)
+{
+    // CRITICAL VULNERABILITY: SQL Injection attack vector!
+    var query = $"SELECT * FROM Songs WHERE Title = '{searchTerm}'";
+    // Attacker input: "'; DROP TABLE Songs; --"
+    // Results in: SELECT * FROM Songs WHERE Title = ''; DROP TABLE Songs; --'
+    
+    return await _context.Songs.FromSqlRaw(query).ToListAsync();
+}
+
+// ✅ CORRECT: Use parameterized LINQ queries
+public async Task<List<Song>> SearchSongs(string searchTerm, string userId)
+{
+    return await _context.Songs
+        .Where(s => s.UserId == userId)
+        .Where(s => s.Title.Contains(searchTerm)) // Parameterized, safe
+        .ToListAsync();
+}
+```
+
+#### **❌ Anti-Pattern 2: Authorization Bypass**
+
+```csharp
+// ❌ NEVER DO THIS: Trusting client-provided user ID
+[HttpGet("{songId}")]
+public async Task<ActionResult<Song>> GetSong(int songId, [FromQuery] string userId)
+{
+    // CRITICAL VULNERABILITY: Client controls userId parameter!
+    // Attacker can specify ANY userId and access other users' songs
+    var song = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+    return Ok(song);
+}
+
+// ✅ CORRECT: Extract user ID from authenticated context
+[HttpGet("{songId}")]
+[Authorize]
+public async Task<ActionResult<Song>> GetSong(int songId)
+{
+    // User ID from authentication token (server-side, trusted)
+    var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException();
+    
+    var song = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+    
+    if (song == null)
+        return NotFound(); // Don't reveal if song exists
+    
+    return Ok(song);
+}
+```
+
+#### **❌ Anti-Pattern 3: Information Disclosure**
+
+```csharp
+// ❌ NEVER DO THIS: Exposing sensitive error details
+[HttpPost]
+public async Task<IActionResult> CreateSong([FromBody] Song song)
+{
+    try
+    {
+        await _songService.CreateSongAsync(song);
+        return Ok();
+    }
+    catch (Exception ex)
+    {
+        // SECURITY FLAW: Exposes internal implementation details!
+        // Reveals: connection strings, stack traces, file paths
+        return BadRequest(new { 
+            error = ex.Message, 
+            stackTrace = ex.StackTrace,
+            innerException = ex.InnerException?.Message 
+        });
+    }
+}
+
+// ✅ CORRECT: Secure error handling
+[HttpPost]
+[Authorize]
+public async Task<IActionResult> CreateSong([FromBody] Song song)
+{
+    var userId = User.Identity?.Name;
+    if (string.IsNullOrEmpty(userId))
+        return Unauthorized();
+    
+    try
+    {
+        var created = await _songService.CreateSongAsync(song, userId);
+        return CreatedAtAction(nameof(GetSong), new { id = created.Id }, created);
+    }
+    catch (ValidationException ex)
+    {
+        // Safe: Only exposes validation errors (expected user-facing info)
+        return BadRequest(new { errors = ex.Errors });
+    }
+    catch (Exception ex)
+    {
+        // Log detailed error server-side
+        _logger.LogError(ex, "Song creation failed for user {UserId}", 
+            SecureLoggingHelper.SanitizeUserId(userId));
+        
+        // Return generic error to client
+        return Problem("An error occurred while creating the song");
+    }
+}
+```
+
+#### **❌ Anti-Pattern 4: Logging Sensitive Data**
+
+```csharp
+// ❌ NEVER DO THIS: Logging PII and sensitive data
+public async Task<bool> AuthenticateUser(string email, string password)
+{
+    // SECURITY FLAW: Logs password in plain text!
+    _logger.LogInformation("Login attempt for {Email} with password {Password}", 
+        email, password);
+    
+    // SECURITY FLAW: Logs user's email address (PII)
+    var user = await _userService.GetByEmailAsync(email);
+    
+    if (user != null && VerifyPassword(password, user.PasswordHash))
+    {
+        _logger.LogInformation("Successful login for {Email}", email);
+        return true;
+    }
+    
+    return false;
+}
+
+// ✅ CORRECT: Secure logging without sensitive data
+public async Task<bool> AuthenticateUser(string email, string password)
+{
+    // Use sanitized user ID, never log passwords or emails
+    var user = await _userService.GetByEmailAsync(email);
+    
+    if (user != null && VerifyPassword(password, user.PasswordHash))
+    {
+        _logger.LogInformation("Successful authentication for user {UserId}",
+            SecureLoggingHelper.SanitizeUserId(user.Id));
+        return true;
+    }
+    
+    // Don't reveal if user exists - generic message
+    _logger.LogWarning("Failed authentication attempt");
+    return false;
+}
+```
+
+#### **❌ Anti-Pattern 5: Hardcoded Secrets**
+
+```csharp
+// ❌ NEVER DO THIS: Hardcoded credentials in source code
+public class EmailService
+{
+    // CRITICAL VULNERABILITY: Credentials committed to version control!
+    private const string SmtpUsername = "admin@setliststudio.com";
+    private const string SmtpPassword = "MySecretPassword123!";
+    private const string ApiKey = "sk_live_1234567890abcdef";
+    
+    public async Task SendEmailAsync(string to, string subject, string body)
+    {
+        // These secrets are now in Git history forever!
+        var client = new SmtpClient("smtp.gmail.com", 587)
+        {
+            Credentials = new NetworkCredential(SmtpUsername, SmtpPassword)
+        };
+        // ...
+    }
+}
+
+// ✅ CORRECT: Load secrets from secure configuration
+public class EmailService
+{
+    private readonly IConfiguration _configuration;
+    
+    public EmailService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+    
+    public async Task SendEmailAsync(string to, string subject, string body)
+    {
+        // Load from environment variables or Azure Key Vault
+        var smtpUsername = _configuration["Email:SmtpUsername"];
+        var smtpPassword = _configuration["Email:SmtpPassword"];
+        
+        // Validate secrets are not placeholder values
+        if (smtpUsername?.Contains("YOUR_") == true || 
+            smtpPassword?.Contains("YOUR_") == true)
+        {
+            throw new InvalidOperationException(
+                "Email configuration not properly set. Update secrets in environment variables.");
+        }
+        
+        var client = new SmtpClient("smtp.gmail.com", 587)
+        {
+            Credentials = new NetworkCredential(smtpUsername, smtpPassword)
+        };
+        // ...
+    }
+}
+```
+
+#### **❌ Anti-Pattern 6: Missing Input Validation**
+
+```csharp
+// ❌ NEVER DO THIS: No validation on user inputs
+[HttpPost]
+public async Task<IActionResult> CreateSong([FromBody] Song song)
+{
+    // SECURITY FLAW: No validation - accepts any input!
+    // Allows: XSS scripts, SQL injection attempts, invalid data
+    await _context.Songs.AddAsync(song);
+    await _context.SaveChangesAsync();
+    return Ok(song);
+}
+
+// ✅ CORRECT: Comprehensive input validation
+[HttpPost]
+[Authorize]
+public async Task<IActionResult> CreateSong([FromBody] Song song)
+{
+    var userId = User.Identity?.Name;
+    if (string.IsNullOrEmpty(userId))
+        return Unauthorized();
+    
+    // Validate input
+    if (string.IsNullOrWhiteSpace(song.Title))
+        return BadRequest("Title is required");
+    
+    if (song.Title.Length > 200)
+        return BadRequest("Title cannot exceed 200 characters");
+    
+    if (string.IsNullOrWhiteSpace(song.Artist))
+        return BadRequest("Artist is required");
+    
+    if (song.Bpm.HasValue && (song.Bpm < 40 || song.Bpm > 250))
+        return BadRequest("BPM must be between 40 and 250");
+    
+    // Sanitize input to prevent XSS
+    song.Title = SecureLoggingHelper.SanitizeMessage(song.Title);
+    song.Artist = SecureLoggingHelper.SanitizeMessage(song.Artist);
+    
+    // Assign authenticated user
+    song.UserId = userId;
+    song.CreatedAt = DateTime.UtcNow;
+    
+    await _context.Songs.AddAsync(song);
+    await _context.SaveChangesAsync();
+    
+    return CreatedAtAction(nameof(GetSong), new { id = song.Id }, song);
+}
+```
+
+---
+
+### Security Testing Requirements
+
+**All security implementations must have corresponding security tests:**
+
+#### **Test Pattern 1: Authorization Tests**
+
+```csharp
+[Fact]
+public async Task GetSongByIdAsync_ShouldReturnNull_WhenUserDoesNotOwnSong()
+{
+    // Arrange
+    var user1Id = "user-123";
+    var user2Id = "user-456";
+    
+    var song = new Song
+    {
+        Title = "Bohemian Rhapsody",
+        Artist = "Queen",
+        UserId = user1Id // Owned by user1
+    };
+    _context.Songs.Add(song);
+    await _context.SaveChangesAsync();
+    
+    // Act - user2 tries to access user1's song
+    var result = await _service.GetSongByIdAsync(song.Id, user2Id);
+    
+    // Assert
+    result.Should().BeNull("users cannot access other users' songs");
+}
+```
+
+#### **Test Pattern 2: Input Validation Tests**
+
+```csharp
+[Theory]
+[InlineData(39, "BPM below minimum (40)")]
+[InlineData(251, "BPM above maximum (250)")]
+public async Task CreateSongAsync_ShouldRejectInvalidBpm(int invalidBpm, string reason)
+{
+    // Arrange
+    var userId = "user-123";
+    var song = new Song
+    {
+        Title = "Test Song",
+        Artist = "Test Artist",
+        Bpm = invalidBpm,
+        UserId = userId
+    };
+    
+    // Act & Assert
+    await Assert.ThrowsAsync<ValidationException>(
+        async () => await _service.CreateSongAsync(song, userId));
+}
+
+[Fact]
+public async Task CreateSongAsync_ShouldRejectXssAttempt()
+{
+    // Arrange
+    var userId = "user-123";
+    var song = new Song
+    {
+        Title = "<script>alert('XSS')</script>",
+        Artist = "Test Artist",
+        UserId = userId
+    };
+    
+    // Act & Assert
+    await Assert.ThrowsAsync<ValidationException>(
+        async () => await _service.CreateSongAsync(song, userId));
+}
+```
+
+#### **Test Pattern 3: Secure Logging Tests**
+
+```csharp
+[Fact]
+public async Task GetSongByIdAsync_ShouldSanitizeUserIdInLogs()
+{
+    // Arrange
+    var userId = "user@example.com"; // Email address (PII)
+    var song = new Song
+    {
+        Title = "Test Song",
+        Artist = "Test Artist",
+        UserId = userId
+    };
+    _context.Songs.Add(song);
+    await _context.SaveChangesAsync();
+    
+    // Act
+    await _service.GetSongByIdAsync(song.Id, userId);
+    
+    // Assert - verify logs don't contain raw email
+    var logEntries = _loggerFactory.GetLogEntries();
+    logEntries.Should().NotContain(entry => entry.Message.Contains(userId),
+        "raw user email should not appear in logs");
+    
+    logEntries.Should().Contain(entry => 
+        entry.Message.Contains(SecureLoggingHelper.SanitizeUserId(userId)),
+        "sanitized user ID should appear in logs");
+}
+```
+
+---
+
 ## Quick Start Guide
 
 When contributing to Setlist Studio:
