@@ -131,14 +131,27 @@ public class SongsController : ControllerBase
             return BadRequest(new { error = "Page size must be between 1 and 100" });
         }
 
-        var userId = SecureUserContext.GetSanitizedUserId(User);
-        var (songs, totalCount) = await _songService.GetSongsAsync(
-            userId,
-            genre: genre.Trim(),
-            pageNumber: page,
-            pageSize: pageSize);
+        // TDD Cycle 4: Add malicious content validation
+        if (ContainsMaliciousContent(genre))
+        {
+            return BadRequest(new { error = "Invalid genre parameter" });
+        }
 
-        return Ok(new { songs, totalCount });
+        try
+        {
+            var userId = SecureUserContext.GetSanitizedUserId(User);
+            var (songs, totalCount) = await _songService.GetSongsAsync(
+                userId,
+                genre: genre.Trim(),
+                pageNumber: page,
+                pageSize: pageSize);
+
+            return Ok(new { songs, totalCount });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost]
@@ -202,14 +215,24 @@ public class SongsController : ControllerBase
             // XSS patterns
             "<script", "</script>", "javascript:", "vbscript:",
             "onload=", "onerror=", "onclick=", "onmouseover=",
+            "<iframe", "<object", "<embed",
             // SQL injection patterns
             "UNION SELECT", "DROP TABLE", "DROP ", "DELETE FROM", "DELETE ", 
             "INSERT INTO", "UPDATE ", "'; DROP", "--", "/*", "*/",
             "' OR '", "\" OR \"", "OR 1=1", "OR '1'='1",
             // SQL Server command injection patterns
             "xp_", "sp_executesql", "sp_", ";--", "; DROP", "; DELETE", 
-            "; UPDATE", "; INSERT"
+            "; UPDATE", "; INSERT",
+            // OS Command injection patterns
+            "&&", "||", "; ", "| ", "$(", "${", 
+            "powershell", "bash", "sh ", "cmd ", "/bin/", "rm -rf",
+            // Additional special characters used in injection
+            "alert(", "fromCharCode"
         };
+
+        // Also check for backticks separately since they can be tricky in strings
+        if (input.Contains('`'))
+            return true;
 
         return maliciousPatterns.Any(pattern => 
             input.Contains(pattern, StringComparison.OrdinalIgnoreCase));

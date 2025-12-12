@@ -46,6 +46,16 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     /// </summary>
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
 
+    /// <summary>
+    /// Setlist templates for reusable performance blueprints
+    /// </summary>
+    public DbSet<SetlistTemplate> SetlistTemplates { get; set; } = null!;
+
+    /// <summary>
+    /// Junction table linking songs to templates with ordering
+    /// </summary>
+    public DbSet<SetlistTemplateSong> SetlistTemplateSongs { get; set; } = null!;
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured && _providerService != null)
@@ -175,6 +185,48 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(u => u.ProfilePictureUrl).HasMaxLength(500);
             entity.Property(u => u.Provider).HasMaxLength(50);
             entity.Property(u => u.ProviderKey).HasMaxLength(200);
+        });
+
+        // Configure SetlistTemplate
+        builder.Entity<SetlistTemplate>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(200);
+            entity.Property(t => t.Description).HasMaxLength(1000);
+            entity.Property(t => t.Category).HasMaxLength(100);
+            entity.Property(t => t.UserId).IsRequired();
+
+            // Indexes for filtering and pagination
+            entity.HasIndex(t => t.UserId);
+            entity.HasIndex(t => new { t.UserId, t.Category });
+            entity.HasIndex(t => new { t.UserId, t.CreatedAt });
+
+            // Navigation to template songs
+            entity.HasMany(t => t.TemplateSongs)
+                .WithOne(ts => ts.Template)
+                .HasForeignKey(ts => ts.SetlistTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure SetlistTemplateSong junction table
+        builder.Entity<SetlistTemplateSong>(entity =>
+        {
+            entity.HasKey(ts => ts.Id);
+
+            // Composite index for template + position ordering
+            entity.HasIndex(ts => new { ts.SetlistTemplateId, ts.Position });
+
+            // Foreign key to template
+            entity.HasOne(ts => ts.Template)
+                .WithMany(t => t.TemplateSongs)
+                .HasForeignKey(ts => ts.SetlistTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Foreign key to song
+            entity.HasOne(ts => ts.Song)
+                .WithMany()
+                .HasForeignKey(ts => ts.SongId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 
