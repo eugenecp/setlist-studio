@@ -42,6 +42,14 @@ public class SongServiceTests : IDisposable
             .Returns<string, Func<Task<IEnumerable<string>>>>((userId, callback) => callback());
         _mockCacheService.Setup(x => x.GetSongCountAsync(It.IsAny<string>(), It.IsAny<Func<Task<int>>>()))
             .Returns<string, Func<Task<int>>>((userId, callback) => callback());
+        
+        // Setup generic GetOrCreateAsync for any type T
+        _mockCacheService.Setup(x => x.GetOrCreateAsync(It.IsAny<string>(), It.IsAny<Func<Task<It.IsAnyType>>>()))
+            .Returns(new InvocationFunc(invocation =>
+            {
+                var callback = invocation.Arguments[1] as Delegate;
+                return callback?.DynamicInvoke() ?? Task.FromResult<object?>(null);
+            }));
             
         _songService = new SongService(_context, _mockLogger.Object, _mockAuditLogService.Object, _mockCacheService.Object);
     }

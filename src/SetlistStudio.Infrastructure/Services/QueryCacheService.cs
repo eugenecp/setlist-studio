@@ -194,6 +194,41 @@ public class QueryCacheService : IQueryCacheService
     }
 
     /// <summary>
+    /// Gets or creates a cached value using the provided factory function
+    /// Generic method for flexible caching of any data type with 5-minute expiration
+    /// </summary>
+    public async Task<T> GetOrCreateAsync<T>(string key, Func<Task<T>> factory)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Cache key cannot be null or empty", nameof(key));
+
+        if (_cache.TryGetValue(key, out T? cached))
+        {
+            RecordCacheHit(key);
+            _logger.LogDebug("Cache hit for key: {Key}", key);
+            return cached!;
+        }
+
+        RecordCacheMiss(key);
+        _logger.LogDebug("Cache miss for key: {Key}", key);
+
+        var value = await factory();
+
+        var options = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5),
+            SlidingExpiration = TimeSpan.FromMinutes(2),
+            Size = 1,
+            Priority = CacheItemPriority.Normal
+        };
+
+        _cache.Set(key, value, options);
+        _logger.LogInformation("Cached value for key: {Key}", key);
+
+        return value;
+    }
+
+    /// <summary>
     /// Gets cached frequently accessed songs for a user
     /// </summary>
     public async Task<IEnumerable<Song>> GetRecentSongsAsync(string userId, Func<Task<IEnumerable<Song>>> factory)

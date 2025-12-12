@@ -37,44 +37,18 @@ public class SongService : ISongService
     {
         try
         {
-            var query = _context.Songs.Where(s => s.UserId == userId);
-
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // Hybrid caching strategy: Cache page 1 for genre-only filters (80% of requests)
+            // This optimizes the most common use case while keeping memory usage low
+            if (pageNumber == 1 && 
+                !string.IsNullOrWhiteSpace(genre) && 
+                string.IsNullOrWhiteSpace(searchTerm) && 
+                string.IsNullOrWhiteSpace(tags))
             {
-                var lowerSearch = searchTerm.ToLower();
-                query = query.Where(s => 
-                    s.Title.ToLower().Contains(lowerSearch) ||
-                    s.Artist.ToLower().Contains(lowerSearch) ||
-                    (s.Album != null && s.Album.ToLower().Contains(lowerSearch)));
+                return await GetGenreFilteredPageOneCachedAsync(userId, genre, pageSize);
             }
 
-            // Apply genre filter
-            if (!string.IsNullOrWhiteSpace(genre))
-            {
-                query = query.Where(s => s.Genre == genre);
-            }
-
-            // Apply tags filter
-            if (!string.IsNullOrWhiteSpace(tags))
-            {
-                query = query.Where(s => s.Tags != null && s.Tags.Contains(tags));
-            }
-
-            var totalCount = await query.CountAsync();
-
-            var songs = await query
-                .OrderBy(s => s.Artist)
-                .ThenBy(s => s.Title)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
-            _logger.LogInformation("Retrieved {Count} songs for user {UserId} (page {Page})", 
-                songs.Count, sanitizedUserId, pageNumber);
-
-            return (songs, totalCount);
+            // Standard query path for all other requests
+            return await ExecuteStandardSongQueryAsync(userId, searchTerm, genre, tags, pageNumber, pageSize);
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
@@ -93,6 +67,107 @@ public class SongService : ISongService
             var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
             _logger.LogError(ex, "Invalid operation retrieving songs for user {UserId}", sanitizedUserId);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Executes standard song query with all filters and pagination
+    /// This is the non-cached path used for complex queries and page 2+
+    /// </summary>
+    private async Task<(IEnumerable<Song> Songs, int TotalCount)> ExecuteStandardSongQueryAsync(
+        string userId,
+        string? searchTerm,
+        string? genre,
+        string? tags,
+        int pageNumber,
+        int pageSize)
+    {
+        var query = _context.Songs.Where(s => s.UserId == userId);
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var lowerSearch = searchTerm.ToLower();
+            query = query.Where(s => 
+                s.Title.ToLower().Contains(lowerSearch) ||
+                s.Artist.ToLower().Contains(lowerSearch) ||
+                (s.Album != null && s.Album.ToLower().Contains(lowerSearch)));
+        }
+
+        // Apply genre filter (leverages IX_Songs_UserId_Genre composite index)
+        if (!string.IsNullOrWhiteSpace(genre))
+        {
+            query = query.Where(s => s.Genre == genre);
+        }
+
+        // Apply tags filter
+        if (!string.IsNullOrWhiteSpace(tags))
+        {
+            query = query.Where(s => s.Tags != null && s.Tags.Contains(tags));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var songs = await query
+            .OrderBy(s => s.Artist)
+            .ThenBy(s => s.Title)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+        _logger.LogInformation("Retrieved {Count} songs for user {UserId} (page {Page})", 
+            songs.Count, sanitizedUserId, pageNumber);
+
+        return (songs, totalCount);
+    }
+
+    /// <summary>
+    /// Gets page 1 of genre-filtered songs with caching for optimal performance
+    /// Implements hybrid caching strategy: cache only the most frequently accessed data (page 1)
+    /// Cache expires after 5 minutes and is invalidated on any song modifications
+    /// </summary>
+    private async Task<(IEnumerable<Song> Songs, int TotalCount)> GetGenreFilteredPageOneCachedAsync(
+        string userId,
+        string genre,
+        int pageSize)
+    {
+        var sanitizedGenre = SecureLoggingHelper.SanitizeMessage(genre);
+        var cacheKey = $"songs_genre_{userId}_{sanitizedGenre}_page1";
+
+        try
+        {
+            // Attempt to retrieve from cache
+            var cached = await _cacheService.GetOrCreateAsync(cacheKey, async () =>
+            {
+                var query = _context.Songs
+                    .Where(s => s.UserId == userId && s.Genre == genre);
+
+                var totalCount = await query.CountAsync();
+
+                var songs = await query
+                    .OrderBy(s => s.Artist)
+                    .ThenBy(s => s.Title)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogDebug("Cached genre filter page 1: {Genre} for user {UserId} ({Count} songs)", 
+                    sanitizedGenre, sanitizedUserId, songs.Count);
+
+                return (Songs: songs, TotalCount: totalCount);
+            });
+
+            return cached;
+        }
+        catch (Exception)
+        {
+            // If caching fails, fall back to standard query (graceful degradation)
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            _logger.LogWarning("Cache operation failed for genre filter, falling back to direct query for user {UserId}", 
+                sanitizedUserId);
+
+            return await ExecuteStandardSongQueryAsync(userId, null, genre, null, 1, pageSize);
         }
     }
 

@@ -49,6 +49,16 @@ public interface IQueryCacheService
     Task<IEnumerable<Song>> GetRecentSongsAsync(string userId, Func<Task<IEnumerable<Song>>> factory);
 
     /// <summary>
+    /// Gets or creates a cached value using the provided factory function
+    /// Generic method for flexible caching of any data type
+    /// </summary>
+    /// <typeparam name="T">The type of data to cache</typeparam>
+    /// <param name="key">Cache key</param>
+    /// <param name="factory">Factory function to create the value if not cached</param>
+    /// <returns>Cached or newly created value</returns>
+    Task<T> GetOrCreateAsync<T>(string key, Func<Task<T>> factory);
+
+    /// <summary>
     /// Invalidates all cached data for a specific user
     /// Should be called when user data is modified
     /// </summary>
