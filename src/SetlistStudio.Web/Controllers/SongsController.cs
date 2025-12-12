@@ -104,6 +104,43 @@ public class SongsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// TDD Step 7 (GREEN): Added pagination validation
+    /// Filters songs by genre with input and pagination validation
+    /// </summary>
+    [HttpGet("genre/{genre}")]
+    public async Task<IActionResult> GetSongsByGenre(
+        [FromRoute] string genre,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        // TDD Cycle 2: Add validation for null/whitespace genre
+        if (string.IsNullOrWhiteSpace(genre))
+        {
+            return BadRequest(new { error = "Genre parameter is required" });
+        }
+
+        // TDD Cycle 3: Add pagination validation
+        if (page < 1)
+        {
+            return BadRequest(new { error = "Page number must be greater than 0" });
+        }
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(new { error = "Page size must be between 1 and 100" });
+        }
+
+        var userId = SecureUserContext.GetSanitizedUserId(User);
+        var (songs, totalCount) = await _songService.GetSongsAsync(
+            userId,
+            genre: genre.Trim(),
+            pageNumber: page,
+            pageSize: pageSize);
+
+        return Ok(new { songs, totalCount });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateSong([FromBody] CreateSongRequest request)
@@ -162,10 +199,16 @@ public class SongsController : ControllerBase
 
         var maliciousPatterns = new[]
         {
+            // XSS patterns
             "<script", "</script>", "javascript:", "vbscript:",
             "onload=", "onerror=", "onclick=", "onmouseover=",
-            "UNION SELECT", "DROP TABLE", "DELETE FROM", "INSERT INTO",
-            "'; DROP", "--", "/*", "*/"
+            // SQL injection patterns
+            "UNION SELECT", "DROP TABLE", "DROP ", "DELETE FROM", "DELETE ", 
+            "INSERT INTO", "UPDATE ", "'; DROP", "--", "/*", "*/",
+            "' OR '", "\" OR \"", "OR 1=1", "OR '1'='1",
+            // SQL Server command injection patterns
+            "xp_", "sp_executesql", "sp_", ";--", "; DROP", "; DELETE", 
+            "; UPDATE", "; INSERT"
         };
 
         return maliciousPatterns.Any(pattern => 
