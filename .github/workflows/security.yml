@@ -111,7 +111,7 @@ jobs:
     # Step 5: Initialize GitHub CodeQL static analysis security scanning
     # CodeQL analyzes code for security vulnerabilities and coding errors
     - name: 🛡️ CodeQL Analysis
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: csharp                # Target C# language analysis
         config-file: ./.github/codeql/codeql-config.yml # Use custom configuration
@@ -124,7 +124,7 @@ jobs:
     # Step 7: Execute CodeQL security analysis
     # Analyzes built code and uploads results to GitHub Security tab
     - name: 🔍 Perform CodeQL Analysis  
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       with:
         category: "/language:csharp"     # Categorize results by language
     
@@ -165,7 +165,7 @@ jobs:
     # Integrates container security findings with GitHub's security features
     - name: 📊 Upload Trivy Results
       if: always() && hashFiles('trivy-results.sarif') != '' # Upload only if SARIF file exists
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: 'trivy-results.sarif' # Trivy scan results file
       continue-on-error: true              # Continue to allow threshold enforcement step to handle failures
