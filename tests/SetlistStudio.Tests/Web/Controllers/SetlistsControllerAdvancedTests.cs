@@ -19,14 +19,16 @@ namespace SetlistStudio.Tests.Web.Controllers;
 public class SetlistsControllerAdvancedTests
 {
     private readonly Mock<ISetlistService> _mockSetlistService;
+    private readonly Mock<ISetlistDurationService> _mockSetlistDurationService;
     private readonly Mock<ILogger<SetlistsController>> _mockLogger;
     private readonly SetlistsController _controller;
 
     public SetlistsControllerAdvancedTests()
     {
         _mockSetlistService = new Mock<ISetlistService>();
+        _mockSetlistDurationService = new Mock<ISetlistDurationService>();
         _mockLogger = new Mock<ILogger<SetlistsController>>();
-        _controller = new SetlistsController(_mockSetlistService.Object, _mockLogger.Object);
+        _controller = new SetlistsController(_mockSetlistService.Object, _mockSetlistDurationService.Object, _mockLogger.Object);
     }
 
     #region GetSetlists Advanced Tests

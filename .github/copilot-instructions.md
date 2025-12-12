@@ -744,7 +744,7 @@ When generating any code (classes, methods, controllers, services, tests), **ALW
 - **Input Validation**: Every user input must be validated and sanitized
 - **Parameterized Queries**: Never concatenate user input into SQL strings - use Entity Framework LINQ exclusively
 - **Authorization Checks**: Every data access operation must verify user ownership
-- **Error Handling**: Never expose sensitive information in error messages or logs
+- **Error Handling**: Never expose sensitive information in error messages
 - **Resource Management**: Always use `using` statements for IDisposable objects
 
 #### 2. **Null Safety and Type Safety**
@@ -1250,7 +1250,7 @@ Setlist Studio maintains **strict security standards** that must be followed for
 - [ ] **CSRF protection** enabled for state-changing operations
 - [ ] **HTTPS** enforced in production configurations
 
-**Note**: GitHub Actions may report 200+ "findings" from comprehensive quality analysis, but these are mostly code quality improvements, not security vulnerabilities. Focus on the security-specific analysis results.
+**Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on the security-specific analysis results for security compliance.
 
 ### Security Code Review Guidelines
 
@@ -1375,7 +1375,7 @@ When contributing to Setlist Studio:
 7. **LOG SECURELY**: Never log sensitive data, always sanitize log entries
 8. **FAIL SECURELY**: Error messages must not leak sensitive information
 
-**Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on security-specific results for security compliance.
+**Note**: GitHub's comprehensive analysis may show hundreds of code quality findings while security analysis shows zero vulnerabilities. This is expected - focus on the security-specific analysis results for security compliance.
 
 **Security violations will result in immediate pull request rejection.**
 
@@ -1409,27 +1409,79 @@ When contributing to Setlist Studio:
 ### **Database Scalability**
 - **SQLite Current Limit**: ~100 concurrent users, ~50MB database files
 - **Migration Threshold**: Plan PostgreSQL migration when database >50MB or >100 concurrent users
-- **Index Strategy**: All user-specific queries have appropriate indexes (UserId, Artist, Genre, PerformanceDate)
-- **Query Performance**: All queries must complete within 100ms; optimize with proper Entity Framework usage
-
-### **Application Scalability**
-- **Blazor Server Limits**: ~200 concurrent connections per instance, 2-4MB memory per connection
-- **Horizontal Scaling**: Implement Redis distributed caching and sticky sessions for load balancing
-- **Memory Management**: Monitor memory usage patterns, implement proper resource disposal
-- **Background Processing**: Use background jobs for heavy operations (calculations, aggregations)
-
-### **Performance Monitoring**
-- **API Response Times**: <500ms for all endpoints under normal load
-- **Database Query Performance**: Monitor with Entity Framework logging and optimize N+1 problems
-- **Memory Usage**: Track per-user memory consumption and implement distributed caching at 1GB+
-- **Connection Limits**: Plan for database connection pooling when approaching 100+ concurrent users
-
-### **Scaling Roadmap**
-1. **Phase 1 (100-300 users)**: Optimize existing SQLite with indexes and caching
-2. **Phase 2 (300-1000 users)**: Migrate to PostgreSQL with connection pooling
-3. **Phase 3 (1000+ users)**: Implement Redis caching and load balancing
-4. **Phase 4 (5000+ users)**: Add read replicas and horizontal scaling
+- **Index Strategy**: All user-specific queries have appropriate indexes (UserId, Genre, PerformanceDate)
 
 ---
 
-**Remember**: We're building a tool that musicians will rely on for their performances. Every line of code should contribute to creating a reliable, **secure**, scalable, and delightful experience for artists sharing their music with the world.
+## New Section: Filtering approach — Server-side offset pagination (Five Principles)
+
+This section summarizes the filtering approach chosen for "filter songs by genre with pagination" using the five guiding principles to help implementers and reviewers.
+
+### ✅ Works (How the pattern functions)
+- Controller accepts `GET /api/songs?genre={genre}&page={page}&limit={limit}` and validates inputs.
+- Controller resolves the authenticated `userId` via `SecureUserContext.GetSanitizedUserId(User)` and forwards parameters to `ISongService.GetSongsAsync(userId, searchTerm: null, genre: genre, tags: null, pageNumber: page, pageSize: limit)`.
+- Service composes an `IQueryable` with filters and ordering, executes `CountAsync()` for `totalCount`, then materializes the requested page using `.OrderBy(...).Skip((page-1)*pageSize).Take(pageSize).ToListAsync()` and returns `(songs, totalCount)`.
+- The API returns a compact JSON shape `{ songs, totalCount }` so the Blazor UI can render items and pagination controls.
+
+### 🔒 Secure (Validation and security requirements)
+- Validate inputs server-side:
+  - `genre`: trim, reject overly long values (>50 chars), and check `ContainsMaliciousContent` before use.
+  - `page`: ensure `page >= 1` (treat 0 as 1); `limit`: clamp `1 <= limit <= 200` and reject values outside bounds with 400.
+- Use `AsNoTracking()` for read queries and EF LINQ only (no raw SQL) to avoid injection risks.
+- Apply `[Authorize]` on the endpoint and always use the server-side `userId` — never accept user-provided identifiers.
+- Sanitize logged values via `SecureLoggingHelper.SanitizeMessage()` and avoid logging raw inputs.
+- Keep rate limiting configured on the controller (API policy) and use anti-forgery on state-changing endpoints only.
+
+### 📈 Scales (Performance considerations)
+- Indexes: add or ensure DB indexes on `(UserId, Genre)` and on ordering columns `(Artist, Title)` for efficient filtered ordered paging.
+- Projection: select to a lightweight DTO (only needed fields) before materializing to reduce payload and serialization overhead.
+- Counting: `CountAsync()` is a separate query; for very large datasets consider caching counts or returning `hasMore` instead of exact totals.
+- Deep paging: `Skip` degrades with large offsets — monitor latency and plan a migration to keyset (cursor) pagination if per-user rows exceed practical thresholds (e.g., 100k+).
+- Cache: reuse `IQueryCacheService` for genres and optionally cache hot pages; invalidate on create/update/delete (existing `SongService` invalidates cache).
+
+### 📚 Maintainable (Code example and conventions)
+- Follow existing project layering: controller → service → dbcontext, async/await everywhere, use `IQueryCacheService` and `Secure*` helpers.
+- Example (controller + service sketch):
+
+```csharp
+// Controller
+[HttpGet]
+public async Task<IActionResult> GetSongs([FromQuery] string? genre, [FromQuery] int page = 1, [FromQuery] int limit = 20)
+{
+    if (!string.IsNullOrWhiteSpace(genre) && genre.Length > 50) return BadRequest(new { error = "Genre too long" });
+    page = Math.Max(1, page);
+    limit = Math.Clamp(limit, 1, 200);
+
+    var userId = SecureUserContext.GetSanitizedUserId(User);
+    var (songs, totalCount) = await _songService.GetSongsAsync(userId, genre: genre, pageNumber: page, pageSize: limit);
+    return Ok(new { songs, totalCount });
+}
+
+// Service (core idea)
+public async Task<(IEnumerable<SongDto> Songs, int TotalCount)> GetSongsAsync(...)
+{
+    var query = _context.Songs.AsNoTracking().Where(s => s.UserId == userId);
+    if (!string.IsNullOrWhiteSpace(genre)) {
+        var g = genre.Trim().ToLower();
+        query = query.Where(s => s.Genre != null && s.Genre.ToLower() == g);
+    }
+    var total = await query.CountAsync();
+    var items = await query.OrderBy(s => s.Artist).ThenBy(s => s.Title)
+        .Skip((pageNumber - 1) * pageSize).Take(pageSize)
+        .Select(s => new SongDto { Id = s.Id, Title = s.Title, Artist = s.Artist, Genre = s.Genre })
+        .ToListAsync();
+    return (items, total);
+}
+```
+
+- Tests: update controller tests in `SongsControllerTests.cs` and service tests in `SongService` test files per test-file naming rules (enhance base test files first).
+
+### ✨ User Delight (Business value)
+- Fast and predictable UX: users can filter by genre and jump to specific pages, which matches common musician workflows (organizing libraries, preparing setlists, rehearsals).
+- Offline-friendly: genre list and recently fetched pages can be cached for offline performance use (existing offline helpers and `DownloadForOffline` component support this pattern).
+- Low friction rollout: server-side offset pagination requires minimal API changes, quick tests, and minimal UI updates — delivers immediate value with low risk.
+- Clear feedback: returning `totalCount` enables the UI to show progress, page numbers, and expected time to find songs, improving confidence during live preparation.
+
+---
+
+*Add this section to guide contributors implementing the feature and reviewers validating PRs. Follow the project's security and testing rules when making changes.*

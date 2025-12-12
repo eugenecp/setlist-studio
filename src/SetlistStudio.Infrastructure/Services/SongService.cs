@@ -95,6 +95,86 @@ public class SongService : ISongService
             throw;
         }
     }
+    /*
+        When to use: Use when the UI needs a single page of songs filtered by a specific genre for the authenticated user (offset pagination: page + limit).
+Core Principles:
+•	Works: Build an IQueryable filtered by Song.UserId and case-insensitive Genre match, apply stable ordering (Artist, Title), then Skip((page-1)*limit).Take(limit) and materialize with ToListAsync(). Return only the page (and optionally total count when needed).
+•	Secure: Validate inputs (userId required, genre trimmed and max 50 chars), use EF Core LINQ (no raw SQL), enforce ownership (s.UserId == userId), use AsNoTracking() for read queries, and sanitize values with SecureLoggingHelper before logging.
+•	Scales: Use DB indexes on (UserId, Genre) and (Artist, Title); clamp limit (e.g., 1–200) and normalize pageNumber (min 1); avoid deep offset paging for very large datasets (consider keyset pagination if needed); cache hot lists with IQueryCacheService.
+•	Maintainable: Keep logic in SongService (GetSongsByGenere) and controllers supply sanitized userId. Follow existing project patterns (async/await, validation helpers, audit/cache invalidation on writes).
+•	User Delight: Fast filtered browsing, predictable paging controls, and consistent ordering make it easy for users to find songs by genre during rehearsal and performance preparation.
+
+    Common pitfalls:
+•	Returning unfiltered songs because userId or genre validation is missing.
+•	Logging raw userId or full messages without sanitization.
+•	Allowing unbounded limit or pageNumber leading to excessive DB load.
+•	Using string comparisons that are not case-insensitive or not database-translatable.
+•	Relying on offset paging for extremely large per-user datasets (use keyset pagination instead).
+
+    */
+    public async Task<IEnumerable<Song>> GetSongsByGenere(string userId, string genre, int pageNumber, int limit)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                throw new ArgumentException("User ID is required", nameof(userId));
+            }
+
+            if (string.IsNullOrWhiteSpace(genre))
+            {
+                return Enumerable.Empty<Song>();
+            }
+
+            var trimmedGenre = genre.Trim();
+            if (trimmedGenre.Length > 50)
+            {
+                throw new ArgumentException("Genre cannot exceed 50 characters", nameof(genre));
+            }
+
+            pageNumber = Math.Max(1, pageNumber);
+            limit = Math.Clamp(limit, 1, 200);
+
+            var genreLower = trimmedGenre.ToLowerInvariant();
+
+            var songs = await _context.Songs
+                .AsNoTracking()
+                .Where(s => s.UserId == userId && s.Genre != null && s.Genre.ToLower() == genreLower)
+                .OrderBy(s => s.Artist)
+                .ThenBy(s => s.Title)
+                .Skip((pageNumber - 1) * limit)
+                .Take(limit)
+                .ToListAsync();
+
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedGenre = SecureLoggingHelper.SanitizeMessage(trimmedGenre);
+            _logger.LogInformation("Retrieved {Count} songs for user {UserId} with genre {Genre} (page {Page})",
+                songs.Count, sanitizedUserId, sanitizedGenre, pageNumber);
+
+            return songs;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedGenre = SecureLoggingHelper.SanitizeMessage(genre);
+            _logger.LogError(ex, "Database error retrieving songs for user {UserId} with genre {Genre}", sanitizedUserId, sanitizedGenre);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedGenre = SecureLoggingHelper.SanitizeMessage(genre);
+            _logger.LogError(ex, "Invalid argument retrieving songs for user {UserId} with genre {Genre}", sanitizedUserId, sanitizedGenre);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+            var sanitizedGenre = SecureLoggingHelper.SanitizeMessage(genre);
+            _logger.LogError(ex, "Invalid operation retrieving songs for user {UserId} with genre {Genre}", sanitizedUserId, sanitizedGenre);
+            throw;
+        }
+    }
 
     public async Task<Song?> GetSongByIdAsync(int songId, string userId)
     {
@@ -555,4 +635,5 @@ public class SongService : ISongService
             errors.Add(customMessage);
         }
     }
+    
 }
