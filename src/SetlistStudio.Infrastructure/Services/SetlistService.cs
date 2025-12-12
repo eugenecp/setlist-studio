@@ -692,6 +692,18 @@ public class SetlistService : ISetlistService
             throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
         }
 
+        // Security validation for all string inputs
+        var securityErrors = new List<string>();
+        ValidateMaliciousInput(name, "Setlist name", securityErrors);
+        ValidateMaliciousInput(venue, "Venue", securityErrors);
+        ValidateMaliciousInput(performanceNotes, "Performance notes", securityErrors);
+
+        if (securityErrors.Any())
+        {
+            var errorMessage = string.Join(", ", securityErrors);
+            throw new ArgumentException($"Validation failed: {errorMessage}");
+        }
+
         try
         {
             // Get the template and verify ownership and template status
@@ -707,10 +719,22 @@ public class SetlistService : ISetlistService
                 return null;
             }
 
-            // Validate the new setlist name
+            // Validate the new setlist name length
             if (name.Length > 200)
             {
                 throw new ArgumentException("Setlist name cannot exceed 200 characters", nameof(name));
+            }
+
+            // Validate venue length
+            if (!string.IsNullOrEmpty(venue) && venue.Length > 200)
+            {
+                throw new ArgumentException("Venue cannot exceed 200 characters", nameof(venue));
+            }
+
+            // Validate performance notes length
+            if (!string.IsNullOrEmpty(performanceNotes) && performanceNotes.Length > 2000)
+            {
+                throw new ArgumentException("Performance notes cannot exceed 2000 characters", nameof(performanceNotes));
             }
 
             // Create new active setlist from template
@@ -842,5 +866,122 @@ public class SetlistService : ISetlistService
         {
             errors.Add("User ID is required");
         }
+    }
+
+    /// <summary>
+    /// Validates input for malicious content (XSS, SQL injection, code injection)
+    /// </summary>
+    private static void ValidateMaliciousInput(string? value, string propertyName, List<string> errors)
+    {
+        if (string.IsNullOrEmpty(value))
+            return;
+
+        // XSS patterns
+        var xssPatterns = new[]
+        {
+            "<script",
+            "</script>",
+            "<img",
+            "onerror=",
+            "javascript:",
+            "<iframe",
+            "<svg",
+            "onload=",
+            "<embed",
+            "<object"
+        };
+
+        // SQL injection patterns
+        var sqlPatterns = new[]
+        {
+            "'; DROP",
+            "' OR '1'='1",
+            "'; DELETE",
+            "'; UPDATE",
+            "EXEC(",
+            "EXECUTE(",
+            "xp_cmdshell"
+        };
+
+        // Code injection patterns
+        var codeInjectionPatterns = new[]
+        {
+            "${jndi:",
+            "${jndi:ldap",
+            "#{",
+            "{{",
+            "${{"
+        };
+
+        var lowerValue = value.ToLower();
+
+        // Check XSS patterns
+        foreach (var pattern in xssPatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLower()))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (XSS attempt detected)");
+                return;
+            }
+        }
+
+        // Check SQL injection patterns
+        foreach (var pattern in sqlPatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLower()))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (SQL injection attempt detected)");
+                return;
+            }
+        }
+
+        // Check code injection patterns
+        foreach (var pattern in codeInjectionPatterns)
+        {
+            if (value.Contains(pattern))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (Code injection attempt detected)");
+                return;
+            }
+        }
+
+        // Check for null byte injection
+        if (value.Contains('\0'))
+        {
+            errors.Add($"{propertyName} contains null byte characters");
+            return;
+        }
+
+        // Check for suspicious Unicode characters (homoglyph attacks)
+        if (ContainsSuspiciousUnicode(value))
+        {
+            errors.Add($"{propertyName} contains suspicious Unicode characters");
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Checks for suspicious Unicode characters that might be used in homoglyph attacks
+    /// </summary>
+    private static bool ContainsSuspiciousUnicode(string value)
+    {
+        // Check for Cyrillic characters that look like Latin (homoglyph attacks)
+        foreach (char c in value)
+        {
+            // Cyrillic range that looks like Latin
+            if (c >= '\u0400' && c <= '\u04FF')
+            {
+                // Check if it's a Cyrillic character that looks like Latin
+                if (c == '\u0430' || c == '\u0435' || c == '\u043E' || c == '\u0440' || 
+                    c == '\u0441' || c == '\u0445' || c == '\u0410' || c == '\u0412' ||
+                    c == '\u0415' || c == '\u041A' || c == '\u041C' || c == '\u041D' ||
+                    c == '\u041E' || c == '\u0420' || c == '\u0421' || c == '\u0422' ||
+                    c == '\u0425')
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

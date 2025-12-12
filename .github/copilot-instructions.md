@@ -1183,6 +1183,543 @@ var fridayShow = await CreateFromTemplateAsync(
 
 ---
 
+## Template System Architecture & Design
+
+### Entity Structure Pattern
+
+**Setlist Studio uses a single-entity template pattern** with discriminator flags rather than separate template tables. This design choice prioritizes simplicity, maintainability, and query performance.
+
+#### Entity Design Rationale
+
+**Single Entity with Discriminator Flags:**
+```csharp
+public class Setlist
+{
+    // Core identification
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string? Description { get; set; }
+    
+    // Template discriminators (PRIMARY PATTERN)
+    public bool IsTemplate { get; set; }        // true = template, false = performance
+    public bool IsActive { get; set; }          // false for templates, true for performances
+    
+    // Performance-specific (nullable for templates)
+    public string? Venue { get; set; }          // null for templates
+    public DateTime? PerformanceDate { get; set; } // null for templates
+    public string? PerformanceNotes { get; set; }  // Generic guidance for templates
+    
+    // Shared properties
+    public int? ExpectedDurationMinutes { get; set; } // Timing estimate
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    
+    // Authorization & relationships
+    public string UserId { get; set; }          // User ownership
+    public ICollection<SetlistSong> SetlistSongs { get; set; } // Ordered songs
+}
+```
+
+**Design Benefits:**
+- ✅ **Simplicity**: No complex inheritance or separate template tables
+- ✅ **Performance**: Single table query, no joins required
+- ✅ **Flexibility**: Easy to convert performance → template or vice versa
+- ✅ **Maintainability**: Single entity to understand and maintain
+- ✅ **Querying**: Simple filter: `WHERE IsTemplate = true`
+
+**Alternative (NOT USED):**
+```csharp
+// ❌ REJECTED: Separate tables require joins and complicate queries
+public class SetlistTemplate { ... }
+public class PerformanceSetlist : SetlistTemplate { ... }
+```
+
+#### Property Usage Matrix
+
+| Property | Template Value | Performance Value |
+|----------|---------------|-------------------|
+| `IsTemplate` | `true` | `false` |
+| `IsActive` | `false` | `true` |
+| `Name` | Generic ("Wedding Template") | Specific ("Smith Wedding - June 15") |
+| `Description` | Template purpose | Inherited or custom |
+| `Venue` | `null` | Specific location |
+| `PerformanceDate` | `null` | Event date/time |
+| `PerformanceNotes` | Generic guidance | Event-specific instructions |
+| `ExpectedDurationMinutes` | Timing estimate | Inherited estimate |
+| `UserId` | Owner ID | Owner ID |
+| `SetlistSongs` | Song blueprint | Copied from template |
+
+### Service Layer Conventions
+
+#### Method Naming Pattern
+
+**Template-Specific Methods:**
+- `CreateFromTemplateAsync` - Create performance from template
+- `GetTemplatesAsync` - Query user's templates
+- `ConvertToTemplateAsync` - Convert performance to template (optional)
+- `UpdateTemplateAsync` - Modify template (standard update with IsTemplate check)
+- `DeleteTemplateAsync` - Remove template (standard delete with IsTemplate check)
+
+**Standard CRUD (works for both):**
+- `GetSetlistsAsync` - Query with optional `isTemplate` filter
+- `GetSetlistByIdAsync` - Retrieve specific setlist
+- `CreateSetlistAsync` - Create new (set `IsTemplate` flag)
+- `UpdateSetlistAsync` - Update existing
+- `DeleteSetlistAsync` - Delete setlist
+
+#### Service Method Pattern Structure
+
+**All template operations follow this structure:**
+
+```
+1. INPUT VALIDATION
+   ↓ Validate required fields
+   ↓ Check length limits
+   ↓ Sanitize for XSS/SQL injection
+
+2. AUTHORIZATION CHECK
+   ↓ Filter by UserId in query
+   ↓ Verify template exists and user owns it
+   ↓ Return null if unauthorized (don't reveal existence)
+
+3. TEMPLATE VALIDATION
+   ↓ Confirm IsTemplate = true (for template operations)
+   ↓ Validate template state is correct
+
+4. BUSINESS LOGIC
+   ↓ Create new entities
+   ↓ Copy data with metadata preservation
+   ↓ Set appropriate flags (IsTemplate, IsActive)
+
+5. PERSISTENCE
+   ↓ Save to database
+   ↓ Use bulk operations for efficiency
+
+6. CACHE INVALIDATION
+   ↓ Clear user-specific cached data
+
+7. AUDIT LOGGING
+   ↓ Log operation for analytics
+   ↓ Include template ID for traceability
+
+8. RETURN RESULT
+   ↓ Return created entity or null
+```
+
+#### Interface Design Convention
+
+**Add template methods to existing `ISetlistService`:**
+
+```csharp
+public interface ISetlistService
+{
+    // Existing CRUD methods...
+    Task<(IEnumerable<Setlist> Setlists, int TotalCount)> GetSetlistsAsync(
+        string userId,
+        string? searchTerm = null,
+        bool? isTemplate = null,  // ← Filter for templates
+        bool? isActive = null,
+        int pageNumber = 1,
+        int pageSize = 20);
+    
+    // Template-specific methods
+    
+    /// <summary>
+    /// Creates a new performance setlist from a template
+    /// Copies all songs with complete metadata preservation
+    /// </summary>
+    /// <param name="templateId">Template to copy from</param>
+    /// <param name="userId">User ID for authorization</param>
+    /// <param name="name">Name for new performance setlist</param>
+    /// <param name="performanceDate">Optional performance date</param>
+    /// <param name="venue">Optional venue name</param>
+    /// <param name="performanceNotes">Optional performance-specific notes</param>
+    /// <returns>Created performance setlist or null if unauthorized/not found</returns>
+    /// <exception cref="ArgumentException">If validation fails</exception>
+    Task<Setlist?> CreateFromTemplateAsync(
+        int templateId,
+        string userId,
+        string name,
+        DateTime? performanceDate = null,
+        string? venue = null,
+        string? performanceNotes = null);
+}
+```
+
+### Security Requirements for Templates
+
+#### Authorization Pattern (MANDATORY)
+
+**Every template operation MUST include:**
+
+```csharp
+// 1. User-scoped query with template validation
+var template = await _context.Setlists
+    .FirstOrDefaultAsync(sl => 
+        sl.Id == templateId &&       // Specific template
+        sl.UserId == userId &&       // ← CRITICAL: User ownership
+        sl.IsTemplate == true);      // ← Template validation
+
+// 2. Return null for unauthorized (don't reveal existence)
+if (template == null)
+{
+    _logger.LogWarning(
+        "Template {TemplateId} not found or unauthorized for user {UserId}", 
+        templateId, SecureLoggingHelper.SanitizeUserId(userId));
+    return null;  // Same response for not found AND unauthorized
+}
+```
+
+**Security Anti-Pattern (NEVER DO THIS):**
+```csharp
+// ❌ WRONG: Missing user authorization
+var template = await _context.Setlists
+    .FirstOrDefaultAsync(sl => sl.Id == templateId);
+
+// ❌ WRONG: Reveals template existence to unauthorized users
+if (template == null)
+    throw new NotFoundException("Template not found");
+if (template.UserId != userId)
+    throw new UnauthorizedException("Not your template");
+```
+
+#### Input Validation Requirements
+
+**All template operations must validate:**
+
+| Parameter | Validation Rules |
+|-----------|------------------|
+| `name` | Required, 1-200 chars, XSS sanitization |
+| `userId` | Required, not null/whitespace |
+| `venue` | Optional, max 200 chars if provided |
+| `performanceNotes` | Optional, max 2000 chars if provided |
+| `description` | Optional, max 1000 chars if provided |
+
+**Validation Example:**
+```csharp
+// Step 1: Null/empty check
+if (string.IsNullOrWhiteSpace(name))
+    throw new ArgumentException("Setlist name cannot be null or empty", nameof(name));
+
+// Step 2: Length validation
+if (name.Length > 200)
+    throw new ArgumentException("Setlist name cannot exceed 200 characters", nameof(name));
+
+// Step 3: XSS prevention (use existing ValidateMaliciousInput method)
+var errors = new List<string>();
+ValidateMaliciousInput(name, "Setlist name", errors);
+if (errors.Any())
+    throw new ArgumentException($"Validation failed: {string.Join(", ", errors)}");
+```
+
+#### Secure Error Handling
+
+**Template operations must handle errors securely:**
+
+```csharp
+try
+{
+    // Template operation logic
+    var result = await CreateFromTemplateAsync(...);
+    return result;
+}
+catch (DbUpdateException ex)
+{
+    // Log detailed error server-side
+    _logger.LogError(ex, 
+        "Database error creating setlist from template {TemplateId} for user {UserId}", 
+        templateId, SecureLoggingHelper.SanitizeUserId(userId));
+    
+    // Generic error to client (don't leak database structure)
+    throw new InvalidOperationException("An error occurred while creating the setlist");
+}
+catch (ArgumentException ex)
+{
+    // Validation errors are safe to expose (expected user errors)
+    _logger.LogWarning(ex, 
+        "Validation error creating setlist from template {TemplateId}", templateId);
+    throw; // Re-throw validation exceptions
+}
+```
+
+#### Security Checklist for Template Operations
+
+- [ ] **User Authorization**: Query filters by `UserId` first
+- [ ] **Template Validation**: Verify `IsTemplate = true`
+- [ ] **Input Validation**: All string inputs validated for length and XSS
+- [ ] **Information Hiding**: Return `null` for unauthorized (don't reveal existence)
+- [ ] **Secure Logging**: User IDs sanitized in all log entries
+- [ ] **Error Handling**: Generic errors to client, detailed logs server-side
+- [ ] **Audit Trail**: Log template usage for security monitoring
+- [ ] **Cache Invalidation**: Clear cached data after modifications
+- [ ] **Immutability**: Original templates never modified during copy
+- [ ] **Resource Disposal**: Database contexts properly disposed
+
+### Testing Expectations for Templates
+
+#### Test Organization Strategy
+
+**Following strict naming conventions from project standards:**
+
+**Base Tests** (`SetlistServiceTests.cs`):
+- Core functionality: Create from template, copy songs, set flags
+- Happy path scenarios: Valid inputs, successful operations
+- Basic validation: Required fields, standard constraints
+
+**Advanced Tests** (`SetlistServiceAdvancedTests.cs`):
+- Security tests: Authorization, unauthorized access attempts
+- Input validation: XSS, SQL injection, boundary conditions
+- Edge cases: Large templates (100+ songs), empty templates
+- Performance tests: Verify <500ms for 50-song templates
+- Concurrency tests: Multiple users, simultaneous operations
+
+#### Test Coverage Requirements
+
+**Minimum Coverage Targets:**
+- **Line Coverage**: 80%+ for all template methods
+- **Branch Coverage**: 80%+ for all conditional logic
+- **Test Success Rate**: 100% (zero failing tests allowed)
+
+#### Required Test Categories
+
+**Category 1: Core Functionality Tests** (15-20 tests)
+
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldCreatePerformanceSetlist_WhenTemplateIsValid()
+{
+    // Verifies: Basic creation, flag settings, property inheritance
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldCopyAllSongs_WithCompleteMetadata()
+{
+    // Verifies: Song copying, position order, custom BPM/keys, transition notes
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldNotModifyOriginalTemplate()
+{
+    // Verifies: Template immutability, create multiple performances from same template
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldInvalidateCache_AfterCreation()
+{
+    // Verifies: Cache invalidation called, user data refreshed
+}
+```
+
+**Category 2: Authorization & Security Tests** (8-10 tests)
+
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenUserDoesNotOwnTemplate()
+{
+    // Verifies: User A cannot copy User B's template
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenSetlistIsNotTemplate()
+{
+    // Verifies: Cannot create from performance setlist (IsTemplate=false)
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldLogWarning_WhenUnauthorizedAccess()
+{
+    // Verifies: Security events logged, no information disclosure
+}
+```
+
+**Category 3: Input Validation Tests** (8-10 tests)
+
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldThrowArgumentException_WhenNameIsEmpty()
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldThrowArgumentException_WhenNameExceeds200Characters()
+
+[Theory]
+[InlineData("<script>alert('xss')</script>", "XSS script tag")]
+[InlineData("<img onerror='alert(1)'>", "XSS image tag")]
+[InlineData("'; DROP TABLE--", "SQL injection")]
+public async Task CreateFromTemplateAsync_ShouldRejectMaliciousInput_InName(
+    string maliciousName, string description)
+{
+    // Verifies: XSS/SQL injection detection in all string inputs
+}
+```
+
+**Category 4: Performance & Edge Cases** (5-7 tests)
+
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldHandleLargeTemplate_WithManySongs()
+{
+    // Verifies: 100-song template completes within 500ms target
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldHandleEmptyTemplate_WithNoSongs()
+{
+    // Verifies: Empty templates supported (edge case)
+}
+
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldCreateMultiplePerformances_FromSameTemplate()
+{
+    // Verifies: Template reusability, concurrent usage
+}
+```
+
+#### Test Pattern Examples
+
+**Standard Test Structure:**
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldCreateActiveSetlist_WhenTemplateIsValid()
+{
+    // Arrange - Setup test data
+    var userId = "user-123";
+    var template = new Setlist
+    {
+        Name = "Wedding Template",
+        Description = "Standard wedding ceremony",
+        IsTemplate = true,
+        IsActive = false,
+        UserId = userId,
+        ExpectedDurationMinutes = 45
+    };
+    _context.Setlists.Add(template);
+    await _context.SaveChangesAsync();
+    
+    // Act - Execute operation
+    var result = await _service.CreateFromTemplateAsync(
+        template.Id,
+        userId,
+        "Smith Wedding - June 15, 2025",
+        new DateTime(2025, 6, 15, 14, 0, 0),
+        "Grand Ballroom",
+        "Bride entrance: Canon in D - slow tempo");
+    
+    // Assert - Verify results with FluentAssertions
+    result.Should().NotBeNull();
+    result!.Name.Should().Be("Smith Wedding - June 15, 2025");
+    result.Venue.Should().Be("Grand Ballroom");
+    result.PerformanceDate.Should().Be(new DateTime(2025, 6, 15, 14, 0, 0));
+    result.IsTemplate.Should().BeFalse();
+    result.IsActive.Should().BeTrue();
+    result.Description.Should().Be(template.Description);
+    result.ExpectedDurationMinutes.Should().Be(45);
+}
+```
+
+**Security Test Pattern:**
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenUserDoesNotOwnTemplate()
+{
+    // Arrange
+    var owner = "user-123";
+    var unauthorized = "user-456";
+    var template = CreateTemplate(owner);
+    
+    // Act
+    var result = await _service.CreateFromTemplateAsync(
+        template.Id, unauthorized, "Unauthorized Copy");
+    
+    // Assert
+    result.Should().BeNull("users cannot copy templates they don't own");
+    
+    // Verify no data was created
+    var unauthorizedSetlists = await _context.Setlists
+        .Where(s => s.UserId == unauthorized)
+        .ToListAsync();
+    unauthorizedSetlists.Should().BeEmpty();
+}
+```
+
+#### Performance Testing Guidelines
+
+**Template operations must meet performance targets:**
+
+| Template Size | Target Time | Test Assertion |
+|---------------|-------------|----------------|
+| 10 songs | <100ms | `stopwatch.ElapsedMilliseconds.Should().BeLessThan(100)` |
+| 30 songs | <200ms | `stopwatch.ElapsedMilliseconds.Should().BeLessThan(200)` |
+| 50 songs | <300ms | `stopwatch.ElapsedMilliseconds.Should().BeLessThan(300)` |
+| 100 songs | <500ms | `stopwatch.ElapsedMilliseconds.Should().BeLessThan(500)` |
+
+**Performance Test Example:**
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldMeetPerformanceTarget_For50Songs()
+{
+    // Arrange
+    var userId = "user-123";
+    var template = CreateTemplateWithSongs(userId, songCount: 50);
+    
+    // Act
+    var stopwatch = Stopwatch.StartNew();
+    var result = await _service.CreateFromTemplateAsync(
+        template.Id, userId, "Performance Test");
+    stopwatch.Stop();
+    
+    // Assert
+    result.Should().NotBeNull();
+    result!.SetlistSongs.Should().HaveCount(50);
+    stopwatch.ElapsedMilliseconds.Should().BeLessThan(300, 
+        "50-song template should complete within 300ms");
+}
+```
+
+#### Test Naming Conventions
+
+**Follow strict naming pattern:**
+- `MethodName_Scenario_ExpectedResult`
+- Clear intent: What's being tested, under what conditions, what's expected
+- Examples:
+  - `CreateFromTemplateAsync_ShouldCreateActiveSetlist_WhenTemplateIsValid`
+  - `CreateFromTemplateAsync_ShouldReturnNull_WhenUserDoesNotOwnTemplate`
+  - `CreateFromTemplateAsync_ShouldThrowArgumentException_WhenNameIsEmpty`
+
+#### Integration Test Considerations
+
+**Template operations require database integration tests:**
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldPersistToDatabase_WithAllRelationships()
+{
+    // Arrange
+    var userId = "user-123";
+    var template = CreateTemplateWithSongs(userId, songCount: 3);
+    
+    // Act
+    var result = await _service.CreateFromTemplateAsync(
+        template.Id, userId, "Database Test");
+    
+    // Assert - Query database directly to verify persistence
+    var savedSetlist = await _context.Setlists
+        .Include(s => s.SetlistSongs)
+        .ThenInclude(ss => ss.Song)
+        .FirstOrDefaultAsync(s => s.Id == result!.Id);
+    
+    savedSetlist.Should().NotBeNull();
+    savedSetlist!.SetlistSongs.Should().HaveCount(3);
+    savedSetlist.SetlistSongs.Should().OnlyContain(ss => ss.Song != null);
+    
+    // Verify template unchanged
+    var unchangedTemplate = await _context.Setlists
+        .Include(s => s.SetlistSongs)
+        .FirstAsync(s => s.Id == template.Id);
+    unchangedTemplate.SetlistSongs.Should().HaveCount(3);
+}
+```
+
+---
+
 ## CodeQL Code Generation Standards
 
 **MANDATORY: All generated code must pass CodeQL static analysis with zero high/critical security issues.**
