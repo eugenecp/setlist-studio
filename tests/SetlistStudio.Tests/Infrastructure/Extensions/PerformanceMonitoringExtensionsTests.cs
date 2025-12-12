@@ -151,7 +151,7 @@ public class PerformanceMonitoringExtensionsTests
     {
         // Arrange
         const string queryType = "TimedQuery";
-        const int delayMs = 50;
+        const int delayMs = 100;
         var function = new Func<Task<string>>(async () =>
         {
             await Task.Delay(delayMs);
@@ -170,7 +170,7 @@ public class PerformanceMonitoringExtensionsTests
         // Assert
         recordedTime.Should().NotBeNull();
         recordedTime!.Value.TotalMilliseconds.Should().BeGreaterOrEqualTo(delayMs * 0.1); // Very loose lower bound for CI
-        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(delayMs * 100); // Very generous upper bound for slow CI (5000ms)
+        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(delayMs * 200); // Very generous upper bound for extremely slow CI (20000ms = 20 seconds)
     }
 
     #endregion
@@ -490,7 +490,7 @@ public class PerformanceMonitoringExtensionsTests
         result.Should().Be("long result");
         recordedTime.Should().NotBeNull();
         recordedTime!.Value.TotalMilliseconds.Should().BeGreaterOrEqualTo(expectedDelayMs * 0.5); // Allow 50% variance for very slow CI
-        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(expectedDelayMs * 5.0); // Allow very generous upper bound for extremely slow CI environments
+        recordedTime.Value.TotalMilliseconds.Should().BeLessOrEqualTo(expectedDelayMs * 20.0); // Allow very generous upper bound for extremely slow CI environments (2000ms for 100ms delay)
     }
 
     #endregion

@@ -494,6 +494,10 @@ public class SongService : ISongService
     {
         ValidateRequiredStringProperty(song.Title, "Song title", 200, errors);
         ValidateRequiredStringProperty(song.Artist, "Artist name", 200, errors);
+        
+        // Security validation for malicious input
+        ValidateMaliciousInput(song.Title, "Song title", errors);
+        ValidateMaliciousInput(song.Artist, "Artist name", errors);
     }
 
     private static void ValidateOptionalProperties(Song song, List<string> errors)
@@ -503,6 +507,13 @@ public class SongService : ISongService
         ValidateOptionalStringProperty(song.MusicalKey, "Musical key", 10, errors);
         ValidateOptionalStringProperty(song.Notes, "Notes", 2000, errors);
         ValidateOptionalStringProperty(song.Tags, "Tags", 500, errors);
+        
+        // Security validation for malicious input in optional fields
+        if (!string.IsNullOrEmpty(song.Album))
+            ValidatePathTraversal(song.Album, "Album name", errors);
+        
+        if (!string.IsNullOrEmpty(song.Notes))
+            ValidateMaliciousInput(song.Notes, "Notes", errors);
     }
 
     private static void ValidateNumericProperties(Song song, List<string> errors)
@@ -554,5 +565,155 @@ public class SongService : ISongService
         {
             errors.Add(customMessage);
         }
+    }
+
+    /// <summary>
+    /// Validates input for malicious patterns including XSS, SQL injection, and code injection
+    /// </summary>
+    private static void ValidateMaliciousInput(string? value, string propertyName, List<string> errors)
+    {
+        if (string.IsNullOrEmpty(value))
+            return;
+
+        // XSS patterns
+        var xssPatterns = new[]
+        {
+            "<script",
+            "</script>",
+            "<img",
+            "onerror=",
+            "javascript:",
+            "<iframe",
+            "<svg",
+            "onload=",
+            "<embed",
+            "<object"
+        };
+
+        // SQL injection patterns
+        var sqlPatterns = new[]
+        {
+            "'; DROP",
+            "' OR '1'='1",
+            "'; DELETE",
+            "'; UPDATE",
+            "EXEC(",
+            "EXECUTE(",
+            "xp_cmdshell"
+        };
+
+        // Code injection patterns
+        var codeInjectionPatterns = new[]
+        {
+            "${jndi:",
+            "${jndi:ldap",
+            "#{",
+            "{{",
+            "${{"
+        };
+
+        var lowerValue = value.ToLower();
+
+        // Check XSS patterns
+        foreach (var pattern in xssPatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLower()))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (XSS attempt detected)");
+                return;
+            }
+        }
+
+        // Check SQL injection patterns
+        foreach (var pattern in sqlPatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLower()))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (SQL injection attempt detected)");
+                return;
+            }
+        }
+
+        // Check code injection patterns
+        foreach (var pattern in codeInjectionPatterns)
+        {
+            if (value.Contains(pattern))
+            {
+                errors.Add($"{propertyName} contains potentially malicious content (Code injection attempt detected)");
+                return;
+            }
+        }
+
+        // Check for null byte injection
+        if (value.Contains('\0'))
+        {
+            errors.Add($"{propertyName} contains null byte characters");
+            return;
+        }
+
+        // Check for suspicious Unicode characters (homoglyph attacks)
+        if (ContainsSuspiciousUnicode(value))
+        {
+            errors.Add($"{propertyName} contains suspicious Unicode characters");
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Validates input for path traversal attacks
+    /// </summary>
+    private static void ValidatePathTraversal(string? value, string propertyName, List<string> errors)
+    {
+        if (string.IsNullOrEmpty(value))
+            return;
+
+        var pathTraversalPatterns = new[]
+        {
+            "../",
+            "..\\",
+            "%2e%2e%2f",
+            "%2e%2e/",
+            "..%2f",
+            "%2e%2e\\",
+            "....//",
+            "....\\\\",
+            "....//"
+        };
+
+        var lowerValue = value.ToLower();
+
+        foreach (var pattern in pathTraversalPatterns)
+        {
+            if (lowerValue.Contains(pattern.ToLower()))
+            {
+                errors.Add($"{propertyName} contains path traversal patterns");
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks for suspicious Unicode characters that might be used in homoglyph attacks
+    /// </summary>
+    private static bool ContainsSuspiciousUnicode(string value)
+    {
+        // Check for Cyrillic characters that look like Latin (homoglyph attacks)
+        foreach (char c in value)
+        {
+            // Cyrillic range that looks like Latin
+            if (c >= '\u0400' && c <= '\u04FF')
+            {
+                // Check if it's a Cyrillic character that looks like Latin
+                if (c == '\u0430' || c == '\u0435' || c == '\u043E' || c == '\u0440' || 
+                    c == '\u0441' || c == '\u0445' || c == '\u0410' || c == '\u0412' ||
+                    c == '\u0415' || c == '\u041A' || c == '\u041C' || c == '\u041D' ||
+                    c == '\u041E' || c == '\u0420' || c == '\u0421' || c == '\u0422' ||
+                    c == '\u0425')
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

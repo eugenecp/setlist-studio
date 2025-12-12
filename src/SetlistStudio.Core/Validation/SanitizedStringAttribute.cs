@@ -30,12 +30,12 @@ public class SanitizedStringAttribute : ValidationAttribute
     private static readonly Regex JavascriptPattern = new Regex(
         @"(javascript:|vbscript:|on\w+\s*=)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        TimeSpan.FromMilliseconds(100));
+        TimeSpan.FromMilliseconds(500));
 
     private static readonly Regex SqlInjectionPattern = new Regex(
         @"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION)\b)|(--)|(\bOR\b\s+\b\d+\s*=\s*\d+)|(\bAND\b\s+\b\d+\s*=\s*\d+)|(';)|('\s+(OR|AND|UNION|SELECT))",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        TimeSpan.FromMilliseconds(100));
+        TimeSpan.FromMilliseconds(500));
 
     private static readonly string[] DangerousPatterns = 
     {

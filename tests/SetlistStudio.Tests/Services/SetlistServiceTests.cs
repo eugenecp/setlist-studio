@@ -643,6 +643,388 @@ public class SetlistServiceTests : IDisposable
 
     #endregion
 
+    #region CreateFromTemplateAsync Method Tests
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldCreateActiveSetlist_WhenTemplateIsValid()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Wedding Template",
+            Description = "Standard wedding ceremony setlist",
+            IsTemplate = true,
+            IsActive = false,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        var newName = "Smith Wedding - June 2024";
+        var venue = "Grand Ballroom";
+        var performanceDate = new DateTime(2024, 6, 15);
+        var performanceNotes = "Request: No slow songs during dinner";
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            userId,
+            newName,
+            performanceDate,
+            venue,
+            performanceNotes);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Name.Should().Be(newName);
+        result.Description.Should().Be(template.Description);
+        result.Venue.Should().Be(venue);
+        result.PerformanceDate.Should().Be(performanceDate);
+        result.PerformanceNotes.Should().Be(performanceNotes);
+        result.IsTemplate.Should().BeFalse();
+        result.IsActive.Should().BeTrue();
+        result.UserId.Should().Be(userId);
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenUserUnauthorized()
+    {
+        // Arrange
+        var templateOwnerId = "user-123";
+        var differentUserId = "user-456";
+        var template = new Setlist
+        {
+            Name = "Wedding Template",
+            IsTemplate = true,
+            UserId = templateOwnerId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            differentUserId,
+            "New Setlist",
+            DateTime.UtcNow.AddDays(7));
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenSetlistIsNotTemplate()
+    {
+        // Arrange
+        var userId = "user-123";
+        var regularSetlist = new Setlist
+        {
+            Name = "Regular Performance",
+            IsTemplate = false,
+            IsActive = true,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(regularSetlist);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            regularSetlist.Id,
+            userId,
+            "New Setlist",
+            DateTime.UtcNow.AddDays(7));
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldReturnNull_WhenTemplateNotFound()
+    {
+        // Arrange
+        var userId = "user-123";
+        var nonExistentTemplateId = 99999;
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            nonExistentTemplateId,
+            userId,
+            "New Setlist",
+            DateTime.UtcNow.AddDays(7));
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldThrowArgumentException_WhenNameIsEmpty()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Template",
+            IsTemplate = true,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateFromTemplateAsync(
+                template.Id,
+                userId,
+                string.Empty,
+                DateTime.UtcNow.AddDays(7)));
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldThrowArgumentException_WhenNameTooLong()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Template",
+            IsTemplate = true,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        var tooLongName = new string('A', 201); // Exceeds 200 character limit
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateFromTemplateAsync(
+                template.Id,
+                userId,
+                tooLongName,
+                DateTime.UtcNow.AddDays(7)));
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldCopyAllSongs_WhenTemplateHasSongs()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Rock Template",
+            Description = "Classic rock setlist",
+            IsTemplate = true,
+            IsActive = false,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var song1 = new Song
+        {
+            Title = "Sweet Child O' Mine",
+            Artist = "Guns N' Roses",
+            Bpm = 125,
+            MusicalKey = "D",
+            Genre = "Rock",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var song2 = new Song
+        {
+            Title = "Bohemian Rhapsody",
+            Artist = "Queen",
+            Bpm = 72,
+            MusicalKey = "Bb",
+            Genre = "Rock",
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        _context.Songs.AddRange(song1, song2);
+        await _context.SaveChangesAsync();
+
+        var setlistSong1 = new SetlistSong
+        {
+            SetlistId = template.Id,
+            SongId = song1.Id,
+            Position = 1,
+            TransitionNotes = "Fade in",
+            PerformanceNotes = "Extended solo",
+            CustomBpm = 130,
+            CustomKey = "E",
+            IsEncore = false,
+            IsOptional = false
+        };
+
+        var setlistSong2 = new SetlistSong
+        {
+            SetlistId = template.Id,
+            SongId = song2.Id,
+            Position = 2,
+            TransitionNotes = "Pause for effect",
+            PerformanceNotes = "Full band harmony",
+            IsEncore = true,
+            IsOptional = true
+        };
+
+        _context.SetlistSongs.AddRange(setlistSong1, setlistSong2);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            userId,
+            "New Rock Show",
+            DateTime.UtcNow.AddDays(7),
+            "Rock Arena");
+
+        // Assert
+        result.Should().NotBeNull();
+
+        var copiedSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == result!.Id)
+            .OrderBy(ss => ss.Position)
+            .ToListAsync();
+
+        copiedSongs.Should().HaveCount(2);
+
+        // Verify first song copy
+        var copiedSong1 = copiedSongs[0];
+        copiedSong1.SongId.Should().Be(song1.Id);
+        copiedSong1.Position.Should().Be(1);
+        copiedSong1.TransitionNotes.Should().Be("Fade in");
+        copiedSong1.PerformanceNotes.Should().Be("Extended solo");
+        copiedSong1.CustomBpm.Should().Be(130);
+        copiedSong1.CustomKey.Should().Be("E");
+        copiedSong1.IsEncore.Should().BeFalse();
+        copiedSong1.IsOptional.Should().BeFalse();
+
+        // Verify second song copy
+        var copiedSong2 = copiedSongs[1];
+        copiedSong2.SongId.Should().Be(song2.Id);
+        copiedSong2.Position.Should().Be(2);
+        copiedSong2.TransitionNotes.Should().Be("Pause for effect");
+        copiedSong2.PerformanceNotes.Should().Be("Full band harmony");
+        copiedSong2.CustomBpm.Should().BeNull();
+        copiedSong2.CustomKey.Should().BeNull();
+        copiedSong2.IsEncore.Should().BeTrue();
+        copiedSong2.IsOptional.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldSetCorrectFlags_WhenCreatingFromTemplate()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Corporate Event Template",
+            IsTemplate = true,
+            IsActive = false,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            userId,
+            "ABC Corp Holiday Party",
+            DateTime.UtcNow.AddDays(30));
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.IsTemplate.Should().BeFalse("created setlist should be a regular performance setlist");
+        result.IsActive.Should().BeTrue("created setlist should be active for performance");
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldHandleEmptyTemplate_WhenTemplateHasNoSongs()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Empty Template",
+            Description = "Template with no songs yet",
+            IsTemplate = true,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            userId,
+            "New Empty Setlist",
+            DateTime.UtcNow.AddDays(7));
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("New Empty Setlist");
+
+        var copiedSongs = await _context.SetlistSongs
+            .Where(ss => ss.SetlistId == result.Id)
+            .ToListAsync();
+
+        copiedSongs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateFromTemplateAsync_ShouldHandleNullOptionalParameters()
+    {
+        // Arrange
+        var userId = "user-123";
+        var template = new Setlist
+        {
+            Name = "Simple Template",
+            IsTemplate = true,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Setlists.Add(template);
+        await _context.SaveChangesAsync();
+
+        // Act - Pass null for all optional parameters
+        var result = await _service.CreateFromTemplateAsync(
+            template.Id,
+            userId,
+            "New Setlist",
+            null,
+            null,
+            null);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.PerformanceDate.Should().BeNull();
+        result.Venue.Should().BeNull();
+        result.PerformanceNotes.Should().BeNull();
+        result.IsTemplate.Should().BeFalse();
+        result.IsActive.Should().BeTrue();
+    }
+
+    #endregion
+
     #region Additional Edge Cases
 
     [Fact]
