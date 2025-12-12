@@ -122,12 +122,13 @@ public class SetlistStudioDbContextTests : IDisposable
         var performanceNotesProperty = setlistEntity.FindProperty("PerformanceNotes");
         performanceNotesProperty!.GetMaxLength().Should().Be(2000);
 
-        // Check indexes (updated count due to query optimization indexes)
+        // Check indexes (updated count due to query optimization indexes and template feature)
         var indexes = setlistEntity.GetIndexes().ToList();
-        indexes.Should().HaveCount(8); // Updated from 4 to 8 due to new performance indexes
+        indexes.Should().HaveCount(9); // Updated from 8 to 9 due to SourceTemplateId index
         
         // Single column indexes
         indexes.Should().Contain(i => i.Properties.Count == 1 && i.Properties.First().Name == "UserId");
+        indexes.Should().Contain(i => i.Properties.Count == 1 && i.Properties.First().Name == "SourceTemplateId");
         
         // Composite indexes
         indexes.Should().Contain(i => i.Properties.Count == 2 && 

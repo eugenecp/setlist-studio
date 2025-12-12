@@ -42,6 +42,16 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SetlistSong> SetlistSongs { get; set; } = null!;
 
     /// <summary>
+    /// Reusable setlist templates for common performance scenarios
+    /// </summary>
+    public DbSet<SetlistTemplate> SetlistTemplates { get; set; } = null!;
+
+    /// <summary>
+    /// Junction table linking songs to templates with ordering and notes
+    /// </summary>
+    public DbSet<SetlistTemplateSong> SetlistTemplateSongs { get; set; } = null!;
+
+    /// <summary>
     /// Audit logs for tracking data changes
     /// </summary>
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
@@ -145,6 +155,60 @@ public class SetlistStudioDbContext : IdentityDbContext<ApplicationUser>
             // Index for ordering
             entity.HasIndex(ss => new { ss.SetlistId, ss.Position });
         });
+
+        // Configure SetlistTemplate entity
+        builder.Entity<SetlistTemplate>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(200);
+            entity.Property(t => t.Description).HasMaxLength(500);
+            entity.Property(t => t.Category).HasMaxLength(100);
+            entity.Property(t => t.UserId).IsRequired();
+
+            // Foreign key relationship to User
+            entity.HasOne(t => t.User)
+                  .WithMany()
+                  .HasForeignKey(t => t.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes for performance (SCALE principle)
+            entity.HasIndex(t => new { t.UserId, t.IsPublic });
+            entity.HasIndex(t => t.Category);
+            entity.HasIndex(t => t.CreatedAt);
+            entity.HasIndex(t => t.UsageCount);
+        });
+
+        // Configure SetlistTemplateSong junction entity
+        builder.Entity<SetlistTemplateSong>(entity =>
+        {
+            entity.HasKey(ts => ts.Id);
+            entity.Property(ts => ts.Position).IsRequired();
+            entity.Property(ts => ts.Notes).HasMaxLength(500);
+            entity.Property(ts => ts.SetlistTemplateId).IsRequired();
+            entity.Property(ts => ts.SongId).IsRequired();
+
+            // Foreign key relationships
+            entity.HasOne(ts => ts.SetlistTemplate)
+                  .WithMany(t => t.Songs)
+                  .HasForeignKey(ts => ts.SetlistTemplateId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(ts => ts.Song)
+                  .WithMany()
+                  .HasForeignKey(ts => ts.SongId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes for performance
+            entity.HasIndex(ts => new { ts.SetlistTemplateId, ts.Position });
+            entity.HasIndex(ts => ts.SongId);
+        });
+
+        // Update Setlist configuration to add SourceTemplate relationship
+        builder.Entity<Setlist>()
+            .HasOne(sl => sl.SourceTemplate)
+            .WithMany(t => t.GeneratedSetlists)
+            .HasForeignKey(sl => sl.SourceTemplateId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Configure AuditLog entity
         builder.Entity<AuditLog>(entity =>

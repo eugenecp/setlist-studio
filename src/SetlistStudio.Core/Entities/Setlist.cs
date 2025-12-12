@@ -79,9 +79,20 @@ public class Setlist
     public string UserId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Optional foreign key to the template this setlist was created from
+    /// USER DELIGHT: Track which template was used to create this setlist
+    /// </summary>
+    public int? SourceTemplateId { get; set; }
+
+    /// <summary>
     /// Navigation property to the user
     /// </summary>
     public virtual ApplicationUser User { get; set; } = null!;
+
+    /// <summary>
+    /// Navigation property to the source template (if created from template)
+    /// </summary>
+    public virtual SetlistTemplate? SourceTemplate { get; set; }
 
     /// <summary>
     /// Navigation property to the songs in this setlist (ordered)

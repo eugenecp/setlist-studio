@@ -24,6 +24,7 @@
 ### Core Features
 - **Song Management**: Artists, songs, metadata (BPM, keys, genres)
 - **Setlist Creation**: Performance planning with song order and transitions
+- **Setlist Templates**: Reusable blueprints for common performance types (weddings, bar gigs, concerts)
 - **User Authentication**: Secure multi-user access with OAuth providers
 
 ### Architecture Layers
@@ -117,6 +118,389 @@ When evaluating customer delight, always provide:
 - **Dependency Management**: Technology choices prioritize long-term sustainability over cutting-edge features
 - **Onboarding Efficiency**: New team members should be productive within days, not months
 - **Creative Industry Focus**: All development decisions must consider real-world music performance needs
+
+---
+
+## Setlist Template Feature
+
+### Feature Overview
+
+**Setlist Templates** provide musicians with reusable blueprints for common performance scenarios, enabling efficient setlist creation from proven song combinations.
+
+**User Value Proposition:**
+- 🎵 **Save Time**: Create setlists in seconds from proven templates
+- 🎭 **Consistency**: Maintain quality across similar performance types
+- 📊 **Learn & Share**: Discover effective setlist structures from the community
+- 🔄 **Adapt & Evolve**: Start with templates, customize for specific gigs
+
+**Real-World Use Cases:**
+- Wedding band saves "Classic Wedding Reception" template (40 songs, 3 hours)
+- Bar musician creates "Friday Night Blues Set" template for weekly gigs
+- Cover band shares "80s Rock Night" template with other musicians
+- Solo artist maintains templates for different venue types and audiences
+
+### Design Philosophy
+
+**Templates vs Setlists:**
+- **Template**: Reusable blueprint (no performance date, generic structure)
+- **Setlist**: Performance instance (specific date/venue, can deviate from template)
+
+**Core Principle**: Templates are *blueprints*, setlists are *instances*
+```
+Template (Blueprint) → [Conversion] → Setlist (Performance Instance)
+                          ↓
+                  - Copy song structure
+                  - Set performance date
+                  - Allow modifications
+                  - Track usage analytics
+```
+
+### Entity Structure Pattern
+
+**SetlistTemplate Entity:**
+```csharp
+public class SetlistTemplate
+{
+    public int Id { get; set; }
+    
+    // Core Properties (WORKS principle)
+    [Required, MaxLength(200)]
+    [SanitizedString(AllowHtml = false, MaxLength = 200)]
+    public string Name { get; set; }  // "Wedding Set - Classic Rock"
+    
+    [MaxLength(500)]
+    [SanitizedString(AllowHtml = false, MaxLength = 500)]
+    public string? Description { get; set; }
+    
+    [MaxLength(100)]
+    public string? Category { get; set; }  // "Wedding", "Bar Gig", "Concert"
+    
+    // Ownership & Sharing (SECURE principle)
+    [Required]
+    public string UserId { get; set; }  // CRITICAL: User ownership
+    
+    public bool IsPublic { get; set; }  // Default: false (private)
+    
+    // Performance Metadata (USER DELIGHT principle)
+    public int EstimatedDurationMinutes { get; set; }
+    
+    public int UsageCount { get; set; }  // Analytics: how many times used
+    
+    // Audit Trail (MAINTAINABLE principle)
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    
+    // Navigation Properties
+    public ICollection<SetlistTemplateSong> Songs { get; set; } = new List<SetlistTemplateSong>();
+}
+```
+
+**SetlistTemplateSong Join Entity:**
+```csharp
+public class SetlistTemplateSong
+{
+    public int Id { get; set; }
+    
+    public int SetlistTemplateId { get; set; }
+    public SetlistTemplate SetlistTemplate { get; set; } = null!;
+    
+    public int SongId { get; set; }
+    public Song Song { get; set; } = null!;
+    
+    public int Position { get; set; }  // Song order in template
+    
+    [MaxLength(500)]
+    [SanitizedString(AllowHtml = false, MaxLength = 500)]
+    public string? Notes { get; set; }  // "Acoustic version", "Extended solo"
+}
+```
+
+**Database Relationships:**
+```
+User (1) ──────────────< (Many) SetlistTemplate
+SetlistTemplate (1) ───< (Many) SetlistTemplateSong
+Song (1) ──────────────< (Many) SetlistTemplateSong
+SetlistTemplate (1) ───< (Many) Setlist (via SourceTemplateId)
+```
+
+### Service Layer Conventions
+
+**Interface Pattern:**
+```csharp
+public interface ISetlistTemplateService
+{
+    // CRUD Operations (WORKS principle)
+    Task<SetlistTemplate> CreateTemplateAsync(SetlistTemplate template, IEnumerable<int> songIds, string userId);
+    Task<SetlistTemplate?> GetTemplateByIdAsync(int templateId, string userId);
+    Task<IEnumerable<SetlistTemplate>> GetTemplatesAsync(string userId, bool includePublic = true, string? category = null);
+    Task<SetlistTemplate?> UpdateTemplateAsync(SetlistTemplate template, string userId);
+    Task<bool> DeleteTemplateAsync(int templateId, string userId);
+    
+    // Song Management (USER DELIGHT principle)
+    Task<bool> AddSongToTemplateAsync(int templateId, int songId, int position, string userId);
+    Task<bool> RemoveSongFromTemplateAsync(int templateId, int songId, string userId);
+    Task<bool> ReorderTemplateSongsAsync(int templateId, IEnumerable<int> songIds, string userId);
+    
+    // Sharing & Discovery (SCALE principle)
+    Task<bool> SetTemplateVisibilityAsync(int templateId, bool isPublic, string userId);
+    Task<(IEnumerable<SetlistTemplate> Templates, int TotalCount)> GetPublicTemplatesAsync(
+        string? category = null, int pageNumber = 1, int pageSize = 20);
+    
+    // Conversion (WORKS principle)
+    Task<Setlist> ConvertTemplateToSetlistAsync(int templateId, DateTime performanceDate, string? venue, string userId);
+    
+    // Analytics (USER DELIGHT principle)
+    Task<TemplateStatistics> GetTemplateStatisticsAsync(int templateId, string userId);
+}
+```
+
+### Security Requirements (SECURE Principle)
+
+**MANDATORY Authorization Patterns:**
+
+**1. User Ownership Validation:**
+```csharp
+// CREATE: Always set userId from authentication context, NEVER from request
+public async Task<SetlistTemplate> CreateTemplateAsync(SetlistTemplate template, IEnumerable<int> songIds, string userId)
+{
+    // CRITICAL: Verify user owns all songs
+    var userSongs = await _context.Songs
+        .Where(s => s.UserId == userId && songIds.Contains(s.Id))
+        .ToListAsync();
+    
+    if (userSongs.Count != songIds.Count())
+        throw new UnauthorizedAccessException("Cannot add songs you don't own");
+    
+    template.UserId = userId;  // NEVER trust from request body
+    template.IsPublic = false;  // Default private
+    template.CreatedAt = DateTime.UtcNow;
+    
+    // ... implementation
+}
+```
+
+**2. Public Template Access:**
+```csharp
+// READ: Allow access if public OR owned by user
+public async Task<SetlistTemplate?> GetTemplateByIdAsync(int templateId, string userId)
+{
+    return await _context.SetlistTemplates
+        .Include(t => t.Songs).ThenInclude(ts => ts.Song)
+        .FirstOrDefaultAsync(t => t.Id == templateId && (t.UserId == userId || t.IsPublic));
+}
+```
+
+**3. Modification Rights:**
+```csharp
+// UPDATE/DELETE: Only owner can modify
+public async Task<SetlistTemplate?> UpdateTemplateAsync(SetlistTemplate template, string userId)
+{
+    var existing = await _context.SetlistTemplates
+        .FirstOrDefaultAsync(t => t.Id == template.Id && t.UserId == userId);
+    
+    if (existing == null)
+        return null;  // Not found or unauthorized (same response prevents info leak)
+    
+    // Update allowed fields...
+}
+```
+
+**4. Template Conversion Security:**
+```csharp
+// CONVERT: User creates setlist from template, but uses their own songs
+public async Task<Setlist> ConvertTemplateToSetlistAsync(int templateId, DateTime performanceDate, string? venue, string userId)
+{
+    // Security: Verify user can access template (public OR owned)
+    var template = await _context.SetlistTemplates
+        .Include(t => t.Songs).ThenInclude(ts => ts.Song)
+        .FirstOrDefaultAsync(t => t.Id == templateId && (t.UserId == userId || t.IsPublic));
+    
+    if (template == null)
+        throw new ForbiddenException("Template not found or access denied");
+    
+    var setlist = new Setlist
+    {
+        Name = template.Name,
+        PerformanceDate = performanceDate,
+        Venue = venue,
+        UserId = userId,  // CRITICAL: New setlist owned by current user
+        SourceTemplateId = templateId,
+        CreatedAt = DateTime.UtcNow
+    };
+    
+    // Security: Match songs by Artist+Title in user's library
+    foreach (var templateSong in template.Songs.OrderBy(s => s.Position))
+    {
+        var userSong = await _context.Songs
+            .FirstOrDefaultAsync(s => 
+                s.UserId == userId &&  // User's own songs only
+                s.Artist == templateSong.Song.Artist &&
+                s.Title == templateSong.Song.Title);
+        
+        if (userSong != null)
+        {
+            setlist.Songs.Add(new SetlistSong
+            {
+                SongId = userSong.Id,
+                Position = templateSong.Position,
+                Notes = templateSong.Notes
+            });
+        }
+    }
+    
+    template.UsageCount++;
+    await _context.SaveChangesAsync();
+    return setlist;
+}
+```
+
+**Security Threats & Mitigations:**
+
+| Threat | Mitigation |
+|--------|------------|
+| Unauthorized template access | Filter by `UserId == currentUserId OR IsPublic` |
+| Song ownership bypass | Validate user owns all songs before adding |
+| Template modification by non-owner | Verify `UserId == currentUserId` before update/delete |
+| Cross-user data leakage | Use user's songs during conversion, not template owner's |
+| Input validation bypass | Apply `SanitizedString` attributes to all text fields |
+
+### Database Configuration (SCALE Principle)
+
+**Required Indexes for Performance:**
+```csharp
+// In DbContext OnModelCreating:
+modelBuilder.Entity<SetlistTemplate>(entity =>
+{
+    entity.HasIndex(t => new { t.UserId, t.IsPublic });  // Template listing
+    entity.HasIndex(t => t.Category);  // Category filtering
+    entity.HasIndex(t => t.CreatedAt);  // Recent templates
+    entity.HasIndex(t => t.UsageCount);  // Popular templates
+});
+
+modelBuilder.Entity<SetlistTemplateSong>(entity =>
+{
+    entity.HasIndex(ts => new { ts.SetlistTemplateId, ts.Position });  // Song ordering
+    entity.HasIndex(ts => ts.SongId);  // Song lookup
+});
+```
+
+**Performance Benchmarks:**
+- Template creation: <100ms
+- Template → setlist conversion (50 songs): <500ms
+- Public template listing (paginated): <200ms
+- Template statistics calculation: <50ms
+
+### Testing Expectations
+
+**Test File Organization:**
+- **SetlistTemplateServiceTests.cs**: Core CRUD operations, authorization, conversion
+- **SetlistTemplateServiceAdvancedTests.cs**: Edge cases, large templates (100+ songs), concurrent operations
+
+**Required Test Categories:**
+
+**1. WORKS Principle Tests:**
+```csharp
+[Fact]
+public async Task CreateTemplateAsync_WithValidData_CreatesTemplate()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_WithValidTemplate_CreatesSetlist()
+
+[Fact]
+public async Task GetTemplatesAsync_ReturnsUserTemplatesAndPublicTemplates()
+```
+
+**2. SECURE Principle Tests:**
+```csharp
+[Fact]
+public async Task CreateTemplateAsync_WithUnauthorizedSongs_ThrowsException()
+
+[Fact]
+public async Task UpdateTemplateAsync_WhenNotOwner_ReturnsNull()
+
+[Fact]
+public async Task GetTemplateByIdAsync_WhenPrivateAndNotOwner_ReturnsNull()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_UsesCurrentUserSongs_NotTemplateOwnerSongs()
+```
+
+**3. SCALE Principle Tests:**
+```csharp
+[Fact]
+public async Task GetPublicTemplatesAsync_WithPagination_ReturnsCorrectPage()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_WithLargeTemplate_CompletesWithinTimeout()
+```
+
+**4. MAINTAINABLE Principle Tests:**
+```csharp
+[Fact]
+public async Task CreateTemplateAsync_SetsAuditFields_Correctly()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_IncrementsUsageCount()
+```
+
+**5. USER DELIGHT Principle Tests:**
+```csharp
+[Fact]
+public async Task GetTemplateStatisticsAsync_ReturnsAccurateMetrics()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_PreservesNotesFromTemplate()
+
+[Fact]
+public async Task ConvertTemplateToSetlistAsync_WhenSongMissing_ContinuesWithAvailableSongs()
+```
+
+**Coverage Requirements:**
+- **Line Coverage**: 80%+ per file
+- **Branch Coverage**: 80%+ per file
+- **Security Coverage**: 100% of all authorization paths tested
+
+### Implementation Checklist
+
+**Phase 1: Entity Models**
+- [ ] Create `SetlistTemplate` entity with validation attributes
+- [ ] Create `SetlistTemplateSong` join entity
+- [ ] Add database migration with indexes
+- [ ] Update `Setlist` entity with `SourceTemplateId` (optional tracking)
+
+**Phase 2: Service Layer (TDD Approach)**
+- [ ] Create `SetlistTemplateServiceTests.cs` with comprehensive test cases
+- [ ] Implement `ISetlistTemplateService` interface
+- [ ] Implement `SetlistTemplateService` with security-first approach
+- [ ] Verify 100% test success, 80%+ coverage
+
+**Phase 3: API Layer**
+- [ ] Create `SetlistTemplateController` with authorization
+- [ ] Add rate limiting and security headers
+- [ ] Implement conversion endpoint
+- [ ] Add Swagger documentation
+
+**Phase 4: User Interface**
+- [ ] Create template creation Blazor component
+- [ ] Add template gallery (public templates)
+- [ ] Implement template → setlist conversion UI
+- [ ] Add template management page
+
+### User Delight Features
+
+**Musician-Focused Experience:**
+- 🎵 **Quick Actions**: "Use This Template" button for instant conversion
+- 📊 **Usage Analytics**: "Used 12 times, avg 3.2 hours"
+- 🔍 **Smart Filtering**: Category, duration, song count filters
+- 🌐 **Community Discovery**: Browse popular public templates
+- ⚡ **Fast Performance**: Template loads <200ms, conversion <500ms
+- 📱 **Mobile Optimized**: Create/use templates on tablets backstage
+
+**Example User Workflows:**
+1. **Create Template**: "Save my 'Classic Rock Wedding' setlist as a template for future gigs"
+2. **Use Template**: "Load my 'Friday Blues Night' template for this week's bar gig"
+3. **Discover Templates**: "Browse public 'Jazz Standards' templates for inspiration"
+4. **Customize**: "Start with 'Wedding Template', add client's special requests"
 
 ---
 
@@ -1449,6 +1833,473 @@ Setlist Studio maintains **strict security standards** that must be followed for
 - Apply ValidateAntiForgeryToken attribute to state-changing endpoints
 - Configure CSRF tokens for AJAX requests
 - Use SameSite=Strict and Secure cookie policies
+
+---
+
+### Specific Validation Rules for Musical Data
+
+#### BPM (Beats Per Minute) Validation
+```csharp
+[BpmRange(40, 250)]
+public int? Bpm { get; set; }
+```
+**Requirements:**
+- **Range**: 40-250 BPM (realistic musical range)
+- **Why**: Prevents unrealistic values that could indicate attacks
+- **Examples**:
+  - ✅ Valid: 60 (ballad), 120 (pop), 180 (fast rock), 250 (speedcore)
+  - ❌ Invalid: 0, -50, 5000, 999999
+- **Error**: "BPM must be between 40 and 250 (typical musical range)"
+
+#### Musical Key Validation
+```csharp
+[MusicalKey]
+public string? MusicalKey { get; set; }
+```
+**Requirements:**
+- **Valid Keys**: C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B (major)
+- **Valid Minor Keys**: Cm, C#m, Dbm, Dm, D#m, Ebm, Em, Fm, F#m, Gbm, Gm, G#m, Abm, Am, A#m, Bbm, Bm
+- **Pattern**: `^[A-Ga-g][#b]?m?$` (max 100ms regex timeout)
+- **Case-Insensitive**: Accepts "Am", "am", "aM"
+- **Normalization**: Auto-convert to standard notation (Am, F#m, Bb)
+- **Examples**:
+  - ✅ Valid: "C", "F#m", "Bb", "Am", "Dbm"
+  - ❌ Invalid: "H", "C##", "InvalidKey", "<script>", "'; DROP TABLE"
+- **Error**: "Musical key must be a valid key signature (e.g., C, F#, Bb, Am, F#m)"
+
+#### String Field Validation
+```csharp
+[SanitizedString(AllowHtml = false, AllowSpecialCharacters = true, MaxLength = 200)]
+public string Title { get; set; }
+```
+**Requirements:**
+- **XSS Prevention**: Blocks `<script>`, `</script>`, `javascript:`, `onerror=`, etc.
+- **SQL Injection Prevention**: Blocks SQL keywords (SELECT, INSERT, DELETE, UNION, etc.)
+- **Musical Characters**: Allows ♭, ♯, apostrophes, hyphens, accents (é, ñ)
+- **Length Limits**:
+  - Title: 200 characters
+  - Artist: 200 characters
+  - Album: 200 characters
+  - Genre: 50 characters
+  - Notes: 2000 characters
+  - Tags: 500 characters
+- **Dangerous Patterns**: Rejects content with `eval()`, `document.cookie`, `window.location`
+- **Examples**:
+  - ✅ Valid: "Bohemian Rhapsody", "Can't Help Falling in Love", "Señorita", "C'est La Vie"
+  - ❌ Invalid: `"<script>alert(1)</script>"`, `"'; DROP TABLE Songs; --"`, `"javascript:void(0)"`
+- **Error**: "Field contains potentially dangerous content. Please remove HTML tags, scripts, and unsafe characters."
+
+#### Duration Validation
+```csharp
+[Range(1, 3600)] // 1 second to 1 hour
+public int? DurationSeconds { get; set; }
+```
+**Requirements:**
+- **Range**: 1-3600 seconds (1 second to 1 hour)
+- **Why**: Prevents negative values, zero, or unrealistic durations
+- **Examples**:
+  - ✅ Valid: 180 (3 minutes), 240 (4 minutes), 600 (10 minutes)
+  - ❌ Invalid: -100, 0, 7200 (2 hours), 999999
+- **Error**: "Duration must be between 1 second and 1 hour"
+
+#### Difficulty Rating Validation
+```csharp
+[Range(1, 5)]
+public int? DifficultyRating { get; set; }
+```
+**Requirements:**
+- **Range**: 1-5 scale (1=Easy, 5=Expert)
+- **Why**: Prevents invalid ratings that could break UI/reporting
+- **Examples**:
+  - ✅ Valid: 1, 2, 3, 4, 5
+  - ❌ Invalid: 0, 6, -1, 100
+- **Error**: "Difficulty rating must be between 1 and 5"
+
+---
+
+### Authorization Patterns & User Ownership
+
+#### Pattern 1: Read Operations - ALWAYS Filter by UserId
+```csharp
+// ✅ CORRECT: Filter by userId in WHERE clause
+public async Task<Song?> GetSongByIdAsync(int songId, string userId)
+{
+    var song = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+    
+    if (song == null)
+    {
+        _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", 
+            songId, SecureLoggingHelper.SanitizeUserId(userId));
+        return null;
+    }
+    
+    return song;
+}
+
+// ❌ WRONG: Check after retrieval (vulnerable to timing attacks)
+public async Task<Song?> GetSongByIdAsync_WRONG(int songId, string userId)
+{
+    var song = await _context.Songs.FirstOrDefaultAsync(s => s.Id == songId);
+    
+    if (song?.UserId != userId)
+        return null;
+    
+    return song;
+}
+```
+**Why this matters**: Filtering at database level prevents unauthorized data from ever leaving the database.
+
+#### Pattern 2: Create Operations - Set UserId from Authentication
+```csharp
+// ✅ CORRECT: Set userId from authenticated user, not request
+[HttpPost]
+public async Task<IActionResult> CreateSong([FromBody] CreateSongRequest request)
+{
+    var userId = SecureUserContext.GetSanitizedUserId(User);  // From auth context
+    
+    var song = new Song
+    {
+        Title = request.Title,
+        Artist = request.Artist,
+        UserId = userId  // ← NEVER from request body
+    };
+    
+    var created = await _songService.CreateSongAsync(song);
+    return CreatedAtAction(nameof(GetSong), new { id = created.Id }, created);
+}
+
+// ❌ WRONG: Trust userId from request (mass assignment vulnerability)
+public async Task<IActionResult> CreateSong_WRONG([FromBody] Song song)
+{
+    // Attacker could set song.UserId to someone else's ID
+    var created = await _songService.CreateSongAsync(song);
+    return Ok(created);
+}
+```
+
+#### Pattern 3: Update Operations - Verify Ownership Before Modification
+```csharp
+// ✅ CORRECT: Verify ownership, then update
+public async Task<Song?> UpdateSongAsync(Song song, string userId)
+{
+    var existingSong = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == song.Id && s.UserId == userId);
+
+    if (existingSong == null)
+    {
+        _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", 
+            song.Id, SecureLoggingHelper.SanitizeUserId(userId));
+        return null;  // 404 or 403 - don't reveal which
+    }
+
+    // Update only allowed fields
+    existingSong.Title = song.Title;
+    existingSong.Artist = song.Artist;
+    // ... other fields
+    existingSong.UpdatedAt = DateTime.UtcNow;
+    
+    await _context.SaveChangesAsync();
+    return existingSong;
+}
+
+// ❌ WRONG: No ownership verification
+public async Task<Song?> UpdateSongAsync_WRONG(Song song)
+{
+    _context.Songs.Update(song);  // Could update anyone's song!
+    await _context.SaveChangesAsync();
+    return song;
+}
+```
+
+#### Pattern 4: Delete Operations - Verify Ownership Before Deletion
+```csharp
+// ✅ CORRECT: Verify ownership before delete
+public async Task<bool> DeleteSongAsync(int songId, string userId)
+{
+    var song = await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == songId && s.UserId == userId);
+
+    if (song == null)
+    {
+        _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", 
+            songId, SecureLoggingHelper.SanitizeUserId(userId));
+        return false;
+    }
+
+    _context.Songs.Remove(song);
+    await _context.SaveChangesAsync();
+    
+    await _auditLogService.LogAuditAsync("DELETE", nameof(Song), songId.ToString(), userId, 
+        new { song.Title, song.Artist });
+    
+    return true;
+}
+
+// ❌ WRONG: No ownership verification
+public async Task<bool> DeleteSongAsync_WRONG(int songId)
+{
+    var song = await _context.Songs.FindAsync(songId);
+    if (song != null)
+    {
+        _context.Songs.Remove(song);
+        await _context.SaveChangesAsync();
+    }
+    return true;
+}
+```
+
+#### Pattern 5: List/Query Operations - Filter Collections by UserId
+```csharp
+// ✅ CORRECT: Always start with userId filter
+public async Task<(IEnumerable<Song> Songs, int TotalCount)> GetSongsAsync(
+    string userId,
+    string? searchTerm = null,
+    string? genre = null,
+    int pageNumber = 1,
+    int pageSize = 20)
+{
+    // Step 1: Filter by userId FIRST (most selective)
+    var query = _context.Songs.Where(s => s.UserId == userId);
+    
+    // Step 2: Apply additional filters
+    if (!string.IsNullOrWhiteSpace(genre))
+        query = query.Where(s => s.Genre == genre);
+    
+    if (!string.IsNullOrWhiteSpace(searchTerm))
+    {
+        var lower = searchTerm.ToLower();
+        query = query.Where(s => 
+            s.Title.ToLower().Contains(lower) ||
+            s.Artist.ToLower().Contains(lower));
+    }
+    
+    // Step 3: Pagination
+    var totalCount = await query.CountAsync();
+    var songs = await query
+        .OrderBy(s => s.Artist)
+        .ThenBy(s => s.Title)
+        .Skip((pageNumber - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync();
+    
+    return (songs, totalCount);
+}
+
+// ❌ WRONG: No userId filter - exposes all users' data
+public async Task<IEnumerable<Song>> GetSongsAsync_WRONG(string? genre = null)
+{
+    var query = _context.Songs.AsQueryable();
+    
+    if (!string.IsNullOrWhiteSpace(genre))
+        query = query.Where(s => s.Genre == genre);
+    
+    return await query.ToListAsync();  // Returns ALL users' songs!
+}
+```
+
+---
+
+### Security Anti-Patterns (What NOT to Do)
+
+#### Anti-Pattern 1: ❌ Trusting Client-Side Data
+```csharp
+// ❌ WRONG: Accepting userId from request body
+[HttpPost]
+public async Task<IActionResult> CreateSong([FromBody] Song song)
+{
+    // Attacker sets song.UserId = "victim-user-id"
+    await _songService.CreateSongAsync(song);
+    return Ok();
+}
+
+// ✅ CORRECT: Get userId from authentication context
+[HttpPost]
+public async Task<IActionResult> CreateSong([FromBody] CreateSongRequest request)
+{
+    var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException();
+    var song = new Song { UserId = userId, /* ... */ };
+    await _songService.CreateSongAsync(song);
+    return Ok();
+}
+```
+
+#### Anti-Pattern 2: ❌ Exposing Internal Error Details
+```csharp
+// ❌ WRONG: Leaking stack traces and database details
+catch (Exception ex)
+{
+    return BadRequest(ex.ToString());  // Exposes internal paths, SQL queries
+}
+
+// ✅ CORRECT: Generic error message, detailed server logs
+catch (Exception ex)
+{
+    _logger.LogError(ex, "Error creating song for user {UserId}", sanitizedUserId);
+    return Problem("An error occurred while processing your request");
+}
+```
+
+#### Anti-Pattern 3: ❌ SQL String Concatenation
+```csharp
+// ❌ WRONG: Vulnerable to SQL injection
+public async Task<IEnumerable<Song>> SearchSongs_WRONG(string searchTerm)
+{
+    var sql = $"SELECT * FROM Songs WHERE Title LIKE '%{searchTerm}%'";
+    return await _context.Songs.FromSqlRaw(sql).ToListAsync();
+}
+
+// ✅ CORRECT: Parameterized query via LINQ
+public async Task<IEnumerable<Song>> SearchSongs(string userId, string searchTerm)
+{
+    var lower = searchTerm.ToLower();
+    return await _context.Songs
+        .Where(s => s.UserId == userId && s.Title.ToLower().Contains(lower))
+        .ToListAsync();
+}
+```
+
+#### Anti-Pattern 4: ❌ Logging Sensitive Data
+```csharp
+// ❌ WRONG: Logging user email addresses and raw input
+_logger.LogInformation("User {Email} searched for: {Query}", user.Email, searchQuery);
+
+// ✅ CORRECT: Sanitize userId and user input
+var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+var sanitizedQuery = SecureLoggingHelper.SanitizeMessage(searchQuery);
+_logger.LogInformation("User {UserId} searched for: {Query}", sanitizedUserId, sanitizedQuery);
+```
+
+#### Anti-Pattern 5: ❌ Missing Input Validation
+```csharp
+// ❌ WRONG: No validation, accepts any BPM value
+public class Song
+{
+    public int? Bpm { get; set; }  // Could be -9999999 or 999999999
+}
+
+// ✅ CORRECT: Validation attributes enforce realistic ranges
+public class Song
+{
+    [BpmRange(40, 250)]
+    public int? Bpm { get; set; }
+}
+```
+
+#### Anti-Pattern 6: ❌ Client-Side Only Authorization
+```csharp
+// ❌ WRONG: Only checking in JavaScript/Blazor UI
+@if (song.UserId == CurrentUserId)
+{
+    <button @onclick="DeleteSong">Delete</button>
+}
+
+// ✅ CORRECT: Always verify server-side
+[HttpDelete("{id}")]
+[Authorize]
+public async Task<IActionResult> DeleteSong(int id)
+{
+    var userId = User.Identity?.Name ?? throw new UnauthorizedAccessException();
+    var success = await _songService.DeleteSongAsync(id, userId);
+    if (!success)
+        return NotFound();  // Or Forbid() if you want to distinguish
+    return NoContent();
+}
+```
+
+#### Anti-Pattern 7: ❌ Hardcoded Secrets
+```csharp
+// ❌ WRONG: Hardcoded connection string
+var connectionString = "Server=prod-db.example.com;User=admin;Password=MySecret123!;";
+
+// ✅ CORRECT: Use configuration providers
+var connectionString = _configuration.GetConnectionString("DefaultConnection");
+// In appsettings.json: "Server=prod-db;User=admin;Password={SECRET_FROM_KEYVAULT}"
+```
+
+#### Anti-Pattern 8: ❌ Timing Attack Vulnerability
+```csharp
+// ❌ WRONG: Different response times reveal data existence
+public async Task<Song?> GetSong_WRONG(int id, string userId)
+{
+    var song = await _context.Songs.FirstOrDefaultAsync(s => s.Id == id);
+    
+    if (song == null)
+        return null;  // Fast response
+    
+    if (song.UserId != userId)
+        return null;  // Slower response (reveals song exists)
+    
+    return song;
+}
+
+// ✅ CORRECT: Consistent response time
+public async Task<Song?> GetSong(int id, string userId)
+{
+    // Single query - same timing whether song doesn't exist or isn't owned
+    return await _context.Songs
+        .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId);
+}
+```
+
+---
+
+### Security Testing Requirements
+
+#### Test Categories (All Required)
+
+1. **Authorization Tests**
+   - Verify users can only access their own resources
+   - Test cross-user access attempts return null/403
+   - Test unauthenticated access returns 401
+
+2. **Input Validation Tests**
+   - Test XSS attack payloads are rejected
+   - Test SQL injection patterns are blocked
+   - Test boundary values (BPM: 39, 40, 250, 251)
+   - Test invalid musical keys are rejected
+
+3. **Malicious Input Tests**
+   - Test script tag injection attempts
+   - Test JavaScript protocol attempts
+   - Test path traversal attempts
+   - Test buffer overflow attempts (very long strings)
+
+4. **Error Handling Tests**
+   - Verify errors don't leak sensitive information
+   - Test database errors are handled gracefully
+   - Test null/invalid inputs don't crash service
+
+#### Security Test Template
+```csharp
+[Trait("Category", "Security")]
+[Fact]
+public async Task MethodName_ShouldRejectUnauthorizedAccess_WhenUserDoesNotOwnResource()
+{
+    // Arrange: Create song owned by different user
+    var song = new Song { Title = "Test", Artist = "Test", UserId = "other-user" };
+    _context.Songs.Add(song);
+    await _context.SaveChangesAsync();
+    
+    // Act: Try to access with different userId
+    var result = await _songService.GetSongByIdAsync(song.Id, "unauthorized-user");
+    
+    // Assert: Access denied
+    result.Should().BeNull();
+    
+    // Verify security event was logged
+    _mockLogger.Verify(
+        x => x.Log(
+            LogLevel.Warning,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("unauthorized")),
+            It.IsAny<Exception>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+        Times.Once);
+}
+```
+
+---
 
 ### Security Validation Checklist
 

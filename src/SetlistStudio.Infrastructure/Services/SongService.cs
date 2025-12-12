@@ -4,6 +4,7 @@ using SetlistStudio.Core.Entities;
 using SetlistStudio.Core.Interfaces;
 using SetlistStudio.Core.Security;
 using SetlistStudio.Infrastructure.Data;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 
 namespace SetlistStudio.Infrastructure.Services;
@@ -183,6 +184,12 @@ public class SongService : ISongService
                 var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
                 _logger.LogInformation("Retrieved song {SongId} for user {UserId}", songId, sanitizedUserId);
             }
+            else
+            {
+                // Log unauthorized access attempt for security monitoring
+                var sanitizedUserId = SecureLoggingHelper.SanitizeUserId(userId);
+                _logger.LogWarning("Song {SongId} not found or unauthorized for user {UserId}", songId, sanitizedUserId);
+            }
 
             return song;
         }
@@ -210,6 +217,20 @@ public class SongService : ISongService
     {
         try
         {
+            // First validate using DataAnnotations (includes SanitizedString, BpmRange, etc.)
+            var validationContext = new ValidationContext(song);
+            var dataAnnotationErrors = new List<ValidationResult>();
+            bool isValid = Validator.TryValidateObject(song, validationContext, dataAnnotationErrors, validateAllProperties: true);
+            
+            if (!isValid)
+            {
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                errorBuilder.Append(string.Join(", ", dataAnnotationErrors.Select(e => e.ErrorMessage)));
+                throw new ArgumentException(errorBuilder.ToString());
+            }
+            
+            // Then perform additional manual validation
             var validationErrors = ValidateSong(song);
             if (validationErrors.Any())
             {

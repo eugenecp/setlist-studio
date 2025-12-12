@@ -49,3 +49,63 @@ public class UpdateSetlistRequest
     [SafeString(MaxLength = 500, AllowEmpty = true, AllowSpecialCharacters = true, AllowNewlines = true)]
     public string? Description { get; set; }
 }
+
+/// <summary>
+/// Complete setlist DTO with songs
+/// </summary>
+public class SetlistDto
+{
+    public int Id { get; set; }
+    
+    public string Name { get; set; } = string.Empty;
+    
+    public DateTime? PerformanceDate { get; set; }
+    
+    public string? Venue { get; set; }
+    
+    public string UserId { get; set; } = string.Empty;
+    
+    public DateTime CreatedAt { get; set; }
+    
+    public DateTime UpdatedAt { get; set; }
+    
+    public List<SetlistSongDto> Songs { get; set; } = new();
+}
+
+/// <summary>
+/// Setlist song DTO with position and song details
+/// </summary>
+public class SetlistSongDto
+{
+    public int Id { get; set; }
+    
+    public int Position { get; set; }
+    
+    public string? Notes { get; set; }
+    
+    public SongDto Song { get; set; } = null!;
+}
+
+/// <summary>
+/// Song DTO with all properties
+/// </summary>
+public class SongDto
+{
+    public int Id { get; set; }
+    
+    public string Title { get; set; } = string.Empty;
+    
+    public string Artist { get; set; } = string.Empty;
+    
+    public string? Album { get; set; }
+    
+    public int? DurationSeconds { get; set; }
+    
+    public int? Bpm { get; set; }
+    
+    public string? MusicalKey { get; set; }
+    
+    public string? Genre { get; set; }
+    
+    public string? Tags { get; set; }
+}

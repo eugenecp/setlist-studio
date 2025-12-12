@@ -418,7 +418,7 @@ public class SongServiceAdvancedTests : IDisposable
         // Act & Assert
         await FluentActions.Invoking(() => _songService.CreateSongAsync(invalidSong))
             .Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Validation failed: Song title is required");
+            .WithMessage("*Title field is required*");
     }
 
     [Fact]
