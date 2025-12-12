@@ -117,6 +117,25 @@ public interface ISetlistService
     Task<Setlist?> CopySetlistAsync(int sourceSetlistId, string newName, string userId);
 
     /// <summary>
+    /// Creates a new active setlist from a template
+    /// Converts a template setlist into a performance-ready setlist with specific event details
+    /// </summary>
+    /// <param name="templateId">The template setlist ID to create from</param>
+    /// <param name="userId">The user's ID</param>
+    /// <param name="name">Name for the new setlist (e.g., "Miller Wedding")</param>
+    /// <param name="performanceDate">Date and time of the performance</param>
+    /// <param name="venue">Performance venue or event location</param>
+    /// <param name="performanceNotes">Optional notes for this specific performance</param>
+    /// <returns>The created setlist if successful, null if template not found or unauthorized</returns>
+    Task<Setlist?> CreateFromTemplateAsync(
+        int templateId,
+        string userId,
+        string name,
+        DateTime? performanceDate = null,
+        string? venue = null,
+        string? performanceNotes = null);
+
+    /// <summary>
     /// Validates setlist data before saving
     /// </summary>
     /// <param name="setlist">The setlist to validate</param>

@@ -674,6 +674,110 @@ public class SetlistService : ISetlistService
         await _context.SaveChangesAsync();
     }
 
+    public async Task<Setlist?> CreateFromTemplateAsync(
+        int templateId,
+        string userId,
+        string name,
+        DateTime? performanceDate = null,
+        string? venue = null,
+        string? performanceNotes = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Setlist name cannot be null or empty", nameof(name));
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
+        }
+
+        try
+        {
+            // Get the template and verify ownership and template status
+            var template = await _context.Setlists
+                .Include(sl => sl.SetlistSongs)
+                .ThenInclude(ss => ss.Song)
+                .FirstOrDefaultAsync(sl => sl.Id == templateId && sl.UserId == userId && sl.IsTemplate);
+
+            if (template == null)
+            {
+                _logger.LogWarning("Template {TemplateId} not found, not a template, or unauthorized for user {UserId}", 
+                    templateId, userId);
+                return null;
+            }
+
+            // Validate the new setlist name
+            if (name.Length > 200)
+            {
+                throw new ArgumentException("Setlist name cannot exceed 200 characters", nameof(name));
+            }
+
+            // Create new active setlist from template
+            var newSetlist = new Setlist
+            {
+                Name = name,
+                Description = template.Description,
+                Venue = venue,
+                PerformanceDate = performanceDate,
+                ExpectedDurationMinutes = template.ExpectedDurationMinutes,
+                IsTemplate = false,  // New setlist is NOT a template
+                IsActive = true,     // New setlist is ACTIVE for performance
+                PerformanceNotes = performanceNotes ?? template.PerformanceNotes,
+                UserId = userId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            // Validate the new setlist
+            var validationErrors = ValidateSetlist(newSetlist);
+            if (validationErrors.Any())
+            {
+                var errorBuilder = new StringBuilder();
+                errorBuilder.Append("Validation failed: ");
+                bool first = true;
+                foreach (var error in validationErrors)
+                {
+                    if (!first) errorBuilder.Append(", ");
+                    errorBuilder.Append(error);
+                    first = false;
+                }
+                throw new ArgumentException(errorBuilder.ToString());
+            }
+
+            _context.Setlists.Add(newSetlist);
+            await _context.SaveChangesAsync();
+
+            // Copy all songs from template to new setlist
+            await CopySetlistSongsAsync(template, newSetlist);
+
+            // Invalidate cache for user
+            await _cacheService.InvalidateUserCacheAsync(userId);
+
+            _logger.LogInformation("Created setlist {SetlistId} '{Name}' from template {TemplateId} for user {UserId}", 
+                newSetlist.Id, name, templateId, userId);
+
+            return newSetlist;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error creating setlist from template {TemplateId} for user {UserId}", 
+                templateId, userId);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid argument creating setlist from template {TemplateId} for user {UserId}", 
+                templateId, userId);
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid operation creating setlist from template {TemplateId} for user {UserId}", 
+                templateId, userId);
+            throw;
+        }
+    }
+
     public IEnumerable<string> ValidateSetlist(Setlist setlist)
     {
         var errors = new List<string>();

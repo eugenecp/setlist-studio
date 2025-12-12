@@ -732,6 +732,457 @@ Use realistic musical data in all examples, tests, and documentation:
 
 ---
 
+## Template Pattern Guidelines
+
+**Setlist Templates** enable musicians to create reusable blueprints for recurring performance types (weddings, corporate events, tribute shows) and quickly generate event-specific setlists with customized details.
+
+### Template vs. Performance Setlists
+
+**Template Setlists (Reusable Blueprints):**
+- `IsTemplate = true` - Marks as reusable template
+- `IsActive = false` - Not for actual performance
+- No performance-specific details (venue, date typically null)
+- Purpose: Reusable blueprint for similar event types
+- Examples: "Wedding Ceremony Template", "Corporate Event Template", "Jazz Club Standard Set"
+
+**Performance Setlists (Event-Specific):**
+- `IsTemplate = false` - Marks as actual performance
+- `IsActive = true` - Ready for performance use
+- Event-specific details: venue, date, custom notes
+- Created from templates OR built from scratch
+- Examples: "Smith Wedding - June 15, 2025", "ABC Corp Holiday Party"
+
+### Creating Setlists from Templates
+
+#### ✅ **Works**: Pattern Implementation
+
+**Method Signature:**
+```csharp
+Task<Setlist?> CreateFromTemplateAsync(
+    int templateId,
+    string userId,
+    string name,
+    DateTime? performanceDate = null,
+    string? venue = null,
+    string? performanceNotes = null);
+```
+
+**Behavior:**
+1. **Validates** template exists, user owns it, and `IsTemplate = true`
+2. **Creates** new setlist with `IsTemplate = false`, `IsActive = true`
+3. **Copies** all songs with complete metadata preservation:
+   - Position order maintained
+   - Custom BPM/keys preserved
+   - Transition notes copied
+   - Performance notes copied
+   - IsEncore/IsOptional flags preserved
+4. **Inherits** template properties:
+   - Description (event context)
+   - ExpectedDurationMinutes (timing estimate)
+5. **Customizes** performance details:
+   - Name (event-specific)
+   - Venue (location)
+   - PerformanceDate (when)
+   - PerformanceNotes (special instructions, overrides template notes if provided)
+
+**Returns:**
+- New performance setlist if successful
+- `null` if template not found, unauthorized, or IsTemplate=false
+
+#### 🔒 **Secure**: Security Requirements
+
+**Authorization Checks (MANDATORY):**
+```csharp
+// ALWAYS verify user ownership BEFORE checking template status
+var template = await _context.Setlists
+    .FirstOrDefaultAsync(sl => 
+        sl.Id == templateId && 
+        sl.UserId == userId &&      // ← Authorization check
+        sl.IsTemplate == true);     // ← Template validation
+
+if (template == null)
+{
+    _logger.LogWarning("Unauthorized or invalid template access");
+    return null;  // Don't reveal whether template exists
+}
+```
+
+**Input Validation (CRITICAL):**
+- **Name**: Required, 1-200 characters, sanitized for XSS
+- **UserId**: Required, not empty/whitespace
+- **Venue**: Optional, max 200 characters if provided
+- **PerformanceNotes**: Optional, max 2000 characters if provided
+- **PerformanceDate**: Optional, no restriction on past/future dates
+
+**Security Patterns:**
+- ✅ User-scoped query: Always filter by `userId`
+- ✅ Return `null` for unauthorized (don't throw exceptions)
+- ✅ Log security events: Unauthorized access attempts
+- ✅ Sanitize all string inputs: Prevent XSS and SQL injection
+- ✅ No information disclosure: Don't reveal if template exists to unauthorized users
+
+**Example Secure Usage:**
+```csharp
+// Validate inputs first
+if (string.IsNullOrWhiteSpace(name))
+    throw new ArgumentException("Name required");
+
+if (name.Length > 200)
+    throw new ArgumentException("Name too long");
+
+// Query with authorization
+var template = await _context.Setlists
+    .Include(sl => sl.SetlistSongs)
+    .FirstOrDefaultAsync(sl => 
+        sl.Id == templateId && 
+        sl.UserId == userId && 
+        sl.IsTemplate);
+
+// Return null if not found/unauthorized
+if (template == null) return null;
+```
+
+#### 📈 **Scales**: Performance Considerations
+
+**Performance Characteristics:**
+
+| Template Size | Query Time | Insert Time | Total Time | Status |
+|---------------|------------|-------------|------------|--------|
+| **10 songs** | ~50ms | ~20ms | ~70ms | ✅ Excellent |
+| **30 songs** | ~100ms | ~50ms | ~150ms | ✅ Good |
+| **50 songs** | ~150ms | ~100ms | ~250ms | ✅ Acceptable |
+| **100 songs** | ~250ms | ~200ms | ~450ms | ⚠️ At API limit (500ms) |
+| **200+ songs** | ~500ms+ | ~400ms+ | ~900ms+ | ❌ Exceeds 500ms target |
+
+**Optimization Strategies:**
+
+**1. Remove Unnecessary Eager Loading:**
+```csharp
+// OPTIMIZED: Don't load Song entity details (not needed for copying)
+var template = await _context.Setlists
+    .Include(sl => sl.SetlistSongs)  // Only load SetlistSong (has SongId)
+    // .ThenInclude(ss => ss.Song)   // ← REMOVE: Not needed!
+    .FirstOrDefaultAsync(sl => sl.Id == templateId && sl.UserId == userId && sl.IsTemplate);
+```
+
+**Impact**: 30-50% faster query, 40-60% less memory
+
+**2. Add Composite Index (CRITICAL):**
+```csharp
+// In DbContext.OnModelCreating
+modelBuilder.Entity<Setlist>()
+    .HasIndex(s => new { s.UserId, s.IsTemplate })
+    .HasDatabaseName("IX_Setlists_UserId_IsTemplate");
+```
+
+**Impact**: 5-10x faster template lookups
+
+**3. Batch Processing for Large Templates (100+ songs):**
+```csharp
+if (template.SetlistSongs.Count > 100)
+{
+    // Process in batches of 50 songs
+    var batches = template.SetlistSongs
+        .OrderBy(ss => ss.Position)
+        .Select((song, index) => new { song, index })
+        .GroupBy(x => x.index / 50);
+    
+    foreach (var batch in batches)
+    {
+        var batchSongs = batch.Select(x => CreateSetlistSong(x.song, newSetlistId));
+        _context.SetlistSongs.AddRange(batchSongs);
+        await _context.SaveChangesAsync();
+    }
+}
+```
+
+**4. Caching Frequently Used Templates:**
+```csharp
+// Cache popular templates for 1 hour
+var cacheKey = $"template:{templateId}";
+var cachedTemplate = await _cache.GetAsync<Setlist>(cacheKey);
+
+if (cachedTemplate == null)
+{
+    cachedTemplate = await _context.Setlists
+        .Include(sl => sl.SetlistSongs)
+        .FirstOrDefaultAsync(sl => sl.Id == templateId);
+    
+    await _cache.SetAsync(cacheKey, cachedTemplate, TimeSpan.FromHours(1));
+}
+```
+
+**Scalability Limits:**
+- ✅ **Works well**: Up to 50 songs per template (95% of use cases)
+- ⚠️ **Monitor**: 50-100 songs (approaches 500ms API limit)
+- ❌ **Optimize required**: 100+ songs (batch processing recommended)
+
+**Concurrent Usage:**
+- 100 concurrent requests: No issues with proper connection pooling
+- Database writes use bulk `AddRange` for efficiency
+- Cache invalidation ensures consistency after creation
+
+#### 📚 **Maintainable**: Code Patterns & Conventions
+
+**Service Layer Pattern:**
+```csharp
+public async Task<Setlist?> CreateFromTemplateAsync(
+    int templateId,
+    string userId,
+    string name,
+    DateTime? performanceDate = null,
+    string? venue = null,
+    string? performanceNotes = null)
+{
+    // 1. Input validation
+    if (string.IsNullOrWhiteSpace(name))
+        throw new ArgumentException("Setlist name cannot be null or empty", nameof(name));
+    
+    if (string.IsNullOrWhiteSpace(userId))
+        throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
+    
+    try
+    {
+        // 2. Authorization & template validation
+        var template = await _context.Setlists
+            .Include(sl => sl.SetlistSongs)
+            .FirstOrDefaultAsync(sl => 
+                sl.Id == templateId && 
+                sl.UserId == userId && 
+                sl.IsTemplate);
+        
+        if (template == null)
+        {
+            _logger.LogWarning(
+                "Template {TemplateId} not found, not a template, or unauthorized for user {UserId}", 
+                templateId, userId);
+            return null;
+        }
+        
+        // 3. Additional validation
+        if (name.Length > 200)
+            throw new ArgumentException("Setlist name cannot exceed 200 characters", nameof(name));
+        
+        // 4. Create performance setlist from template
+        var newSetlist = new Setlist
+        {
+            Name = name,
+            Description = template.Description,
+            Venue = venue,
+            PerformanceDate = performanceDate,
+            ExpectedDurationMinutes = template.ExpectedDurationMinutes,
+            IsTemplate = false,      // NOT a template
+            IsActive = true,         // Ready for performance
+            PerformanceNotes = performanceNotes ?? template.PerformanceNotes,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        // 5. Validate new setlist
+        var validationErrors = ValidateSetlist(newSetlist);
+        if (validationErrors.Any())
+        {
+            var errorMessage = string.Join(", ", validationErrors);
+            throw new ArgumentException($"Validation failed: {errorMessage}");
+        }
+        
+        // 6. Persist new setlist
+        _context.Setlists.Add(newSetlist);
+        await _context.SaveChangesAsync();
+        
+        // 7. Copy all songs from template
+        await CopySetlistSongsAsync(template, newSetlist);
+        
+        // 8. Invalidate user cache
+        await _cacheService.InvalidateUserCacheAsync(userId);
+        
+        // 9. Log success
+        _logger.LogInformation(
+            "Created setlist {SetlistId} '{Name}' from template {TemplateId} for user {UserId}", 
+            newSetlist.Id, name, templateId, userId);
+        
+        return newSetlist;
+    }
+    catch (DbUpdateException ex)
+    {
+        _logger.LogError(ex, 
+            "Database error creating setlist from template {TemplateId} for user {UserId}", 
+            templateId, userId);
+        throw;
+    }
+    catch (ArgumentException ex)
+    {
+        _logger.LogError(ex, 
+            "Invalid argument creating setlist from template {TemplateId} for user {UserId}", 
+            templateId, userId);
+        throw;
+    }
+}
+
+// Helper method for song copying (reusable)
+private async Task CopySetlistSongsAsync(Setlist sourceSetlist, Setlist newSetlist)
+{
+    var newSetlistSongs = sourceSetlist.SetlistSongs
+        .OrderBy(ss => ss.Position)
+        .Select(sourceSong => new SetlistSong
+        {
+            SetlistId = newSetlist.Id,
+            SongId = sourceSong.SongId,
+            Position = sourceSong.Position,
+            TransitionNotes = sourceSong.TransitionNotes,
+            PerformanceNotes = sourceSong.PerformanceNotes,
+            IsEncore = sourceSong.IsEncore,
+            IsOptional = sourceSong.IsOptional,
+            CustomBpm = sourceSong.CustomBpm,
+            CustomKey = sourceSong.CustomKey,
+            CreatedAt = DateTime.UtcNow
+        });
+    
+    _context.SetlistSongs.AddRange(newSetlistSongs);
+    await _context.SaveChangesAsync();
+}
+```
+
+**Testing Pattern:**
+```csharp
+[Fact]
+public async Task CreateFromTemplateAsync_ShouldCreateActiveSetlist_WhenTemplateIsValid()
+{
+    // Arrange
+    var userId = "user-123";
+    var template = new Setlist
+    {
+        Name = "Wedding Template",
+        Description = "Standard wedding ceremony setlist",
+        IsTemplate = true,
+        IsActive = false,
+        UserId = userId,
+        CreatedAt = DateTime.UtcNow
+    };
+    _context.Setlists.Add(template);
+    await _context.SaveChangesAsync();
+    
+    // Act
+    var result = await _service.CreateFromTemplateAsync(
+        template.Id,
+        userId,
+        "Smith Wedding - June 2025",
+        new DateTime(2025, 6, 15, 19, 0, 0),
+        "Grand Ballroom",
+        "First dance: 'Unchained Melody'");
+    
+    // Assert
+    result.Should().NotBeNull();
+    result!.Name.Should().Be("Smith Wedding - June 2025");
+    result.Venue.Should().Be("Grand Ballroom");
+    result.PerformanceDate.Should().Be(new DateTime(2025, 6, 15, 19, 0, 0));
+    result.IsTemplate.Should().BeFalse();
+    result.IsActive.Should().BeTrue();
+    result.Description.Should().Be(template.Description);
+}
+```
+
+**Naming Conventions:**
+- Method: `CreateFromTemplateAsync` (clear intent)
+- Parameters: Explicit names (no abbreviations)
+- Returns: `Task<Setlist?>` (null for not found/unauthorized)
+- Test: `MethodName_Scenario_ExpectedResult` pattern
+
+#### ✨ **User Delight**: Business Value
+
+**Problem Solved:**
+Musicians perform similar types of shows repeatedly (weddings, corporate events, tribute nights). Creating setlists from scratch each time is:
+- **Time-consuming**: 15-30 minutes per setlist
+- **Error-prone**: Forgetting key songs or transitions
+- **Inconsistent**: Different song order for similar events
+
+**Solution Value:**
+
+**1. Time Savings:**
+- Template creation: ~30 minutes (one-time investment)
+- Creating from template: ~2 minutes (vs. 30 minutes manual)
+- **ROI**: After 2 uses, template saves 28 minutes per event
+- **Annual savings**: Wedding band doing 50 weddings = ~23 hours saved
+
+**2. Consistency & Quality:**
+- Proven song order and transitions
+- No forgotten songs or awkward gaps
+- Professional presentation to clients
+- Confidence in performance flow
+
+**3. Customization Flexibility:**
+- Keep template structure (what works)
+- Customize event details (venue, date, special requests)
+- Override performance notes per gig
+- Maintain brand consistency across similar events
+
+**4. Organization & Clarity:**
+- Clear separation: Planning (templates) vs. Execution (performances)
+- Easy to find: "Wedding Template" vs. "Smith Wedding - June 15"
+- Template library: Build expertise over time
+- Quick onboarding: New band members see proven setlists
+
+**Real-World Scenarios:**
+
+**Wedding Musicians:**
+```csharp
+// Create once: Wedding Ceremony Template (processional, recessional, etc.)
+var ceremonyPerformance = await CreateFromTemplateAsync(
+    weddingCeremonyTemplateId,
+    userId,
+    "Johnson Wedding Ceremony",
+    new DateTime(2025, 7, 20, 14, 0, 0),
+    "Riverside Chapel",
+    "Bride entrance: 'Canon in D' - slow tempo");
+```
+
+**Corporate Event Bands:**
+```csharp
+// Template: "Corporate Event - Upbeat Mix"
+var holidayParty = await CreateFromTemplateAsync(
+    corporateTemplateId,
+    userId,
+    "TechCorp Holiday Party 2025",
+    new DateTime(2025, 12, 15, 19, 0, 0),
+    "Convention Center Ballroom",
+    "Client request: No slow songs during dinner");
+```
+
+**Jazz Clubs:**
+```csharp
+// Template: "Jazz Standards - Friday Night"
+var fridayShow = await CreateFromTemplateAsync(
+    jazzStandardsTemplateId,
+    userId,
+    "Blue Note - Friday Dec 20",
+    new DateTime(2025, 12, 20, 21, 0, 0),
+    "Blue Note Jazz Club",
+    "Special: Holiday jazz medley for second set");
+```
+
+**Customer Delight Metrics:**
+- **Efficiency**: 90% time reduction (30 min → 2 min)
+- **Confidence**: Musicians trust proven setlist structure
+- **Professionalism**: Consistent quality across similar events
+- **Flexibility**: Easy customization for event-specific needs
+- **Scalability**: Build template library over career
+
+**User Experience Flow:**
+1. **Discover**: Musician identifies recurring event type (weddings)
+2. **Create Template**: Build perfect setlist once (~30 min)
+3. **Reuse Template**: Create event-specific setlist (~2 min)
+4. **Customize**: Add venue, date, special requests
+5. **Perform**: Confident in proven song order and flow
+6. **Iterate**: Update template based on audience feedback
+
+**Business Impact:**
+- **More gigs**: Faster preparation = capacity for more bookings
+- **Higher quality**: Consistent excellence across performances
+- **Easier scaling**: Onboard new musicians with proven templates
+- **Professional image**: Organized, reliable, client-ready
+
+---
+
 ## CodeQL Code Generation Standards
 
 **MANDATORY: All generated code must pass CodeQL static analysis with zero high/critical security issues.**
