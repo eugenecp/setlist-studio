@@ -48,7 +48,7 @@ jobs:
     # Step 2: Setup .NET development environment
     # Installs specified .NET version for consistent builds across environments
     - name: 🏗️ Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
