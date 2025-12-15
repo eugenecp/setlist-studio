@@ -48,7 +48,7 @@ jobs:
     steps:
     # Step 1: Checkout code with full history for comprehensive analysis
     - name: 🔄 Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0                 # Full Git history for better security analysis
     
@@ -696,7 +696,7 @@ jobs:
     steps:
     # Step 1: Checkout source code for baseline compliance verification
     - name: 🔄 Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     
     # Step 2: Verify security policy compliance and required security files
     # Checks for presence of mandatory security documentation and configurations
